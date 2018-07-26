@@ -115,18 +115,13 @@ class INF {
 
 class Component {
 
-    static async ForPath (path) {
-        let component = new Component(path);
-        return component.init();
-    }
-
     constructor (path) {
         let self = this;
 
         self.path = path;
     }
 
-    async init () {
+    async init (namespace) {
         let self = this;
 
         let mod = require(self.path);
@@ -140,7 +135,8 @@ class Component {
                 Promise: Promise,
                 PATH: PATH,
                 FS: FS
-            }
+            },
+            cwd: namespace.rootDir
         });
     }
 
@@ -217,7 +213,9 @@ class Namespace {
 
             log("Load component for uri '" + uri + "' from file:", path);
 
-            self.components[uri] = await Component.ForPath(path);
+            let component = new Component(path);
+
+            self.components[uri] = await component.init(self);
         }
         return self.components[uri];
     }

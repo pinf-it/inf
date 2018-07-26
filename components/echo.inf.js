@@ -8,7 +8,6 @@ exports.inf = async function (inf) {
         invoke: function (pointer, instruction) {
 
             process.stdout.write(instruction + "\n");
-
         }
     };
 }
