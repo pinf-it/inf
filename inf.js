@@ -165,23 +165,36 @@ class Namespace {
         self.aliases = {};
     }
 
-    async resolveComponentId (id) {
+    async resolveInfUri (uri) {
         let self = this;
 
-        if (/\/$/.test(id)) {
-            throw new Error("Component id '" + id + "' may not end with '/'!");
+        if (/^\./.test(uri)) {
+            var cwdPath = PATH.join(self.rootDir, uri, "inf.json");
+            if (await FS.existsAsync(cwdPath)) {
+                return cwdPath;
+            }    
+        }
+
+        throw new Error("Inf file for uri '" + uri + "' not found!");
+    }
+
+    async resolveComponentUri (uri) {
+        let self = this;
+
+        if (/\/$/.test(uri)) {
+            throw new Error("Component uri '" + uri + "' may not end with '/'!");
         }
 
         // Flip domain name
-        let idMatch = id.match(/^([^\/]+)(\/.+)?$/);
-        let domain = idMatch[1].split(".");
+        let uriMatch = uri.match(/^([^\/]+)(\/.+)?$/);
+        let domain = uriMatch[1].split(".");
         domain.reverse();
-        id = domain.join(".") + (idMatch[2] || "");
+        uri = domain.join(".") + (uriMatch[2] || "");
 
-        let filepath = id + ".inf.js";
+        let filepath = uri + ".inf.js";
 
-        if (/^\./.test(id)) {
-            var cwdPath = PATH.join(self.rootDir, id + ".inf.js");
+        if (/^\./.test(uri)) {
+            var cwdPath = PATH.join(self.rootDir, uri + ".inf.js");
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
             }    
@@ -192,33 +205,33 @@ class Namespace {
             return defaultPath;
         }
 
-        throw new Error("Component for id '" + id + "' not found!");
+        throw new Error("Component for uri '" + uri + "' not found!");
     }
 
-    async getComponentForId (id) {
+    async getComponentForUri (uri) {
         let self = this;
 
-        if (!self.components[id]) {
+        if (!self.components[uri]) {
 
-            let path = await self.resolveComponentId(id);
+            let path = await self.resolveComponentUri(uri);
 
-            log("Load component for id '" + id + "' from file:", path);
+            log("Load component for uri '" + uri + "' from file:", path);
 
-            self.components[id] = await Component.ForPath(path);
+            self.components[uri] = await Component.ForPath(path);
         }
-        return self.components[id];
+        return self.components[uri];
     }
 
-    async mapComponent (alias, id) {
+    async mapComponent (alias, uri) {
         let self = this;
 
-        let component = await self.getComponentForId(id);
+        let component = await self.getComponentForUri(uri);
 
         if (self.aliases[alias]) {
             throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
         }
 
-        log("Map component for id '" + id + "' to alias '" + alias + "'");
+        log("Map component for uri '" + uri + "' to alias '" + alias + "'");
 
         return self.aliases[alias] = component;
     }
@@ -254,10 +267,22 @@ class Parser {
 
         log("Parse instruction:", key, ":", value);
 
+        // Inherit from another inf.json file
+        if (key === "#") {
+
+            let path = await self.namespace.resolveInfUri(value);
+
+            log("Inherit from inf file:", path);
+
+            let inf = new INF(PATH.dirname(path));
+
+            await inf.runInstructionsFile(PATH.basename(path));
+
+        } else
         // Default 'inf' namespace
         if (/^#/.test(key)) {
 
-            let component = await self.namespace.getComponentForId(key.replace(/^#\s*/, ""));
+            let component = await self.namespace.getComponentForUri(key.replace(/^#\s*/, ""));
 
             return component.invoke(undefined, value);
 

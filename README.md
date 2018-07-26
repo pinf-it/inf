@@ -15,13 +15,14 @@ Features:
   * Combine aliases with pointers
   * Set properties on aliased pointers
   * Map aliased pointers to aliased pointers
+  * Inheritance
+
 
   * TODO:
     * Comments
     * Ordered JSONish (allows for duplicate keys)
     * Extendable
     * Layerable
-    * Inheritance
     * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
     * Highly optimized runtime structure (RTNamespace)
     * Interfaces:
