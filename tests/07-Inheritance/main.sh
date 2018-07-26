@@ -3,5 +3,7 @@
 inf {
     "#": "../06-MapAliasToComponent",
 
+    "stdout # echo": "ok",
+
     "# echo": "OK"
 }

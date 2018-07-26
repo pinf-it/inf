@@ -8,6 +8,7 @@ TODO:
 
 'use strict'
 
+const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
 const PATH = require("path");
 const FS = require("fs");
@@ -63,10 +64,11 @@ setImmediate(function () {
 
 class INF {
 
-    constructor (rootDir) {
+    constructor (rootDir, referringNamespace) {
         let self = this;
 
         self.rootDir = rootDir;
+        self.referringNamespace = referringNamespace;
     }
 
     async runInstructionsFile (filepath) {
@@ -102,9 +104,9 @@ class INF {
             throw new Error("Error parsing instructions!");
         }
 
-        self.rootNamespace = new Namespace(self.rootDir);
+        self.namespace = new Namespace(self.rootDir, self.referringNamespace);
 
-        self.parser = new Parser(self.rootNamespace);
+        self.parser = new Parser(self.namespace);
 
         await self.parser.processInstructions(instructions);
 
@@ -130,14 +132,7 @@ class Component {
             throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
         }
 
-        return self.impl = await mod.inf({
-            LIB: {
-                Promise: Promise,
-                PATH: PATH,
-                FS: FS
-            },
-            cwd: namespace.rootDir
-        });
+        return self.impl = await mod.inf(namespace.componentInitContext);
     }
 
     async invoke (instruction) {
@@ -151,24 +146,72 @@ class Component {
     }
 }
 
+class ComponentInitContext extends EventEmitter {
+
+    constructor (namespace) {
+        super();
+
+        let self = this;
+
+        self.LIB = {
+            Promise: Promise,
+            PATH: PATH,
+            FS: FS
+        };
+
+        self.cwd = (namespace.referringNamespace && namespace.referringNamespace.rootDir) || namespace.rootDir;
+    }
+}
+
 class Namespace {
 
-    constructor (rootDir) {
+    constructor (rootDir, referringNamespace) {
         let self = this;
 
         self.rootDir = rootDir;
-        self.components = {};
-        self.aliases = {};
+
+        self.referringNamespace = referringNamespace;
+
+        self.components = (self.referringNamespace && self.referringNamespace.components) || {};
+        self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
+
+        self.componentInitContext = new ComponentInitContext(self);
+
+        if (self.referringNamespace) {
+            self.referringNamespace.componentInitContext.on("parsed", function () {
+                self.componentInitContext.emit("parsed");
+            });
+        }
+    }
+
+    flipDomainInUri (uri) {
+        if (/^\./.test(uri)) {
+            // There is no domain when using a relative path.
+            return uri;
+        }
+        let uriMatch = uri.match(/^([^\/]+)(\/.+)?$/);
+        let domain = uriMatch[1].split(".");
+        domain.reverse();
+        return (domain.join(".") + (uriMatch[2] || ""));
     }
 
     async resolveInfUri (uri) {
         let self = this;
 
+        uri = self.flipDomainInUri(uri);
+
+        let filepath = PATH.join(uri, "inf.json");
+
         if (/^\./.test(uri)) {
-            var cwdPath = PATH.join(self.rootDir, uri, "inf.json");
+            var cwdPath = PATH.join(self.rootDir, filepath);
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
-            }    
+            }
+        }
+
+        var defaultPath = PATH.join(__dirname, "vocabularies", filepath);
+        if (await FS.existsAsync(defaultPath)) {
+            return defaultPath;
         }
 
         throw new Error("Inf file for uri '" + uri + "' not found!");
@@ -181,16 +224,12 @@ class Namespace {
             throw new Error("Component uri '" + uri + "' may not end with '/'!");
         }
 
-        // Flip domain name
-        let uriMatch = uri.match(/^([^\/]+)(\/.+)?$/);
-        let domain = uriMatch[1].split(".");
-        domain.reverse();
-        uri = domain.join(".") + (uriMatch[2] || "");
+        uri = self.flipDomainInUri(uri);
 
         let filepath = uri + ".inf.js";
 
         if (/^\./.test(uri)) {
-            var cwdPath = PATH.join(self.rootDir, uri + ".inf.js");
+            var cwdPath = PATH.join(self.rootDir, filepath);
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
             }    
@@ -255,9 +294,13 @@ class Parser {
 
     async processInstructions (instructions) {
         let self = this;
-        return Promise.mapSeries(Object.keys(instructions), await function (key) {
+        await Promise.mapSeries(Object.keys(instructions), await function (key) {
             return self.processInstruction(key, instructions[key]);
         });
+
+        if (!self.namespace.referringNamespace) {
+            self.namespace.componentInitContext.emit("parsed");
+        }
     }
 
     async processInstruction (key, value) {
@@ -272,7 +315,7 @@ class Parser {
 
             log("Inherit from inf file:", path);
 
-            let inf = new INF(PATH.dirname(path));
+            let inf = new INF(PATH.dirname(path), self.namespace);
 
             await inf.runInstructionsFile(PATH.basename(path));
 
