@@ -17,7 +17,6 @@ Features:
   * Map aliased pointers to aliased pointers
   * Inheritance
 
-
   * TODO:
     * Comments
     * Ordered JSONish (allows for duplicate keys)
@@ -47,9 +46,9 @@ Install
 Usage
 -----
 
-See `tests/` for examples of all features. The tests can be run with `npm test`.
+See `tests/` for examples of all features. The tests can be run with `npm test`. Specific tests can be run with `npm test \d{2}` where `\d{2}` denotes the numbered test prefix.
 
-The point of `inf` is to execute `inf.json` files directly which will cause the owning component to **bootstrap & test itself**. Thus tests can also be run with `./inf.json`. If the `#!/usr/bin/env inf` shebang is missing from `inf.json` it can be run using `inf inf.json`.
+The point of `inf` is to execute `inf.json` files which should cause the owning component to **bootstrap & test itself**. Thus tests can also be run by executing `./inf.json`. If the `#!/usr/bin/env inf` shebang is missing from `inf.json` it can be run using `inf inf.json`.
 
 
 API
