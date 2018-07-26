@@ -27,10 +27,19 @@ exports.inf = async function (inf) {
 
                 return new Promise(function (resolve, reject) {
 
+                    let env = {};
+                    Object.keys(process.env).forEach(function (name) {
+                        if (/^BO_TEST_/.test(name)) return;
+                        env[name] = process.env[name];
+                    });
+
+//console.log("env", env);
+
                     var proc = SPAWN("bash.origin.test", [
                         testDir
                     ], {
                         cwd: inf.cwd,
+                        env: env,
                         stdio: [
                             "ignore",
                             "inherit",
