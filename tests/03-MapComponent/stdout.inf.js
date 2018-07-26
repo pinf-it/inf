@@ -7,8 +7,10 @@ exports.inf = async function (inf) {
 
         invoke: function (pointer, instruction) {
 
-            process.stdout.write(instruction + "\n");
+            if (pointer === "echo") {
 
+                process.stdout.write(instruction + "\n");
+            }
         }
     };
 }

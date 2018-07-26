@@ -162,9 +162,11 @@ class Namespace {
 
         self.rootDir = rootDir;
         self.components = {};
+        self.aliases = {};
     }
 
     async resolveComponentId (id) {
+        let self = this;
 
         if (/\/$/.test(id)) {
             throw new Error("Component id '" + id + "' may not end with '/'!");
@@ -178,7 +180,12 @@ class Namespace {
 
         let filepath = id + ".inf.js";
 
-//        var nsPath = PATH.join(self.rootDir, id + ".inf.js");
+        if (/^\./.test(id)) {
+            var cwdPath = PATH.join(self.rootDir, id + ".inf.js");
+            if (await FS.existsAsync(cwdPath)) {
+                return cwdPath;
+            }    
+        }
 
         var defaultPath = PATH.join(__dirname, "components", filepath);
         if (await FS.existsAsync(defaultPath)) {
@@ -188,7 +195,7 @@ class Namespace {
         throw new Error("Component for id '" + id + "' not found!");
     }
 
-    async loadComponent (id) {
+    async getComponentForId (id) {
         let self = this;
 
         if (!self.components[id]) {
@@ -200,6 +207,28 @@ class Namespace {
             self.components[id] = await Component.ForPath(path);
         }
         return self.components[id];
+    }
+
+    async mapComponent (alias, id) {
+        let self = this;
+
+        let component = await self.getComponentForId(id);
+
+        if (self.aliases[alias]) {
+            throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
+        }
+
+        return self.aliases[alias] = component;
+    }
+
+    async getComponentForAlias (alias) {
+        let self = this;
+
+        if (!self.aliases[alias]) {
+            throw new Error("No component mapped to alias '" + alias + "'!");
+        }
+
+        return self.aliases[alias];
     }
 }
 
@@ -213,7 +242,7 @@ class Parser {
 
     async processInstructions (instructions) {
         let self = this;
-        return Promise.map(Object.keys(instructions), await function (key) {
+        return Promise.mapSeries(Object.keys(instructions), await function (key) {
             return self.processInstruction(key, instructions[key]);
         });
     }
@@ -223,11 +252,26 @@ class Parser {
 
         log("Parse instruction:", key, ":", value);
 
+        // Default 'inf' namespace
         if (/^#/.test(key)) {
 
-            let component = await self.namespace.loadComponent(key.replace(/^#/, ""));
+            let component = await self.namespace.getComponentForId(key.replace(/^#/, ""));
 
-            return component.invoke(value);
+            return component.invoke(undefined, value);
+
+        } else
+        // Component mapping
+        if (/#$/.test(key)) {
+
+            await self.namespace.mapComponent(key.replace(/#$/, ""), value);
+
+        } else
+        // Component instruction
+        if (/^.+#.+$/.test(key)) {
+
+            let component = await self.namespace.getComponentForAlias(key.replace(/^([^#]+)#.+$/, "$1"));
+
+            return component.invoke(key.replace(/^[^#]+#/, ""), value);
 
         } else {
             console.error("instruction:", key, ":", value);
