@@ -42,7 +42,11 @@ setImmediate(function () {
 
                 let inf = new INF(cwd);
 
-                await inf.runFile(PATH.relative(cwd, PATH.resolve(filepath)));
+                if (/^\{/.test(filepath)) {
+                    await inf.runInstructions(filepath);
+                } else {
+                    await inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath)));
+                }
 
             } catch (err) {
                 console.error("[inf]", err);
@@ -65,7 +69,7 @@ class INF {
         self.rootDir = rootDir;
     }
 
-    async runFile (filepath) {
+    async runInstructionsFile (filepath) {
         let self = this;
 
         let path = PATH.join(self.rootDir, filepath);
@@ -161,6 +165,17 @@ class Namespace {
     }
 
     async resolveComponentId (id) {
+
+        if (/\/$/.test(id)) {
+            throw new Error("Component id '" + id + "' may not end with '/'!");
+        }
+
+        // Flip domain name
+        let idMatch = id.match(/^([^\/]+)(\/.+)?$/);
+        let domain = idMatch[1].split(".");
+        domain.reverse();
+        id = domain.join(".") + (idMatch[2] || "");
+
         let filepath = id + ".inf.js";
 
 //        var nsPath = PATH.join(self.rootDir, id + ".inf.js");

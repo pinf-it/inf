@@ -30,7 +30,7 @@ Features:
 
 Limitations:
 
-  * Not mergeable (Cannot merge two `inf.json` files. To customize, merge a JSON object on top of namespace.)
+  * Cannot merge two `inf.json` files by overlaying them. Use inheritance and runtime customization.
   * Cannot use `JSON.parse()` as duplicate keys are dropped.
   * Parsing large instruction files that reference many Components may be slow but the resulting runtime structure (RTNamespace) is fast and small as long as the RTComponents are also optimized.
   * The instructions in a `inf.json` file can be hard to follow. To provide clarity follow a Vocabulary/Schema/Convention for aliases or generate `inf` instructions from a higher level abstraction that matches your domain model more closely ([ccjson](https://github.com/ccjson/ccjson.nodejs) is an example that can generate `inf.js` files as well as represent its runtime structure using RTNamespace & RTComponent).
