@@ -1,0 +1,5 @@
+#!/usr/bin/env inf
+{
+    "#": "inception.genesis.pinf.it",
+    "test#dir": "tests"
+}
