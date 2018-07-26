@@ -11,10 +11,10 @@ The output is a nested namespace in the form of a JavaScript object with all nod
 
 Features:
 
+  * Map component URIs to aliases
+  * Set properties on aliases
+
   * TODO:
-    * Create a nested namespace
-    * Alias component URIs to aliases
-    * Set properties on aliases
     * Map aliases to aliases
     * Comments
     * Ordered JSONish (allows for duplicate keys)

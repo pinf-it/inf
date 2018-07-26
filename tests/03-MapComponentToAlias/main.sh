@@ -9,5 +9,6 @@
 
 inf {
     "stdout#": "./stdout",
-    "stdout#echo": "OK"
+    "stdout#echo": "Component OK",
+    "#echo": "Default OK"
 }

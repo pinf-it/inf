@@ -218,6 +218,8 @@ class Namespace {
             throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
         }
 
+        log("Map component for id '" + id + "' to alias '" + alias + "'");
+
         return self.aliases[alias] = component;
     }
 
@@ -255,7 +257,7 @@ class Parser {
         // Default 'inf' namespace
         if (/^#/.test(key)) {
 
-            let component = await self.namespace.getComponentForId(key.replace(/^#/, ""));
+            let component = await self.namespace.getComponentForId(key.replace(/^#\s*/, ""));
 
             return component.invoke(undefined, value);
 
@@ -263,15 +265,15 @@ class Parser {
         // Component mapping
         if (/#$/.test(key)) {
 
-            await self.namespace.mapComponent(key.replace(/#$/, ""), value);
+            await self.namespace.mapComponent(key.replace(/\s*#$/, ""), value);
 
         } else
         // Component instruction
         if (/^.+#.+$/.test(key)) {
 
-            let component = await self.namespace.getComponentForAlias(key.replace(/^([^#]+)#.+$/, "$1"));
+            let component = await self.namespace.getComponentForAlias(key.replace(/^([^#]+?)\s*#.+?$/, "$1"));
 
-            return component.invoke(key.replace(/^[^#]+#/, ""), value);
+            return component.invoke(key.replace(/^[^#]+#\s*/, ""), value);
 
         } else {
             console.error("instruction:", key, ":", value);
