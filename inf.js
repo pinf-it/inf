@@ -273,6 +273,21 @@ class Parser {
 
             let component = await self.namespace.getComponentForAlias(key.replace(/^([^#]+?)\s*#.+?$/, "$1"));
 
+            if (typeof value === "string") {
+                // See if we are referencing an aliased component. If we are we resolve the reference
+                // and pass it along with the component invocation.
+                let referenceMatch = value.match(/^([^#]+?)\s*#\s*(.+?)$/);
+                if (referenceMatch) {
+
+                    let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
+
+                    // We create an invocation wrapper to avoid leaking references.
+                    value = function (instruction) {
+                        return referencedComponent.invoke(referenceMatch[2], instruction);
+                    }
+                }
+            }
+
             return component.invoke(key.replace(/^[^#]+#\s*/, ""), value);
 
         } else {

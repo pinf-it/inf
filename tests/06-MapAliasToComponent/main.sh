@@ -8,7 +8,13 @@
 #       a standard JSON parser to process the JSON syntax.
 
 inf {
-    "stdout#": "./stdout",
-    "stdout#echo": "Component OK",
-    "#echo": "Default OK"
+
+    "formatter #": "./formatter",
+    "formatter # mode": "UPPERCASE",
+
+    "stdout #": "./stdout",
+    "stdout # formatter": "formatter # format",
+    "stdout # echo": "Component OK",
+
+    "# echo": "Default OK"
 }

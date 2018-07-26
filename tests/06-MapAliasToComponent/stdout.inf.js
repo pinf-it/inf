@@ -3,13 +3,22 @@
 
 exports.inf = async function (inf) {
 
+    let formatter = null;
+
     return {
 
         invoke: function (pointer, instruction) {
 
+            if (pointer === "formatter") {
+
+                formatter = instruction;
+
+            } else
             if (pointer === "echo") {
 
-                process.stdout.write(instruction + "\n");
+                let message = formatter(instruction);
+
+                process.stdout.write(message + "\n");
             }
         }
     };
