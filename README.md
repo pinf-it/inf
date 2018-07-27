@@ -60,6 +60,18 @@ API
 Details
 =======
 
+Terminilogy
+-----------
+
+  * Instruction File
+  * Instructions
+  * Instruction
+  * Alias
+  * Component Uri
+  * Component
+  * Pointer
+  * Value
+  * ValueReference - A *proxy function* to get the **Value** from a mapped **Component**.
 
 Entities
 --------

@@ -7,16 +7,16 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, instruction) {
+        invoke: function (pointer, value) {
 
             if (pointer === "formatter") {
 
-                formatter = instruction;
+                formatter = value;
 
             } else
             if (pointer === "echo") {
 
-                let message = formatter(instruction);
+                let message = formatter(value);
 
                 process.stdout.write(message + "\n");
             }

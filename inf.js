@@ -18,6 +18,7 @@ FS.existsAsync = function (path) {
         return FS.exists(path, resolve);
     });
 }
+const CLARINET = require("clarinet");
 
 
 // ####################################################################################################
@@ -94,25 +95,74 @@ class INF {
         // Strip shebang
         instructions = instructions.replace(/^#!.+\n/, "");
 
-        // Parse JSON
-        try {
-            instructions = JSON.parse(instructions);
-        } catch (err) {
-            console.error("self.rootDir", self.rootDir);
-            console.error("filepath", filepath);
-            console.error("instructions", instructions);
-            throw new Error("Error parsing instructions!");
-        }
-
         self.namespace = new Namespace(self.rootDir, self.referringNamespace);
+        self.processor = new Processor(self.namespace);
 
-        self.parser = new Parser(self.namespace);
+        // TODO: Instead of first populating 'instructionObjects' and then processing them we should
+        //       process instruction objects as they come in. This will allow for faster processing of
+        //       large instruction files.
+        var instructionObjects = [];
 
-        await self.parser.processInstructions(instructions);
+        // Parse JSON using SAX parser which allows for repeated keys.
+        await new Promise(function (resolve, reject) {
+            function onInstructionObject (obj) {
+                instructionObjects.push(obj);
+            }
+            var parser = CLARINET.parser();
+            parser.onerror = function (err) {
+                console.error("err", err); 
+                console.error("self.rootDir", self.rootDir);
+                console.error("filepath", filepath);
+                console.error("instructions", instructions);
+                reject(new Error("Error parsing instructions!"));
+            };
+            var rootObj = null;
+            var currentObject = null;
+            var currentKey = null;
+            parser.onopenobject = function (key) {
+                if (this.depth === 0) {
+                    currentObject = rootObj = {};
+                } else {
+                    currentObject = currentObject[currentKey] = {};
+                }
+                currentKey = key;
+            };
+            parser.onvalue = function (value) {
+                currentObject[currentKey] = value;
+            };
+            parser.onkey = function (key) {
+                if (this.depth === 1) {
+                    onInstructionObject(rootObj);
+                    currentObject = rootObj = {};
+                }
+                currentKey = key;
+            };
+            parser.oncloseobject = function () {
+                if (this.depth === 1) {
+                    onInstructionObject(rootObj);
+                }
+            };
+            parser.onopenarray = function () {
+                throw new Error("TODO: implement");
+            };
+            parser.onclosearray = function () {
+                throw new Error("TODO: implement");
+            };
+            parser.onend = resolve;
+            parser.write(instructions).close();            
+        });
+        
+        await Promise.mapSeries(instructionObjects, await function (instructionObject) {
+            let key = Object.keys(instructionObject)[0];
+            return self.processor.processInstruction(key, instructionObject[key]);
+        });
+
+        if (!self.namespace.referringNamespace) {
+            self.namespace.componentInitContext.emit("parsed");
+        }
 
         // TODO: Dump state
     }
-
 }
 
 class Component {
@@ -185,8 +235,8 @@ class Namespace {
     }
 
     flipDomainInUri (uri) {
-        if (/^\./.test(uri)) {
-            // There is no domain when using a relative path.
+        if (/^(\/|\.)/.test(uri)) {
+            // There is no domain when using an absolute or relative path.
             return uri;
         }
         let uriMatch = uri.match(/^([^\/]+)(\/.+)?$/);
@@ -235,7 +285,7 @@ class Namespace {
             }    
         }
 
-        var defaultPath = PATH.join(__dirname, "components", filepath);
+        var defaultPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
         if (await FS.existsAsync(defaultPath)) {
             return defaultPath;
         }
@@ -276,6 +326,11 @@ class Namespace {
     async getComponentForAlias (alias) {
         let self = this;
 
+        if (alias === '') {
+            // Default component
+            return self.getComponentForUri("inf");
+        }
+
         if (!self.aliases[alias]) {
             throw new Error("No component mapped to alias '" + alias + "'!");
         }
@@ -284,7 +339,7 @@ class Namespace {
     }
 }
 
-class Parser {
+class Processor {
 
     constructor (namespace) {
         let self = this;
@@ -292,21 +347,40 @@ class Parser {
         self.namespace = namespace;
     }
 
-    async processInstructions (instructions) {
+    async closureForValueIfReference (value) {
         let self = this;
-        await Promise.mapSeries(Object.keys(instructions), await function (key) {
-            return self.processInstruction(key, instructions[key]);
-        });
 
-        if (!self.namespace.referringNamespace) {
-            self.namespace.componentInitContext.emit("parsed");
+        if (typeof value === "string") {
+
+            // See if we are referencing an aliased component. If we are we resolve the reference
+            // and pass it along with the component invocation.
+            let referenceMatch = value.match(/^([^#]*?)\s*#\s*(.+?)$/);
+
+            if (referenceMatch) {
+
+                let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
+
+                // We create an invocation wrapper to avoid leaking references.
+                value = function (instruction) {
+                    return referencedComponent.invoke(referenceMatch[2], instruction);
+                }
+            }
         }
+
+        return value;
     }
 
     async processInstruction (key, value) {
         let self = this;
 
         log("Parse instruction:", key, ":", value);
+
+        let keyMatch = key.match(/^([^#]*?)\s*#\s*(.*?)$/);
+        if (!keyMatch) {
+            throw new Error("Instruction key does not follow '[<Alias> ]#[ <Pointer>]' format!");
+        }
+        let alias = keyMatch[1];
+        let pointer = keyMatch[2];
 
         // Inherit from another inf.json file
         if (key === "#") {
@@ -320,44 +394,25 @@ class Parser {
             await inf.runInstructionsFile(PATH.basename(path));
 
         } else
-        // Default 'inf' namespace
-        if (/^#/.test(key)) {
-
-            let component = await self.namespace.getComponentForUri(key.replace(/^#\s*/, ""));
-
-            return component.invoke(undefined, value);
-
-        } else
         // Component mapping
-        if (/#$/.test(key)) {
+        if (pointer === '') {
 
-            await self.namespace.mapComponent(key.replace(/\s*#$/, ""), value);
+            await self.namespace.mapComponent(alias, value);
 
         } else
-        // Component instruction
-        if (/^.+#.+$/.test(key)) {
+        // Mapped component instruction
+        if (pointer != '') {
 
-            let component = await self.namespace.getComponentForAlias(key.replace(/^([^#]+?)\s*#.+?$/, "$1"));
+            let component = await self.namespace.getComponentForAlias(alias);
 
-            if (typeof value === "string") {
-                // See if we are referencing an aliased component. If we are we resolve the reference
-                // and pass it along with the component invocation.
-                let referenceMatch = value.match(/^([^#]+?)\s*#\s*(.+?)$/);
-                if (referenceMatch) {
+            value = await self.closureForValueIfReference(value);
 
-                    let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
-
-                    // We create an invocation wrapper to avoid leaking references.
-                    value = function (instruction) {
-                        return referencedComponent.invoke(referenceMatch[2], instruction);
-                    }
-                }
-            }
-
-            return component.invoke(key.replace(/^[^#]+#\s*/, ""), value);
+            return component.invoke(pointer, value);
 
         } else {
             console.error("instruction:", key, ":", value);
+            console.error("alias:", alias);
+            console.error("pointer:", pointer);
             throw new Error("Unknown instruction!");
         }
     }

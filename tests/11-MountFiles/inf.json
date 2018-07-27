@@ -1,0 +1,11 @@
+{
+    "vfs #": "./vfs",
+
+    "# echo": "---",
+    "# echo": "# /main.sh",
+    "# echo": "---",
+
+    "vfs # /test.txt": "OK",
+
+    "# echo": "vfs # /test.txt"
+}

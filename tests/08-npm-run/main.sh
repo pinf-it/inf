@@ -3,7 +3,7 @@
 echo ">>>TEST_IGNORE_LINE:^>\s<<<"
 
 inf {
-    "npm #": "npm.org",
+    "npm #": "./npm",
 
     "npm # run": "test"
 }

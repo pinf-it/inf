@@ -14,11 +14,11 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: async function (pointer, instruction) {
+        invoke: async function (pointer, value) {
 
             if (pointer === "dir") {
 
-                testDir = instruction;
+                testDir = value;
 
             } else
             if (pointer === "run") {

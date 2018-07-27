@@ -7,7 +7,7 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, instruction) {
+        invoke: function (pointer, value) {
 
             if (pointer === "run") {
 
@@ -15,7 +15,7 @@ exports.inf = async function (inf) {
 
                     var proc = SPAWN("npm", [
                         'run',
-                        instruction
+                        value
                     ], {
                         cwd: inf.cwd,
                         stdio: [

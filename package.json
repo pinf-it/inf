@@ -10,6 +10,7 @@
     "bash.origin.test": "^0.1.39"
   },
   "dependencies": {
-    "bluebird": "^3.5.1"
+    "bluebird": "^3.5.1",
+    "clarinet": "^0.12.1"
   }
 }

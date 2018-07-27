@@ -5,11 +5,11 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, instruction) {
+        invoke: function (pointer, value) {
 
             if (pointer === "echo") {
 
-                process.stdout.write(instruction + "\n");
+                process.stdout.write(value + "\n");
             }
         }
     };

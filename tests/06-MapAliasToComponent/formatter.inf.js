@@ -7,18 +7,18 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, instruction) {
+        invoke: function (pointer, value) {
 
             if (pointer === "mode") {
 
-                mode = instruction;
+                mode = value;
 
             } else
             if (pointer === "format") {
 
                 if (mode === "UPPERCASE") {
 
-                    return instruction.toUpperCase();
+                    return value.toUpperCase();
                 }
             }
         }

@@ -22,11 +22,11 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, instruction) {
+        invoke: function (pointer, value) {
 
             if (pointer === "on.turn") {
 
-                on.turn.push(instruction);
+                on.turn.push(value);
 
             } else {
                 throw new Error("Pointer '" + pointer + "' not found in component '" +  __filename + "'!");
