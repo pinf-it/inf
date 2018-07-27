@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "#": "inception.genesis.pinf.it",
+    "#": "inf.pinf.it/bo",
 
     "test # dir": "tests"
 }

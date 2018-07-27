@@ -1,6 +1,6 @@
 #!/usr/bin/env inf
 {
-    "#": "inception.genesis.pinf.it",
+    "#": "inf.pinf.it/bo",
 
     "test # dir": "tests"
 }

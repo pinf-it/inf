@@ -1,8 +1,8 @@
 #!/usr/bin/env inf
 {
-    "pinf #": "./pinf",
+    "inf #": "./inf",
 
     "test #": "./bash.origin.test",
 
-    "pinf # on.turn": "test # run"
+    "inf # on.turn": "test # run"
 }
