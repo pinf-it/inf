@@ -1,6 +1,6 @@
 #!/usr/bin/env inf
 {
-    "inf #": "./inf",
+    "inf #": "../inf",
 
     "test #": "./bash.origin.test",
 

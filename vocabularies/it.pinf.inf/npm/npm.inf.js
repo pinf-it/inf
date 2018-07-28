@@ -9,13 +9,13 @@ exports.inf = async function (inf) {
 
         invoke: function (pointer, value) {
 
-            if (pointer === "run") {
+            if (pointer === "test") {
 
                 return new Promise(function (resolve, reject) {
 
                     var proc = SPAWN("npm", [
                         'run',
-                        value
+                        'test'
                     ], {
                         cwd: inf.cwd,
                         stdio: [
