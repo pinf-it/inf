@@ -8,7 +8,7 @@ exports.inf = async function (inf) {
     };
 
     // We trigger all 'turn' handlers after all inf instructions are parsed.
-    inf.on("parsed", function () {
+    inf.on("processed", function () {
 
         return inf.LIB.Promise.mapSeries(on.turn, function (handler) {
 

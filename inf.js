@@ -93,6 +93,54 @@ class INF {
     async runInstructions (instructions, filepath) {
         let self = this;
 
+        self.parser = new Parser(self.rootDir, filepath);
+        // TODO: Instead of first populating 'instructionObjects' and then processing them we should
+        //       process instruction objects as they come in. This will allow for faster processing of
+        //       large instruction files.
+        let instructionObjects = await self.parser.parseInstructions(instructions);
+
+        self.namespace = new Namespace(self.rootDir, self.referringNamespace);
+        self.processor = new Processor(self.namespace);
+       
+        await Promise.mapSeries(instructionObjects, await function (instructionObject) {
+            instructionObject = instructionObject.split("\t");
+            return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]));
+        });
+
+        if (!self.namespace.referringNamespace) {
+            self.namespace.componentInitContext.emit("processed");
+        }
+
+        // TODO: Dump state
+    }
+}
+
+
+class Parser {
+
+    constructor (rootDir, filepath) {
+        this.rootDir = rootDir;
+        this.filepath = filepath;
+        if (this.filepath) {
+            this.infiFilepath = PATH.join(this.filepath, '..', '.~infi~' + PATH.basename(this.filepath));
+        }
+    }
+
+    async parseInstructions (instructions) {
+        let self = this;
+
+        if (self.infiFilepath) {
+            let exists = await FS.existsAsync(self.infiFilepath);
+            if (exists) {
+                if (
+                    (await FS.statAsync(self.infiFilepath)).mtime >=
+                    (await FS.statAsync(PATH.join(self.rootDir, self.filepath))).mtime
+                ) {
+                    return (await FS.readFileAsync(self.infiFilepath, "utf8")).split("\n");
+                }
+            }
+        }
+
         let PARSER_EVENT_DEBUG = false;
 
         // Strip shebang
@@ -103,14 +151,8 @@ class INF {
             freezeToJSON: true
         }).toString();
 
-        self.namespace = new Namespace(self.rootDir, self.referringNamespace);
-        self.processor = new Processor(self.namespace);
+        if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions(instructions)", instructions);
 
-        if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions(instructions)", instructions);
-
-        // TODO: Instead of first populating 'instructionObjects' and then processing them we should
-        //       process instruction objects as they come in. This will allow for faster processing of
-        //       large instruction files.
         let instructionObjects = [];
 
         // Parse JSON using SAX parser which allows for repeated keys.
@@ -122,7 +164,7 @@ class INF {
             parser.onerror = function (err) {
                 console.error("err", err); 
                 console.error("self.rootDir", self.rootDir);
-                console.error("filepath", filepath);
+                console.error("filepath", self.filepath);
                 console.error("instructions", instructions);
                 reject(new Error("Error parsing instructions!"));
             };
@@ -132,7 +174,7 @@ class INF {
             let previousKeyStack = [];
             let previousObjectStack = [];
             parser.onopenobject = function (key) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onopenobject", key);
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
                 if (this.depth === 0) {
                     currentObject = rootObj = {};
                 } else {
@@ -151,7 +193,7 @@ class INF {
                 currentKey = key;
             };
             parser.onvalue = function (value) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onvalue", value);
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onvalue", value);
                 if (currentKey === null) {
                     currentObject.push(value);
                 } else {
@@ -159,7 +201,7 @@ class INF {
                 }
             };
             parser.onkey = function (key) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onkey", key);
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onkey", key);
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
                     currentObject = rootObj = {};
@@ -167,7 +209,7 @@ class INF {
                 currentKey = key;
             };
             parser.oncloseobject = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:oncloseobject");
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:oncloseobject");
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
                 } else {
@@ -176,34 +218,37 @@ class INF {
                 }
             };
             parser.onopenarray = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onopenarray");
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onopenarray");
                 previousObjectStack.push(currentObject);
                 currentObject = currentObject[currentKey] = [];
                 previousKeyStack.push(currentKey);
                 currentKey = null;
             };
             parser.onclosearray = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onclosearray");
+                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onclosearray");
                 currentKey = previousKeyStack.pop();
                 currentObject = previousObjectStack.pop();
             };
             parser.onend = resolve;
             parser.write(instructions).close();            
         });
-        
-        await Promise.mapSeries(instructionObjects, await function (instructionObject) {
-            if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():instructionObject". instructionObject);
+
+        instructionObjects = instructionObjects.map(function (instructionObject) {
             let key = Object.keys(instructionObject)[0];
-            return self.processor.processInstruction(key, instructionObject[key]);
+            return [
+                key,
+                JSON.stringify(instructionObject[key])
+            ].join("\t");
         });
 
-        if (!self.namespace.referringNamespace) {
-            self.namespace.componentInitContext.emit("parsed");
+        if (self.infiFilepath) {
+            await FS.writeFileAsync(self.infiFilepath, instructionObjects.join("\n"));
         }
 
-        // TODO: Dump state
+        return instructionObjects;
     }
 }
+
 
 class Component {
 
@@ -268,8 +313,8 @@ class Namespace {
         self.componentInitContext = new ComponentInitContext(self);
 
         if (self.referringNamespace) {
-            self.referringNamespace.componentInitContext.on("parsed", function () {
-                self.componentInitContext.emit("parsed");
+            self.referringNamespace.componentInitContext.on("processed", function () {
+                self.componentInitContext.emit("processed");
             });
         }
     }

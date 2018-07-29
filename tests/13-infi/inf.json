@@ -1,0 +1,15 @@
+{
+    "bundle #": "../12-PINFBundle/bundler",
+
+    "bundle # /main.js": (javascript () >>>
+
+        console.log("Hello World!");
+
+    <<<),
+
+    "# echo": "bundle # bundle",
+
+    "# echo": "---",
+
+    "# echo": "# /.~infi~inf.json"
+}
