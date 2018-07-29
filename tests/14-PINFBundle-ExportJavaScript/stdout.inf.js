@@ -9,8 +9,6 @@ exports.inf = async function (inf) {
 
         invoke: async function (pointer, value) {
 
-            value = value.value;
-
             if (pointer === "formatter") {
 
                 formatter = value;
@@ -18,7 +16,7 @@ exports.inf = async function (inf) {
             } else
             if (pointer === "echo") {
 
-                let message = await formatter(value);
+                let message = await formatter.value(value);
                 
                 process.stdout.write(message.toString() + "\n");
             }
@@ -27,9 +25,14 @@ exports.inf = async function (inf) {
         toJavaScript: function () {
 
             return `
-                exports.echo = function () {
+                let formatter = require("${formatter.moduleId}");
 
-                }            
+                exports.echo = function (value) {
+
+                    let message = formatter(value);
+
+                    console.log(message);
+                }
             `
         }
     };

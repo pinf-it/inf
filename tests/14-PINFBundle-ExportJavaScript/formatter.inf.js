@@ -26,11 +26,16 @@ exports.inf = async function (inf) {
         },
 
         toJavaScript: function () {
-
             return `
-                exports.format = function () {
+                let mode = ${JSON.stringify(mode)};
 
-                }            
+                exports.format = function (value) {
+
+                    if (mode === "UPPERCASE") {
+
+                        return value.toUpperCase();
+                    }
+                }
             `
         }
     };

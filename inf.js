@@ -305,9 +305,11 @@ class ComponentInitContext extends EventEmitter {
         self.toJavaScript = function () {
             let self = this;
 
+            let memoizedComponents = {};
             let fs = Object.keys(namespace.components).filter(function (uri) {
                 return (typeof namespace.components[uri].impl.toJavaScript === 'function');
             }).map(function (uri) {
+                memoizedComponents[namespace.components[uri].pathHash] = true;
 // --------------------------------------------------
 return `require.memoize("/${namespace.components[uri].pathHash}.js", function (require, exports, module) {
     ${namespace.components[uri].impl.toJavaScript()}
@@ -315,15 +317,22 @@ return `require.memoize("/${namespace.components[uri].pathHash}.js", function (r
 // --------------------------------------------------
             });
 
+            let aliases = {};
+            Object.keys(namespace.aliases).forEach(function (alias) {
+                if (!memoizedComponents[namespace.aliases[alias].pathHash]) return;
+                aliases[alias] = namespace.aliases[alias].pathHash;
+            });
+
 // --------------------------------------------------
-return `module.exports = new Promise(function (resolve, reject) { require.sandbox(function (require) {
+return `let inf = new Promise(function (resolve, reject) { require.sandbox(function (require) {
 ${fs.join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
 
-aliases ...    
+let aliases = ${JSON.stringify(aliases, null, 4)};
 
 });
-}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
+}, function (sandbox) { try { resolve(sandbox); } catch (err) { reject(err); } }, reject); });
+module.exports = function (uri) { return inf.then(function (inf) { return inf.require("/" + uri); }); }`
 // --------------------------------------------------
         }
     }

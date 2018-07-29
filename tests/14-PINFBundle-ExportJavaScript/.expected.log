@@ -1,36 +1,56 @@
 COMPONENT OK
 Default OK
 ---
+TO JAVASCRIPT in STDOUT: formatter!! Node { value: [AsyncFunction] }
 PINF.bundle("", function (require) {
     require.memoize("/inf.js", function (require, exports, module) {
-module.exports = new Promise(function (resolve, reject) { require.sandbox(function (require) {
+let inf = new Promise(function (resolve, reject) { require.sandbox(function (require) {
 require.memoize("/1847b03979dc6892d29b5686f0cc8018bec54b0a.js", function (require, exports, module) {
     
-                exports.format = function () {
+                let mode = "UPPERCASE";
 
-                }            
+                exports.format = function (value) {
+
+                    if (mode === "UPPERCASE") {
+
+                        return value.toUpperCase();
+                    }
+                }
             
 });
 require.memoize("/11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43.js", function (require, exports, module) {
     
-                exports.echo = function () {
+                let formatter = require("undefined");
 
-                }            
+                exports.echo = function (value) {
+
+                    let message = formatter(value);
+
+                    console.log(message);
+                }
             
 });
 require.memoize("/main.js", function (require, exports, module) {
 
-aliases ...    
+let aliases = {
+    "formatter": "1847b03979dc6892d29b5686f0cc8018bec54b0a",
+    "stdout": "11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43"
+};
 
 });
-}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });
+}, function (sandbox) { try { resolve(sandbox); } catch (err) { reject(err); } }, reject); });
+module.exports = function (uri) { return inf.then(function (inf) { return inf.require("/" + uri); }); }
     });
     require.memoize("/main.js", function (require, exports, module) {
 
 require("./inf").then(function (inf) {
 
-    console.log("inf", inf);
+    return inf("stdout").then(function (stdout) {
+
+        stdout("Hello from bundle");
+    });
 
 }, console.error);
     });
 });
+TODO: Run bundle!
