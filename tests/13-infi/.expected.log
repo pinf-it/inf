@@ -6,7 +6,7 @@ console.log("Hello World!");
     });
 });
 ---
-bundle #	"../12-PINFBundle/bundler"
+bundle #	"../12-PINFBundle-MountFiles/bundler"
 bundle # /main.js	{".@":"github.com~0ink~codeblock/codeblock:Codeblock","_code":"\\nconsole.log(\"Hello World!\");\\n","_format":"javascript","_args":[],"_compiled":false}
 # echo	"bundle # bundle"
 # echo	"---"
