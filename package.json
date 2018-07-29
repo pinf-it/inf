@@ -12,6 +12,7 @@
   "dependencies": {
     "bluebird": "^3.5.1",
     "clarinet": "^0.12.1",
-    "codeblock": "^0.3.10"
+    "codeblock": "^0.3.10",
+    "pinf-loader-js": "^0.4.22"
   }
 }

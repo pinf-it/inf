@@ -25,11 +25,11 @@ exports.inf = async function (inf) {
         toJavaScript: function () {
 
             return `
-                let formatter = require("${formatter.moduleId}");
+                let formatter = require("${formatter.jsId}");
 
                 exports.echo = function (value) {
 
-                    let message = formatter(value);
+                    let message = formatter.format(value);
 
                     console.log(message);
                 }

@@ -3,7 +3,8 @@ Default OK
 ---
 PINF.bundle("", function (require) {
     require.memoize("/inf.js", function (require, exports, module) {
-let inf = new Promise(function (resolve, reject) { require.sandbox(function (require) {
+
+return new Promise(function (resolve, reject) { require.sandbox(function (require) {
 require.memoize("/1847b03979dc6892d29b5686f0cc8018bec54b0a.js", function (require, exports, module) {
     
                 let mode = "UPPERCASE";
@@ -19,11 +20,11 @@ require.memoize("/1847b03979dc6892d29b5686f0cc8018bec54b0a.js", function (requir
 });
 require.memoize("/11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43.js", function (require, exports, module) {
     
-                let formatter = require("undefined");
+                let formatter = require("./1847b03979dc6892d29b5686f0cc8018bec54b0a");
 
                 exports.echo = function (value) {
 
-                    let message = formatter(value);
+                    let message = formatter.format(value);
 
                     console.log(message);
                 }
@@ -31,25 +32,22 @@ require.memoize("/11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43.js", function (requir
 });
 require.memoize("/main.js", function (require, exports, module) {
 
-let aliases = {
-    "formatter": "1847b03979dc6892d29b5686f0cc8018bec54b0a",
-    "stdout": "11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43"
-};
+    let rtNamespace = {};
+    rtNamespace['formatter'] = require('./1847b03979dc6892d29b5686f0cc8018bec54b0a')
+rtNamespace['stdout'] = require('./11ea3a36ac9eb4632e8619cb452aa6a28fb1fe43')
 
+    return rtNamespace;
 });
-}, function (sandbox) { try { resolve(sandbox); } catch (err) { reject(err); } }, reject); });
-module.exports = function (uri) { return inf.then(function (inf) { return inf.require("/" + uri); }); }
+}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });
     });
     require.memoize("/main.js", function (require, exports, module) {
 
 require("./inf").then(function (inf) {
 
-    return inf("stdout").then(function (stdout) {
-
-        stdout("Hello from bundle");
-    });
+    inf.stdout.echo("Hello from bundle!");
 
 }, console.error);
     });
 });
-TODO: Run bundle!
+---
+HELLO FROM BUNDLE!

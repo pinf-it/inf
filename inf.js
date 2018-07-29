@@ -317,22 +317,24 @@ return `require.memoize("/${namespace.components[uri].pathHash}.js", function (r
 // --------------------------------------------------
             });
 
-            let aliases = {};
-            Object.keys(namespace.aliases).forEach(function (alias) {
-                if (!memoizedComponents[namespace.aliases[alias].pathHash]) return;
-                aliases[alias] = namespace.aliases[alias].pathHash;
-            });
-
 // --------------------------------------------------
-return `let inf = new Promise(function (resolve, reject) { require.sandbox(function (require) {
+return `
+return new Promise(function (resolve, reject) { require.sandbox(function (require) {
 ${fs.join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
 
-let aliases = ${JSON.stringify(aliases, null, 4)};
+    let rtNamespace = {};
+    ${Object.keys(namespace.aliases).filter(function (alias) {
+        return (!!memoizedComponents[namespace.aliases[alias].pathHash]);
+    }).map(function (alias) {
+// --------------------------------------------------
+return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}')`
+// --------------------------------------------------
+    }).join('\n')}
 
+    return rtNamespace;
 });
-}, function (sandbox) { try { resolve(sandbox); } catch (err) { reject(err); } }, reject); });
-module.exports = function (uri) { return inf.then(function (inf) { return inf.require("/" + uri); }); }`
+}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
 // --------------------------------------------------
         }
     }
@@ -566,6 +568,8 @@ class Processor {
 
                     return Node.WrapInstructionNode(value);
                 });
+
+                value.jsId = "./" + referencedComponent.pathHash;
             }
         }
 

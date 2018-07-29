@@ -3,6 +3,8 @@
 
 exports.inf = async function (inf) {
 
+    const PINF = require("pinf-loader-js");
+
     var fs = {};
 
     return {
@@ -30,6 +32,35 @@ ${value.toString()}
     }`
 // --------------------------------------------------
                 }
+            } else
+            if (pointer === 'eval') {
+
+                let bundle = (await value.value()).value;
+
+                if (!/^PINF\.bundle\(/.test(bundle)) {
+                    console.error("bundle", bundle);
+                    throw new Error("Cannot eval() code as it is not a PINF bundle!");
+                }
+
+                await new Promise(function (resolve, reject) {
+                    PINF.sandbox("", {
+                        load: function (uri, loadedCallback) {
+                            try {
+                                eval(bundle);
+                                loadedCallback(null);
+                            } catch (err) {
+                                console.error("bundle", bundle);
+                                console.error("err", err);
+                                loadedCallback(new Error("Error evaluating bundle!"));
+                            }
+                        }
+                    }, function (sandbox) {
+
+                        resolve(sandbox.main());
+
+                    }, reject);
+                });
+
             } else {
                 throw new Error("Pointer '" + pointer + "' not found in component '" +  __filename + "'!");
             }

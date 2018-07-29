@@ -20,6 +20,7 @@ Features:
   * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
   * Great compile target
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
+  * Export resolved `inf` component structure and mapped invocation relationships to JavaScript
   * TODO:
     * Comments
     * Extendable

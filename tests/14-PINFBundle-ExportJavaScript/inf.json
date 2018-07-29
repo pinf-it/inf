@@ -18,15 +18,14 @@
 
         require("./inf").then(function (inf) {
 
-            return inf("stdout").then(function (stdout) {
-
-                stdout("Hello from bundle");
-            });
+            inf.stdout.echo("Hello from bundle!");
 
         }, console.error);
     <<<),
 
     "# echo": "bundle # bundle",
 
-    "# echo": "TODO: Run bundle!"
+    "# echo": "---",
+
+    "bundle # eval": "bundle # bundle"
 }
