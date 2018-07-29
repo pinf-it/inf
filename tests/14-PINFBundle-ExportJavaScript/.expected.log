@@ -1,7 +1,6 @@
 COMPONENT OK
 Default OK
 ---
-TO JAVASCRIPT in STDOUT: formatter!! Node { value: [AsyncFunction] }
 PINF.bundle("", function (require) {
     require.memoize("/inf.js", function (require, exports, module) {
 let inf = new Promise(function (resolve, reject) { require.sandbox(function (require) {
