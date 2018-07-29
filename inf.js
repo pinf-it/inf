@@ -20,6 +20,7 @@ FS.existsAsync = function (path) {
 }
 const CLARINET = require("clarinet");
 const CODEBLOCK = require("codeblock");
+const CRYPTO = require("crypto");
 
 
 // ####################################################################################################
@@ -76,6 +77,8 @@ class INF {
     async runInstructionsFile (filepath) {
         let self = this;
 
+        filepath = filepath.replace(/^\.~infi~/, "");
+
         let path = PATH.join(self.rootDir, filepath);
         let exists = await FS.existsAsync(path);
 
@@ -129,15 +132,16 @@ class Parser {
     async parseInstructions (instructions) {
         let self = this;
 
-        if (self.infiFilepath) {
-            let exists = await FS.existsAsync(self.infiFilepath);
-            if (exists) {
-                if (
-                    (await FS.statAsync(self.infiFilepath)).mtime >=
-                    (await FS.statAsync(PATH.join(self.rootDir, self.filepath))).mtime
-                ) {
-                    return (await FS.readFileAsync(self.infiFilepath, "utf8")).split("\n");
-                }
+        let sourceExists = (self.filepath && await FS.existsAsync(PATH.join(self.rootDir, self.filepath)));
+        let infiExists = (self.infiFilepath && await FS.existsAsync(PATH.join(self.rootDir, self.infiFilepath)));
+
+        if (infiExists) {
+            if (!sourceExists) return (await FS.readFileAsync(PATH.join(self.rootDir, self.infiFilepath), "utf8")).split("\n");
+            if (
+                (await FS.statAsync(PATH.join(self.rootDir, self.infiFilepath))).mtime >=
+                (await FS.statAsync(PATH.join(self.rootDir, self.filepath))).mtime
+            ) {
+                return (await FS.readFileAsync(PATH.join(self.rootDir, self.infiFilepath), "utf8")).split("\n");
             }
         }
 
@@ -261,6 +265,8 @@ class Component {
     async init (namespace) {
         let self = this;
 
+        self.pathHash = CRYPTO.createHash('sha1').update(self.path).digest('hex');
+
         let mod = require(self.path);
 
         if (typeof mod.inf !== "function") {
@@ -270,14 +276,14 @@ class Component {
         return self.impl = await mod.inf(namespace.componentInitContext);
     }
 
-    async invoke (instruction) {
+    async invoke (pointer, value) {
         let self = this;
 
         if (typeof self.impl.invoke !== "function") {
-            throw new Error("Component at path '" + self.path + "' does not export 'inf().invoke()'!");
+            throw new Error("Component at path '" + self.path + "' does not export 'inf().invoke(pointer, value)'!");
         }
 
-        return self.impl.invoke(instruction);
+        return self.impl.invoke(pointer, value);
     }
 }
 
@@ -295,6 +301,31 @@ class ComponentInitContext extends EventEmitter {
         };
 
         self.cwd = (namespace.referringNamespace && namespace.referringNamespace.rootDir) || namespace.rootDir;
+
+        self.toJavaScript = function () {
+            let self = this;
+
+            let fs = Object.keys(namespace.components).filter(function (uri) {
+                return (typeof namespace.components[uri].impl.toJavaScript === 'function');
+            }).map(function (uri) {
+// --------------------------------------------------
+return `require.memoize("/${namespace.components[uri].pathHash}.js", function (require, exports, module) {
+    ${namespace.components[uri].impl.toJavaScript()}
+});`
+// --------------------------------------------------
+            });
+
+// --------------------------------------------------
+return `module.exports = new Promise(function (resolve, reject) { require.sandbox(function (require) {
+${fs.join("\n")}
+require.memoize("/main.js", function (require, exports, module) {
+
+aliases ...    
+
+});
+}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
+// --------------------------------------------------
+        }
     }
 }
 
@@ -389,7 +420,9 @@ class Namespace {
 
             let component = new Component(path);
 
-            self.components[uri] = await component.init(self);
+            await component.init(self);
+
+            self.components[uri] = component;
         }
         return self.components[uri];
     }

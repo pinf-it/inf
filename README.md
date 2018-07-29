@@ -7,7 +7,7 @@ inf
 
 The syntax is JSON compliant and an ordered parser is used to process each document node in the order it was declared in.
 
-The output is a nested namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in a `inf.json` file.
+The output is a flat namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in a `inf.json` file. An intermediate `.~infi~inf.json` file containing `\t` and `\n` delimited JSON nodes for entire `inf` structure is also generated.
 
 Features:
 
@@ -16,13 +16,14 @@ Features:
   * Set properties on aliased pointers
   * Map aliased pointers to aliased pointers
   * Inheritance
-
+  * Ordered JSONish (allows for duplicate keys)
+  * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
+  * Great compile target
+  * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
   * TODO:
     * Comments
-    * Ordered JSONish (allows for duplicate keys)
     * Extendable
     * Layerable
-    * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
     * Highly optimized runtime structure (RTNamespace)
     * Interfaces:
       * Unix CLI
@@ -63,6 +64,8 @@ Details
 Terminilogy
 -----------
 
+  * `inf.json`
+  * `.~infi~inf.json`
   * Instruction File
   * Instructions
   * Instruction

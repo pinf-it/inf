@@ -1,0 +1,27 @@
+{
+    "formatter #": "./formatter",
+    "formatter # mode": "UPPERCASE",
+
+    "stdout #": "./stdout",
+    "stdout # formatter": "formatter # format",
+    "stdout # echo": "Component OK",
+
+    "# echo": "Default OK",
+
+    "# echo": "---",
+
+    "bundle #": "../12-PINFBundle-MountFiles/bundler",
+
+    "bundle # /inf.js": "# js",
+
+    "bundle # /main.js": (javascript () >>>
+
+        require("./inf").then(function (inf) {
+
+            console.log("inf", inf);
+
+        }, console.error);
+    <<<),
+
+    "# echo": "bundle # bundle"
+}

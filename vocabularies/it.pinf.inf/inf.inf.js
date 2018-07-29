@@ -24,6 +24,11 @@ exports.inf = async function (inf) {
 
         invoke: async function (pointer, value) {
 
+            if (pointer === "js") {
+
+                return inf.toJavaScript();
+
+            } else
             if (pointer === "echo") {
 
                 if (typeof value.value === "function") {
