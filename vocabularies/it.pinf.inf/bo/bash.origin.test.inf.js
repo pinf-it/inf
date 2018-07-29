@@ -18,7 +18,7 @@ exports.inf = async function (inf) {
 
             if (pointer === "dir") {
 
-                testDir = value;
+                testDir = value.value;
 
             } else
             if (pointer === "run") {

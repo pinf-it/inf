@@ -9,6 +9,8 @@ exports.inf = async function (inf) {
 
         invoke: function (pointer, value) {
 
+            value = value.value;
+
             if (pointer === "prefix") {
 
                 options.prefix = value;

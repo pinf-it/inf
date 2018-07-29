@@ -19,6 +19,7 @@ FS.existsAsync = function (path) {
     });
 }
 const CLARINET = require("clarinet");
+const CODEBLOCK = require("codeblock");
 
 
 // ####################################################################################################
@@ -92,23 +93,32 @@ class INF {
     async runInstructions (instructions, filepath) {
         let self = this;
 
+        let PARSER_EVENT_DEBUG = false;
+
         // Strip shebang
         instructions = instructions.replace(/^#!.+\n/, "");
+
+        // Normalize codeblocks
+        instructions = CODEBLOCK.purifyCode(instructions, {
+            freezeToJSON: true
+        }).toString();
 
         self.namespace = new Namespace(self.rootDir, self.referringNamespace);
         self.processor = new Processor(self.namespace);
 
+        if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions(instructions)", instructions);
+
         // TODO: Instead of first populating 'instructionObjects' and then processing them we should
         //       process instruction objects as they come in. This will allow for faster processing of
         //       large instruction files.
-        var instructionObjects = [];
+        let instructionObjects = [];
 
         // Parse JSON using SAX parser which allows for repeated keys.
         await new Promise(function (resolve, reject) {
             function onInstructionObject (obj) {
                 instructionObjects.push(obj);
             }
-            var parser = CLARINET.parser();
+            let parser = CLARINET.parser();
             parser.onerror = function (err) {
                 console.error("err", err); 
                 console.error("self.rootDir", self.rootDir);
@@ -116,21 +126,40 @@ class INF {
                 console.error("instructions", instructions);
                 reject(new Error("Error parsing instructions!"));
             };
-            var rootObj = null;
-            var currentObject = null;
-            var currentKey = null;
+            let rootObj = null;
+            let currentObject = null;
+            let currentKey = null;
+            let previousKeyStack = [];
+            let previousObjectStack = [];
             parser.onopenobject = function (key) {
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onopenobject", key);
                 if (this.depth === 0) {
                     currentObject = rootObj = {};
                 } else {
-                    currentObject = currentObject[currentKey] = {};
+                    previousObjectStack.push(currentObject);
+
+                    if (Array.isArray(currentObject)) {
+                        let obj = {};
+                        obj[key] = {}
+                        currentObject.push(obj);
+                        currentObject = obj;
+                    } else {
+                        currentObject = currentObject[currentKey] = {};
+                    }
+                    previousKeyStack.push(currentKey);
                 }
                 currentKey = key;
             };
             parser.onvalue = function (value) {
-                currentObject[currentKey] = value;
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onvalue", value);
+                if (currentKey === null) {
+                    currentObject.push(value);
+                } else {
+                    currentObject[currentKey] = value;
+                }
             };
             parser.onkey = function (key) {
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onkey", key);
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
                     currentObject = rootObj = {};
@@ -138,21 +167,32 @@ class INF {
                 currentKey = key;
             };
             parser.oncloseobject = function () {
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:oncloseobject");
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
+                } else {
+                    currentKey = previousKeyStack.pop();
+                    currentObject = previousObjectStack.pop();
                 }
             };
             parser.onopenarray = function () {
-                throw new Error("TODO: implement");
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onopenarray");
+                previousObjectStack.push(currentObject);
+                currentObject = currentObject[currentKey] = [];
+                previousKeyStack.push(currentKey);
+                currentKey = null;
             };
             parser.onclosearray = function () {
-                throw new Error("TODO: implement");
+                if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():parser:onclosearray");
+                currentKey = previousKeyStack.pop();
+                currentObject = previousObjectStack.pop();
             };
             parser.onend = resolve;
             parser.write(instructions).close();            
         });
         
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
+            if (PARSER_EVENT_DEBUG) console.log("[inf] INF:runInstructions():instructionObject". instructionObject);
             let key = Object.keys(instructionObject)[0];
             return self.processor.processInstruction(key, instructionObject[key]);
         });
@@ -339,6 +379,76 @@ class Namespace {
     }
 }
 
+
+
+class Node {
+
+    static WrapInstructionNode (value) {
+
+        if (value instanceof Node) {
+            return value;
+        } else
+        if (!value) {
+            return new Node(value);
+        } else
+        if (CodeblockNode.handlesValue(value)) {
+            return new CodeblockNode(value);
+        } else
+        if (ReferenceNode.handlesValue(value)) {
+            return new ReferenceNode(value);
+        }
+
+        return new Node(value);
+    }
+
+    constructor (value) {
+        this.value = value;
+    }
+
+    toString () {
+        if (typeof this.value === "object") return JSON.stringify(this.value, null, 4);
+        return this.value;
+    }
+}
+
+class CodeblockNode extends Node {
+
+    static handlesValue (value) {
+        return (
+            typeof value === "object" &&
+            value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+        );
+    }
+
+    toString () {
+        let codeblock = CODEBLOCK.thawFromJSON(this.value);
+
+        return codeblock.getCode();
+    }
+}
+
+class ReferenceNode extends Node {
+
+    static handlesValue (value) {
+        return (
+            typeof value === "string" &&
+            value.match(/^([^#]*?)\s*#\s*(.*?)$/)
+        );
+    }
+
+    constructor (value) {
+        super(value);
+        let keyMatch = ReferenceNode.handlesValue(value);
+        this.alias = keyMatch[1];
+        this.pointer = keyMatch[2];
+    }
+
+    toString () {
+        return (this.alias + '#' + this.pointer);
+    }
+}
+
+
 class Processor {
 
     constructor (namespace) {
@@ -350,42 +460,49 @@ class Processor {
     async closureForValueIfReference (value) {
         let self = this;
 
-        if (typeof value === "string") {
+        if (typeof value.value === "string") {
 
             // See if we are referencing an aliased component. If we are we resolve the reference
             // and pass it along with the component invocation.
-            let referenceMatch = value.match(/^([^#]*?)\s*#\s*(.+?)$/);
+            let referenceMatch = value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
 
             if (referenceMatch) {
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
 
                 // We create an invocation wrapper to avoid leaking references.
-                value = function (instruction) {
-                    return referencedComponent.invoke(referenceMatch[2], instruction);
-                }
+                value = Node.WrapInstructionNode(async function (instruction) {
+
+                    let value = Node.WrapInstructionNode(instruction);
+
+                    value = await referencedComponent.invoke(referenceMatch[2], value);
+
+                    return Node.WrapInstructionNode(value);
+                });
             }
         }
 
         return value;
     }
 
-    async processInstruction (key, value) {
+    async processInstruction (anchor, value) {
         let self = this;
 
-        log("Parse instruction:", key, ":", value);
+        log("Parse instruction:", anchor, ":", value);
 
-        let keyMatch = key.match(/^([^#]*?)\s*#\s*(.*?)$/);
-        if (!keyMatch) {
-            throw new Error("Instruction key does not follow '[<Alias> ]#[ <Pointer>]' format!");
+        // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
+        anchor = Node.WrapInstructionNode(anchor);
+        value = Node.WrapInstructionNode(value);
+
+        if (! anchor instanceof ReferenceNode) {
+            console.error("anchor", anchor);
+            throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
         }
-        let alias = keyMatch[1];
-        let pointer = keyMatch[2];
 
         // Inherit from another inf.json file
-        if (key === "#") {
+        if (anchor.value === "#") {
 
-            let path = await self.namespace.resolveInfUri(value);
+            let path = await self.namespace.resolveInfUri(value.value);
 
             log("Inherit from inf file:", path);
 
@@ -395,24 +512,24 @@ class Processor {
 
         } else
         // Component mapping
-        if (pointer === '') {
+        if (anchor.pointer === '') {
 
-            await self.namespace.mapComponent(alias, value);
+            await self.namespace.mapComponent(anchor.alias, value);
 
         } else
         // Mapped component instruction
-        if (pointer != '') {
+        if (anchor.pointer != '') {
 
-            let component = await self.namespace.getComponentForAlias(alias);
+            let component = await self.namespace.getComponentForAlias(anchor.alias);
 
             value = await self.closureForValueIfReference(value);
 
-            return component.invoke(pointer, value);
+            return component.invoke(anchor.pointer, value);
 
         } else {
-            console.error("instruction:", key, ":", value);
-            console.error("alias:", alias);
-            console.error("pointer:", pointer);
+            console.error("instruction:", anchor, ":", value);
+            console.error("anchor.alias:", anchor.alias);
+            console.error("anchor.pointer:", anchor.pointer);
             throw new Error("Unknown instruction!");
         }
     }

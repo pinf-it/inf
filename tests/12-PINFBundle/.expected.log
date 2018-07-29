@@ -1,0 +1,7 @@
+PINF.bundle("", function (require) {
+    require.memoize("/main.js", function (require, exports, module) {
+        
+console.log("Hello World!");
+
+    });
+});

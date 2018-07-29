@@ -1,2 +1,0 @@
-INIT BUNDLER
-BUNDLER INVOKE: /main.js Hello World!

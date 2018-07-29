@@ -1,0 +1,19 @@
+OK
+{
+    "message": "Mesage 1",
+    "messages": [
+        {
+            "message": "Mesage 2"
+        },
+        "Message 3",
+        {
+            "message": "Mesage 4",
+            "message_extra": {
+                "message": "Message 5"
+            }
+        },
+        "Message  6"
+    ],
+    "message_final": "Mesage 7"
+}
+OK

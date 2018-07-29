@@ -7,7 +7,9 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, value) {
+        invoke: async function (pointer, value) {
+
+            value = value.value;
 
             if (pointer === "mode") {
 

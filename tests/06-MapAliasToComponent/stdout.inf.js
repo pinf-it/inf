@@ -7,7 +7,9 @@ exports.inf = async function (inf) {
 
     return {
 
-        invoke: function (pointer, value) {
+        invoke: async function (pointer, value) {
+
+            value = value.value;
 
             if (pointer === "formatter") {
 
@@ -16,9 +18,9 @@ exports.inf = async function (inf) {
             } else
             if (pointer === "echo") {
 
-                let message = formatter(value);
-
-                process.stdout.write(message + "\n");
+                let message = await formatter(value);
+                
+                process.stdout.write(message.toString() + "\n");
             }
         }
     };

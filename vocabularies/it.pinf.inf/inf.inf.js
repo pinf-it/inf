@@ -8,7 +8,7 @@ exports.inf = async function (inf) {
     };
 
     // We trigger all 'turn' handlers after all inf instructions are parsed.
-    inf.on("parsed", function async () {
+    inf.on("parsed", function () {
 
         return inf.LIB.Promise.mapSeries(on.turn, function (handler) {
 
@@ -16,7 +16,7 @@ exports.inf = async function (inf) {
             //       a file has changed.
             // TODO: Check CLI option or ENV variable to force calling all handlers.
 
-            return handler();
+            return handler.value();
         });
     });
 
@@ -26,9 +26,16 @@ exports.inf = async function (inf) {
 
             if (pointer === "echo") {
 
-                if (typeof value === "function") {
-                    value = await value();
+                if (typeof value.value === "function") {
+                    value = await value.value();
                 }
+
+                if (value.value instanceof Buffer) {
+                    value = value.value.toString();
+                } else {
+                    value = value.toString();
+                }
+
                 process.stdout.write(value + "\n");
 
             } else
@@ -41,7 +48,7 @@ exports.inf = async function (inf) {
             if (pointer === "on.turn") {
 
                 on.turn.push(value);
-                
+
             } else {
                 throw new Error("Pointer '" + pointer + "' not found in component '" +  __filename + "'!");
             }
