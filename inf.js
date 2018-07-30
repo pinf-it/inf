@@ -246,7 +246,7 @@ class Parser {
         });
 
         if (self.infiFilepath) {
-            await FS.writeFileAsync(self.infiFilepath, instructionObjects.join("\n"));
+            await FS.writeFileAsync(PATH.join(self.rootDir, self.infiFilepath), instructionObjects.join("\n"));
         }
 
         return instructionObjects;
@@ -302,6 +302,7 @@ class ComponentInitContext extends EventEmitter {
 
         self.cwd = (namespace.referringNamespace && namespace.referringNamespace.rootDir) || namespace.rootDir;
 
+        // TODO: Use 'self.fatherAspect("JavaScript")'
         self.toJavaScript = function () {
             let self = this;
 
