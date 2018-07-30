@@ -297,42 +297,29 @@ class ComponentInitContext extends EventEmitter {
         self.LIB = {
             Promise: Promise,
             PATH: PATH,
-            FS: FS
+            FS: FS,
+            CODEBLOCK: CODEBLOCK,
+            CRYPTO: CRYPTO
         };
 
         self.cwd = (namespace.referringNamespace && namespace.referringNamespace.rootDir) || namespace.rootDir;
 
-        // TODO: Use 'self.fatherAspect("JavaScript")'
         self.toJavaScript = function () {
             let self = this;
-
             let memoizedComponents = {};
-            let fs = Object.keys(namespace.components).filter(function (uri) {
-                return (typeof namespace.components[uri].impl.toJavaScript === 'function');
-            }).map(function (uri) {
-                memoizedComponents[namespace.components[uri].pathHash] = true;
 // --------------------------------------------------
-return `require.memoize("/${namespace.components[uri].pathHash}.js", function (require, exports, module) {
-    ${namespace.components[uri].impl.toJavaScript()}
-});`
-// --------------------------------------------------
-            });
-
-// --------------------------------------------------
-return `
-return new Promise(function (resolve, reject) { require.sandbox(function (require) {
-${fs.join("\n")}
+return `return new Promise(function (resolve, reject) { require.sandbox(function (require) {
+${namespace.gatherComponentAspect("JavaScript").map(function (component) {
+    memoizedComponents[component.pathHash] = true;
+    return `require.memoize("/${component.pathHash}.js", function (require, exports, module) {\n${component.aspect}\n});`;
+}).join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
-
     let rtNamespace = {};
     ${Object.keys(namespace.aliases).filter(function (alias) {
         return (!!memoizedComponents[namespace.aliases[alias].pathHash]);
     }).map(function (alias) {
-// --------------------------------------------------
-return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}')`
-// --------------------------------------------------
+        return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}')`;
     }).join('\n')}
-
     return rtNamespace;
 });
 }, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
@@ -467,6 +454,19 @@ class Namespace {
 
         return self.aliases[alias];
     }
+
+    gatherComponentAspect (aspectName) {
+        let self = this;
+        return Object.keys(self.components).filter(function (uri) {
+            return (typeof self.components[uri].impl['to' + aspectName] === 'function');
+        }).map(function (uri) {
+            return {
+                uri: uri,
+                pathHash: self.components[uri].pathHash,
+                aspect: self.components[uri].impl['to' + aspectName]()
+            };
+        });
+    }    
 }
 
 
