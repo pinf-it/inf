@@ -1,5 +1,5 @@
 {
-    "vfs #": "./vfs",
+    "vfs #": "./vfs.",
 
     "# echo": "---",
     "# echo": "# /main.sh",

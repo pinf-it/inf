@@ -1,6 +1,6 @@
 #!/usr/bin/env inf
 {
-    "#": "inf.pinf.it/bo",
+    "#": "inf.pinf.it/bo/",
 
     "test # dir": "tests"
 }

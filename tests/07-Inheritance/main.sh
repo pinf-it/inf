@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "#": "../06-MapAliasToComponent",
+    "#": "../06-MapAliasToComponent/",
 
     "stdout # echo": "ok",
 

@@ -46,7 +46,7 @@ exports.inf = async function (inf) {
             } else
             if (/^\//.test(pointer)) {
 
-                let path = inf.LIB.PATH.join(inf.cwd, pointer);
+                let path = inf.LIB.PATH.join(inf.rootDir, pointer);
                 return inf.LIB.FS.readFileAsync(path);
 
             } else

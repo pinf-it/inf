@@ -1,8 +1,8 @@
 {
-    "formatter #": "./formatter",
+    "formatter #": "./formatter.",
     "formatter # mode": "UPPERCASE",
 
-    "stdout #": "./stdout",
+    "stdout #": "./stdout.",
     "stdout # formatter": "formatter # format",
     "stdout # echo": "Component OK",
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "bundle #": "./bundler",
+    "bundle #": "./bundler.",
 
     "bundle # /main.js": (javascript () >>>
 

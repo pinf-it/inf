@@ -67,10 +67,10 @@ setImmediate(function () {
 
 class INF {
 
-    constructor (rootDir, referringNamespace) {
+    constructor (baseDir, referringNamespace) {
         let self = this;
 
-        self.rootDir = rootDir;
+        self.baseDir = baseDir;
         self.referringNamespace = referringNamespace;
     }
 
@@ -79,7 +79,7 @@ class INF {
 
         filepath = filepath.replace(/^\.~infi~/, "");
 
-        let path = PATH.join(self.rootDir, filepath);
+        let path = PATH.join(self.baseDir, filepath);
         let exists = await FS.existsAsync(path);
 
         if (!exists) {
@@ -96,13 +96,13 @@ class INF {
     async runInstructions (instructions, filepath) {
         let self = this;
 
-        self.parser = new Parser(self.rootDir, filepath);
+        self.parser = new Parser(self.baseDir, filepath);
         // TODO: Instead of first populating 'instructionObjects' and then processing them we should
         //       process instruction objects as they come in. This will allow for faster processing of
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(self.rootDir, self.referringNamespace);
+        self.namespace = new Namespace(self.baseDir, self.referringNamespace);
         self.processor = new Processor(self.namespace);
        
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
@@ -121,8 +121,8 @@ class INF {
 
 class Parser {
 
-    constructor (rootDir, filepath) {
-        this.rootDir = rootDir;
+    constructor (baseDir, filepath) {
+        this.baseDir = baseDir;
         this.filepath = filepath;
         if (this.filepath) {
             this.infiFilepath = PATH.join(this.filepath, '..', '.~infi~' + PATH.basename(this.filepath));
@@ -132,16 +132,16 @@ class Parser {
     async parseInstructions (instructions) {
         let self = this;
 
-        let sourceExists = (self.filepath && await FS.existsAsync(PATH.join(self.rootDir, self.filepath)));
-        let infiExists = (self.infiFilepath && await FS.existsAsync(PATH.join(self.rootDir, self.infiFilepath)));
+        let sourceExists = (self.filepath && await FS.existsAsync(PATH.join(self.baseDir, self.filepath)));
+        let infiExists = (self.infiFilepath && await FS.existsAsync(PATH.join(self.baseDir, self.infiFilepath)));
 
         if (infiExists) {
-            if (!sourceExists) return (await FS.readFileAsync(PATH.join(self.rootDir, self.infiFilepath), "utf8")).split("\n");
+            if (!sourceExists) return (await FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8")).split("\n");
             if (
-                (await FS.statAsync(PATH.join(self.rootDir, self.infiFilepath))).mtime >=
-                (await FS.statAsync(PATH.join(self.rootDir, self.filepath))).mtime
+                (await FS.statAsync(PATH.join(self.baseDir, self.infiFilepath))).mtime >=
+                (await FS.statAsync(PATH.join(self.baseDir, self.filepath))).mtime
             ) {
-                return (await FS.readFileAsync(PATH.join(self.rootDir, self.infiFilepath), "utf8")).split("\n");
+                return (await FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8")).split("\n");
             }
         }
 
@@ -167,7 +167,7 @@ class Parser {
             let parser = CLARINET.parser();
             parser.onerror = function (err) {
                 console.error("err", err); 
-                console.error("self.rootDir", self.rootDir);
+                console.error("self.baseDir", self.baseDir);
                 console.error("filepath", self.filepath);
                 console.error("instructions", instructions);
                 reject(new Error("Error parsing instructions!"));
@@ -246,7 +246,7 @@ class Parser {
         });
 
         if (self.infiFilepath) {
-            await FS.writeFileAsync(PATH.join(self.rootDir, self.infiFilepath), instructionObjects.join("\n"));
+            await FS.writeFileAsync(PATH.join(self.baseDir, self.infiFilepath), instructionObjects.join("\n"));
         }
 
         return instructionObjects;
@@ -287,6 +287,14 @@ class Component {
     }
 }
 
+const LIB = {
+    Promise: Promise,
+    PATH: PATH,
+    FS: FS,
+    CODEBLOCK: CODEBLOCK,
+    CRYPTO: CRYPTO
+};
+
 class ComponentInitContext extends EventEmitter {
 
     constructor (namespace) {
@@ -294,15 +302,18 @@ class ComponentInitContext extends EventEmitter {
 
         let self = this;
 
-        self.LIB = {
-            Promise: Promise,
-            PATH: PATH,
-            FS: FS,
-            CODEBLOCK: CODEBLOCK,
-            CRYPTO: CRYPTO
-        };
+        self.LIB = LIB;
 
-        self.cwd = (namespace.referringNamespace && namespace.referringNamespace.rootDir) || namespace.rootDir;
+        self.baseDir = namespace.baseDir;
+
+        Object.defineProperty(self, 'rootDir', {
+            get: function () {
+                if (namespace.referringNamespace) {
+                    return namespace.referringNamespace.componentInitContext.rootDir;
+                }
+                return namespace.baseDir;
+            }
+        });
 
         self.toJavaScript = function () {
             let self = this;
@@ -325,15 +336,24 @@ require.memoize("/main.js", function (require, exports, module) {
 }, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
 // --------------------------------------------------
         }
+
+        self.run = async function (filepath) {
+
+            let path = PATH.resolve(namespace.baseDir || "", filepath);
+
+            let inf = new INF(PATH.dirname(path));
+
+            return inf.runInstructionsFile(PATH.basename(path));
+        }
     }
 }
 
 class Namespace {
 
-    constructor (rootDir, referringNamespace) {
+    constructor (baseDir, referringNamespace) {
         let self = this;
 
-        self.rootDir = rootDir;
+        self.baseDir = baseDir;
 
         self.referringNamespace = referringNamespace;
 
@@ -354,6 +374,10 @@ class Namespace {
             // There is no domain when using an absolute or relative path.
             return uri;
         }
+        if (/(\/|\.)$/.test(uri) && !/\//.test(uri)) {
+            // There is no domain when referencing a package or file without '/'
+            return uri;
+        }
         let uriMatch = uri.match(/^([^\/]+)(\/.+)?$/);
         let domain = uriMatch[1].split(".");
         domain.reverse();
@@ -365,10 +389,15 @@ class Namespace {
 
         uri = self.flipDomainInUri(uri);
 
-        let filepath = PATH.join(uri, "inf.json");
+        if (!/(\/|\.)$/.test(uri)) {
+            console.error("uri", uri);
+            throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
+        }
+
+        let filepath = uri + "inf.json";
 
         if (/^\./.test(uri)) {
-            var cwdPath = PATH.join(self.rootDir, filepath);
+            var cwdPath = PATH.join(self.baseDir, filepath);
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
             }
@@ -391,10 +420,22 @@ class Namespace {
 
         uri = self.flipDomainInUri(uri);
 
-        let filepath = uri + ".inf.js";
+        if (/^\./.test(uri)) {
+            var exactPath = PATH.resolve(self.baseDir || "", uri);
+            if (await FS.existsAsync(exactPath)) {
+                return exactPath;
+            }    
+        }
+
+        if (!/(\/|\.)$/.test(uri)) {
+            console.error("uri", uri);
+            throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
+        }
+
+        let filepath = uri + "inf.js";
 
         if (/^\./.test(uri)) {
-            var cwdPath = PATH.join(self.rootDir, filepath);
+            var cwdPath = PATH.join(self.baseDir, filepath);
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
             }    
@@ -445,7 +486,7 @@ class Namespace {
 
         if (alias === '') {
             // Default component
-            return self.getComponentForUri("inf");
+            return self.getComponentForUri("inf.");
         }
 
         if (!self.aliases[alias]) {
@@ -473,26 +514,28 @@ class Namespace {
 
 class Node {
 
-    static WrapInstructionNode (value) {
+    static WrapInstructionNode (namespace, value) {
 
         if (value instanceof Node) {
             return value;
         } else
         if (!value) {
-            return new Node(value);
+            return new Node(namespace, value);
         } else
         if (CodeblockNode.handlesValue(value)) {
-            return new CodeblockNode(value);
+            return new CodeblockNode(namespace, value);
         } else
         if (ReferenceNode.handlesValue(value)) {
-            return new ReferenceNode(value);
+            return new ReferenceNode(namespace, value);
         }
 
-        return new Node(value);
+        return new Node(namespace, value);
     }
 
-    constructor (value) {
+    constructor (namespace, value) {
         this.value = value;
+
+        this.baseDir = namespace.baseDir;
     }
 
     toString () {
@@ -526,8 +569,8 @@ class ReferenceNode extends Node {
         );
     }
 
-    constructor (value) {
-        super(value);
+    constructor (namespace, value) {
+        super(namespace, value);
         let keyMatch = ReferenceNode.handlesValue(value);
         this.alias = keyMatch[1];
         this.pointer = keyMatch[2];
@@ -561,13 +604,13 @@ class Processor {
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
 
                 // We create an invocation wrapper to avoid leaking references.
-                value = Node.WrapInstructionNode(async function (instruction) {
+                value = Node.WrapInstructionNode(self.namespace, async function (instruction) {
 
-                    let value = Node.WrapInstructionNode(instruction);
+                    let value = Node.WrapInstructionNode(self.namespace, instruction);
 
                     value = await referencedComponent.invoke(referenceMatch[2], value);
 
-                    return Node.WrapInstructionNode(value);
+                    return Node.WrapInstructionNode(self.namespace, value);
                 });
 
                 value.jsId = "./" + referencedComponent.pathHash;
@@ -583,8 +626,8 @@ class Processor {
         log("Parse instruction:", anchor, ":", value);
 
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
-        anchor = Node.WrapInstructionNode(anchor);
-        value = Node.WrapInstructionNode(value);
+        anchor = Node.WrapInstructionNode(self.namespace, anchor);
+        value = Node.WrapInstructionNode(self.namespace, value);
 
         if (! anchor instanceof ReferenceNode) {
             console.error("anchor", anchor);
@@ -606,7 +649,7 @@ class Processor {
         // Component mapping
         if (anchor.pointer === '') {
 
-            await self.namespace.mapComponent(anchor.alias, value);
+            await self.namespace.mapComponent(anchor.alias, value.value);
 
         } else
         // Mapped component instruction

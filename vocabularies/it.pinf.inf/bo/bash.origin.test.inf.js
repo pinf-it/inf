@@ -38,7 +38,7 @@ exports.inf = async function (inf) {
                     var proc = SPAWN("bash.origin.test", [
                         testDir
                     ], {
-                        cwd: inf.cwd,
+                        cwd: inf.rootDir,
                         env: env,
                         stdio: [
                             "ignore",

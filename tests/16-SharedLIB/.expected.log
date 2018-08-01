@@ -1,0 +1,3 @@
+inf ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toJavaScript","run"]
+inf.LIB ["Promise","PATH","FS","CODEBLOCK","CRYPTO","foo"]
+OK

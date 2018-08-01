@@ -17,7 +17,7 @@ exports.inf = async function (inf) {
                         'run',
                         'test'
                     ], {
-                        cwd: inf.cwd,
+                        cwd: inf.rootDir,
                         stdio: [
                             "ignore",
                             "inherit",

@@ -1,3 +1,7 @@
 [1;37m[bash.origin.test] Test: 01-HelloWorld[0m
 Hello World!
 [1;32m[bash.origin.test] Successful: 01-HelloWorld[0m
+---
+[1;37m[bash.origin.test] Test: 01-HelloWorld[0m
+Hello World!
+[1;32m[bash.origin.test] Successful: 01-HelloWorld[0m

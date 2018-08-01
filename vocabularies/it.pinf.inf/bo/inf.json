@@ -1,8 +1,8 @@
 #!/usr/bin/env inf
 {
-    "inf #": "../inf",
+    "inf #": "../inf.",
 
-    "test #": "./bash.origin.test",
+    "test #": "./bash.origin.test.",
 
     "inf # on.turn": "test # run"
 }

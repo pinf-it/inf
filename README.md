@@ -65,6 +65,13 @@ Details
 Terminilogy
 -----------
 
+  * URI:
+    * `./bo/` - References a package at relative path (then e.g. `inf.json` is appended to find interface file)
+    * `./bo.` - References a file at relative path (then e.g. `inf.json` is appended to find interface file)
+    * `alias/bo/` & `alias/bo.` - References a package/file by mapped alias
+    * `alias/bo` - References a package using namespace unique URI
+    * `//domain.com/bo/` & `//domain.com/bo.` - References a package or file using globally unique URL
+
   * `inf.json`
   * `.~infi~inf.json`
   * Instruction File

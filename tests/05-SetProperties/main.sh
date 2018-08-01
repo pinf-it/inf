@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "stdout #": "./stdout",
+    "stdout #": "./stdout.",
 
     "stdout # prefix": "prefix: ",
     "stdout # options": {
