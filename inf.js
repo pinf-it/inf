@@ -315,21 +315,22 @@ class ComponentInitContext extends EventEmitter {
             }
         });
 
-        self.toJavaScript = function () {
+        self.toPINFBundle = function (aspectName, options) {
+            options = options || {};
             let self = this;
             let memoizedComponents = {};
 // --------------------------------------------------
 return `return new Promise(function (resolve, reject) { require.sandbox(function (require) {
-${namespace.gatherComponentAspect("JavaScript").map(function (component) {
+${namespace.gatherComponentAspect(aspectName).map(function (component) {
     memoizedComponents[component.pathHash] = true;
-    return `require.memoize("/${component.pathHash}.js", function (require, exports, module) {\n${component.aspect}\n});`;
+    return `require.memoize("/${component.pathHash}${options.ext || '.js'}", function (require, exports, module) {\n${component.aspect}\n});`;
 }).join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
     let rtNamespace = {};
     ${Object.keys(namespace.aliases).filter(function (alias) {
         return (!!memoizedComponents[namespace.aliases[alias].pathHash]);
     }).map(function (alias) {
-        return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}')`;
+        return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}${options.ext || '.js'}')`;
     }).join('\n')}
     return rtNamespace;
 });
@@ -613,6 +614,7 @@ class Processor {
                     return Node.WrapInstructionNode(self.namespace, value);
                 });
 
+                value.alias = referenceMatch[1];
                 value.jsId = "./" + referencedComponent.pathHash;
             }
         }

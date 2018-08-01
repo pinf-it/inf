@@ -1,3 +1,3 @@
-inf ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toJavaScript","run"]
+inf ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toPINFBundle","run"]
 inf.LIB ["Promise","PATH","FS","CODEBLOCK","CRYPTO","foo"]
 OK

@@ -1,0 +1,58 @@
+{
+    "formatter #": "./formatter.",
+    "formatter # mode": "UPPERCASE",
+
+    "stdout #": "./stdout.",
+    "stdout # formatter": "formatter # format",
+    "stdout # echo": "Component OK",
+
+    "# echo": "Default OK",
+
+    "# echo": "-----",
+
+    "bundle #": "../12-PINFBundle-MountFiles/bundler.",
+
+    "bundle # /inf.js": "# js",
+
+    "bundle # /reps.js": "# reps",
+
+    "bundle # /jsonrep.js": "jsonrep/dist/jsonrep",
+
+    "bundle # /main.js": (javascript () >>>
+
+        const JSONREP = require("./jsonrep").jsonrep;
+
+        require("./inf").then(function (inf) {
+
+            inf.stdout.echo("Hello from bundle!");
+
+            inf.stdout.echo("---");
+
+            return require("./reps").then(function (reps) {
+
+                JSONREP.loadRenderer = function (uri) {
+                    let alias = uri.replace(/^(.+)\.rep$/, "$1");
+                    if (!reps[alias]) {
+                        throw new Error("Rep '" + alias + "' not found!");
+                    }
+                    return Promise.resolve(reps[alias]);
+                };
+
+                return JSONREP.markupNode({
+                    "@stdout": "Hello from rep!"
+                }).then(function (code) {
+
+                    inf.stdout.echo(code);
+                });
+            });
+        }, console.error);
+    <<<),
+
+    "# echo": "TEST_MATCH_IGNORE>>>",
+    "# echo": "bundle # bundle",
+    "# echo": "<<<TEST_MATCH_IGNORE",
+
+    "# echo": "-----",
+
+    "bundle # eval": "bundle # bundle"
+}

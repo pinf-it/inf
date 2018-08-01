@@ -26,7 +26,14 @@ exports.inf = async function (inf) {
 
             if (pointer === "js") {
 
-                return inf.toJavaScript();
+                return inf.toPINFBundle("JavaScript");
+
+            } else
+            if (pointer === "reps") {
+
+                return inf.toPINFBundle("JSONRep", {
+                    ext: ".rep.js"
+                });
 
             } else
             if (pointer === "echo") {

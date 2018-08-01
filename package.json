@@ -7,7 +7,8 @@
     "test": "([ -e node_modules ] || npm install) && bash.origin.test tests"
   },
   "devDependencies": {
-    "bash.origin.test": "^0.1.39"
+    "bash.origin.test": "^0.1.39",
+    "jsonrep": "0.0.11"
   },
   "dependencies": {
     "bluebird": "^3.5.1",
