@@ -566,7 +566,7 @@ class ReferenceNode extends Node {
     static handlesValue (value) {
         return (
             typeof value === "string" &&
-            value.match(/^([^#]*?)\s*#\s*(.*?)$/)
+            value.match(/^([^#]*?)\s*#\s*(.*?)(\s+\+([^\+]+))?$/)
         );
     }
 
