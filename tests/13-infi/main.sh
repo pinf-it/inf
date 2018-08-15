@@ -4,4 +4,4 @@ inf inf.json
 
 echo "-----"
 
-inf .~infi~inf.json
+inf .~inf.json~infi.log

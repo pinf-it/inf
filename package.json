@@ -8,7 +8,8 @@
   },
   "devDependencies": {
     "bash.origin.test": "^0.1.39",
-    "jsonrep": "0.0.11"
+    "jsonrep": "0.0.11",
+    "puppeteer": "^1.7.0"
   },
   "dependencies": {
     "bluebird": "^3.5.1",

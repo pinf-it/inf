@@ -1,0 +1,31 @@
+>>>TEST_IGNORE_LINE:^Request: /pingpong<<<
+Server running at: http://127.0.0.1:8080
+Request: /index.html
+Request: /loader.js
+Request: /ui.js
+---
+<h1>Server</h1>
+<div _repid="1">
+    Request count: <span class="count">3</span>
+</div>
+<h1>Pingpong</h1>
+<ul _repid="2">
+<li>Success!</li><li>Success!</li><li>Success!</li></ul><style>
+[_repid="1"] {
+    border: 1px solid black;
+    padding: 5px;
+}
+[_repid="1"] .count {
+    font-weight: bold;
+}
+
+
+[_repid="2"] {
+    border: 1px solid black;
+    padding: 5px;
+    padding-left: 25px;
+}
+[_repid="2"] LI {
+    color: green;
+}
+</style>

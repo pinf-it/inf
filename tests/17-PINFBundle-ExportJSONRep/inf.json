@@ -20,7 +20,7 @@
 
     "bundle # /main.js": (javascript () >>>
 
-        const JSONREP = require("./jsonrep").jsonrep;
+        const JSONREP = require("./jsonrep");
 
         require("./inf").then(function (inf) {
 

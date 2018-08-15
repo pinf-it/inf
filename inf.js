@@ -77,7 +77,7 @@ class INF {
     async runInstructionsFile (filepath) {
         let self = this;
 
-        filepath = filepath.replace(/^\.~infi~/, "");
+        filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
 
         let path = PATH.join(self.baseDir, filepath);
         let exists = await FS.existsAsync(path);
@@ -125,7 +125,7 @@ class Parser {
         this.baseDir = baseDir;
         this.filepath = filepath;
         if (this.filepath) {
-            this.infiFilepath = PATH.join(this.filepath, '..', '.~infi~' + PATH.basename(this.filepath));
+            this.infiFilepath = PATH.join(this.filepath, '..', '.~' + PATH.basename(this.filepath) + '~infi.log');
         }
     }
 
@@ -294,6 +294,14 @@ const LIB = {
     CODEBLOCK: CODEBLOCK,
     CRYPTO: CRYPTO
 };
+LIB.Promise.defer = function () {
+    var deferred = {};
+    deferred.promise = new LIB.Promise(function (resolve, reject) {
+        deferred.resolve = resolve;
+        deferred.reject = reject;
+    });
+    return deferred;
+}
 
 class ComponentInitContext extends EventEmitter {
 
@@ -315,23 +323,23 @@ class ComponentInitContext extends EventEmitter {
             }
         });
 
-        self.toPINFBundle = function (aspectName, options) {
+        self.toPINFBundle = async function (aspectName, options) {
             options = options || {};
             let self = this;
             let memoizedComponents = {};
 // --------------------------------------------------
 return `return new Promise(function (resolve, reject) { require.sandbox(function (require) {
-${namespace.gatherComponentAspect(aspectName).map(function (component) {
+${(await Promise.map(namespace.gatherComponentAspect(aspectName), function (component) {
     memoizedComponents[component.pathHash] = true;
     return `require.memoize("/${component.pathHash}${options.ext || '.js'}", function (require, exports, module) {\n${component.aspect}\n});`;
-}).join("\n")}
+})).join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
     let rtNamespace = {};
-    ${Object.keys(namespace.aliases).filter(function (alias) {
+    ${(await Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
         return (!!memoizedComponents[namespace.aliases[alias].pathHash]);
-    }).map(function (alias) {
+    }), function (alias) {
         return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}${options.ext || '.js'}')`;
-    }).join('\n')}
+    })).join('\n')}
     return rtNamespace;
 });
 }, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });`
@@ -345,6 +353,10 @@ require.memoize("/main.js", function (require, exports, module) {
             let inf = new INF(PATH.dirname(path));
 
             return inf.runInstructionsFile(PATH.basename(path));
+        }
+
+        self.wrapValue = function (value) {
+            return Node.WrapInstructionNode(namespace, value);
         }
     }
 }
@@ -497,15 +509,26 @@ class Namespace {
         return self.aliases[alias];
     }
 
-    gatherComponentAspect (aspectName) {
+    async gatherComponentAspect (aspectName) {
         let self = this;
-        return Object.keys(self.components).filter(function (uri) {
-            return (typeof self.components[uri].impl['to' + aspectName] === 'function');
-        }).map(function (uri) {
+        return Promise.map(Object.keys(self.components).filter(function (uri) {
+            return ( !! self.components[uri].impl['to' + aspectName]);
+        }), async function (uri) {
+
+            let aspectCode = self.components[uri].impl['to' + aspectName];
+
+            if (typeof aspectCode === "function") {
+                aspectCode = await aspectCode();
+            }
+
+            aspectCode = CODEBLOCK.purifyCode(aspectCode, {
+                freezeToJavaScript: true
+            }).toString();
+
             return {
                 uri: uri,
                 pathHash: self.components[uri].pathHash,
-                aspect: self.components[uri].impl['to' + aspectName]()
+                aspect: aspectCode
             };
         });
     }    
