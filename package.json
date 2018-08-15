@@ -1,21 +1,21 @@
 {
-  "name": "@pinf-it/inf",
-  "version": "0.1.0",
-  "bin": {
-    "inf": "inf.js"
-  },
-  "scripts": {
-    "test": "([ -e node_modules ] || npm install) && bash.origin.test tests"
-  },
-  "devDependencies": {
-    "bash.origin.test": "^0.1.39",
-    "jsonrep": "0.0.11",
-    "puppeteer": "^1.7.0"
-  },
-  "dependencies": {
-    "bluebird": "^3.5.1",
-    "clarinet": "^0.12.1",
-    "codeblock": "^0.3.10",
-    "pinf-loader-js": "^0.4.22"
-  }
+    "name": "@pinf-it/inf",
+    "version": "0.1.1",
+    "bin": {
+        "inf": "inf.js"
+    },
+    "scripts": {
+        "test": "([ -e node_modules ] || npm install) && bash.origin.test tests"
+    },
+    "devDependencies": {
+        "bash.origin.test": "^0.1.39",
+        "jsonrep": "0.0.11",
+        "puppeteer": "^1.7.0"
+    },
+    "dependencies": {
+        "bluebird": "^3.5.1",
+        "clarinet": "^0.12.1",
+        "codeblock": "^0.3.10",
+        "pinf-loader-js": "^0.4.22"
+    }
 }
