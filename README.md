@@ -9,7 +9,7 @@ The syntax is JSON compliant and an ordered parser is used to process each docum
 
 The output is a namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in an `inf.json` file. An intermediate `.~inf.json~infi.log` file containing `\t` and `\n` delimited JSON nodes for the entire `inf` structure is also generated.
 
-Features:
+### Features
 
   * Map component URIs to aliases
   * Combine aliases with pointers
@@ -32,7 +32,7 @@ Features:
     * Interfaces:
       * NodeJS
 
-Limitations:
+### Limitations
 
   * Cannot merge two `inf.json` files by overlaying them. Use inheritance and runtime customization.
   * Cannot use `JSON.parse()` for `inf.json` files as duplicate keys are dropped unless duplicate keys are suffixed with `+<unique>`. Assumes order of keys is preserved.
@@ -41,7 +41,7 @@ Limitations:
 
 
 Install
--------
+=======
 
     npm install inf
 
