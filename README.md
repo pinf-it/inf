@@ -1,13 +1,13 @@
 inf
 ===
 
-| Weave components into a namespace and do work to bootstrap a component.
+| Weave sub components into a namespace and do work to bootstrap an owning component.
 
-`inf` provides a *domain specific language* in the form of a **Interface File** to map aliased components into layered namespaces and declare relationships between them.
+`inf` provides a *domain specific language* in the form of an **Interface File** to map aliased components into layered namespaces and declare relationships between them.
 
 The syntax is JSON compliant and an ordered parser is used to process each document node in the order it was declared in.
 
-The output is a flat namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in a `inf.json` file. An intermediate `.~infi~inf.json` file containing `\t` and `\n` delimited JSON nodes for entire `inf` structure is also generated.
+The output is a namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in an `inf.json` file. An intermediate `.~inf.json~infi.log` file containing `\t` and `\n` delimited JSON nodes for the entire `inf` structure is also generated.
 
 Features:
 
@@ -21,22 +21,23 @@ Features:
   * Great compile target
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
   * Export resolved `inf` component structure and mapped invocation relationships to JavaScript
+  * Extendable
+  * Interfaces:
+    * Unix CLI
+    * Browser (the instanciated Namespace can be serialized to JavaScript if the Components support JavaScript serialization.)
   * TODO:
-    * Comments
-    * Extendable
     * Layerable
+    * Comments
     * Highly optimized runtime structure (RTNamespace)
     * Interfaces:
-      * Unix CLI
       * NodeJS
-      * Browser (The instanciated Namespace can be serialized to JavaScript if the Components only use browser APIs.)
 
 Limitations:
 
   * Cannot merge two `inf.json` files by overlaying them. Use inheritance and runtime customization.
-  * Cannot use `JSON.parse()` as duplicate keys are dropped.
+  * Cannot use `JSON.parse()` for `inf.json` files as duplicate keys are dropped unless duplicate keys are suffixed with `+<unique>`. Assumes order of keys is preserved.
   * Parsing large instruction files that reference many Components may be slow but the resulting runtime structure (RTNamespace) is fast and small as long as the RTComponents are also optimized.
-  * The instructions in a `inf.json` file can be hard to follow. To provide clarity follow a Vocabulary/Schema/Convention for aliases or generate `inf` instructions from a higher level abstraction that matches your domain model more closely ([ccjson](https://github.com/ccjson/ccjson.nodejs) is an example that can generate `inf.js` files as well as represent its runtime structure using RTNamespace & RTComponent).
+  * The instructions in an `inf.json` file can be hard to follow. To provide clarity follow a Vocabulary/Schema/Convention for aliases or generate `inf` instructions from a higher level abstraction that matches your domain model more closely ([ccjson](https://github.com/ccjson/ccjson.nodejs) is an example that can generate `inf.js` files as well as represent its runtime structure using RTNamespace & RTComponent).
 
 
 Install
@@ -65,6 +66,8 @@ Details
 Terminilogy
 -----------
 
+*TODO: Complete*
+
   * URI:
     * `./bo/` - References a package at relative path (then e.g. `inf.json` is appended to find interface file)
     * `./bo.` - References a file at relative path (then e.g. `inf.json` is appended to find interface file)
@@ -73,7 +76,7 @@ Terminilogy
     * `//domain.com/bo/` & `//domain.com/bo.` - References a package or file using globally unique URL
 
   * `inf.json`
-  * `.~infi~inf.json`
+  * `.~inf.json~infi.log`
   * Instruction File
   * Instructions
   * Instruction
@@ -86,6 +89,8 @@ Terminilogy
 
 Entities
 --------
+
+*TODO: Complete*
 
   * **Namespace** - The parsed hierarchical structure that is mapped via aliases in the `inf.json` file.
 
