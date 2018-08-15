@@ -20,17 +20,14 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
   * Great compile target
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
-  * Export resolved `inf` component structure and mapped invocation relationships to JavaScript
+  * Export resolved `inf` component structure and mapped invocation relationships along with optimized invocation handlers to JavaScript
   * Extendable
-  * Interfaces:
-    * Unix CLI
-    * Browser (the instanciated Namespace can be serialized to JavaScript if the Components support JavaScript serialization.)
+  * Unix CLI interface via `inf`
   * TODO:
     * Layerable
     * Comments
     * Highly optimized runtime structure (RTNamespace)
-    * Interfaces:
-      * NodeJS
+    * NodeJS API interface
 
 ### Limitations
 
