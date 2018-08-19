@@ -5,11 +5,9 @@ inf
 
 `inf` allows for the expansion of many aspects from a singular structure to externalized entities and the reverse contraction as well as the instanciation of a singular structure from multiple perspectives in source and optimized form.
 
-`inf` uses a *domain specific language* in the form of an **Interface File** to map aliased components into layered namespaces and declare relationships between them.
+`inf` uses a *domain specific language* in the form of an **Interface File** to map aliased components into layered namespaces and declare relationships between them. The syntax is JSON compliant and an ordered parser is used to process each document node in the order it was declared.
 
-The syntax is JSON compliant and an ordered parser is used to process each document node in the order it was declared in.
-
-The output is a namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in an `inf.json` file. An intermediate `.~inf.json~infi.log` file containing `\t` and `\n` delimited JSON nodes for the `inf` structure is also generated.
+The output is a namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in an `inf.json` file. An intermediate `.~inf.json~infi.log` file containing `\t` and `\n` delimited node instructions for the `inf` structure is also generated.
 
 ### Features
 
@@ -27,6 +25,7 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Comments
   * Unix CLI interface via `inf`
   * Browserifyable
+  * Heavily tested
   * TODO:
     * Layerable
     * NodeJS API interface
