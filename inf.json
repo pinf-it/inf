@@ -2,5 +2,7 @@
 {
     "#": "inf.pinf.it/bo/",
 
-    "test # dir": "tests"
+    "test # dir": "tests",
+
+    "bundle # nodejs-script": "inf.js"
 }

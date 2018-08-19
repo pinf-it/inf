@@ -4,5 +4,7 @@
 
     "test #": "./bash.origin.test.",
 
-    "inf # on.turn": "test # run"
+    "inf # on.turn": "test # run",
+
+    "bundle #": "./bundler."
 }

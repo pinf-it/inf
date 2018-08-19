@@ -23,6 +23,8 @@ exports.inf = async function (inf) {
             } else
             if (pointer === "run") {
 
+                if (!testDir) return;
+
                 await ensureDependencies();
 
                 return new Promise(function (resolve, reject) {

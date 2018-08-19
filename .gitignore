@@ -3,3 +3,5 @@
 *~.compiled.bash
 .~*
 /npm-debug.log
+/inf.bundle.*
+/.installed*

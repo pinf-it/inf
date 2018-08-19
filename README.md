@@ -50,6 +50,8 @@ See `tests/` for examples of all features. The tests can be run with `npm test`.
 
 The point of `inf` is to execute `inf.json` files which should cause the owning component to **bootstrap & test itself**. Thus tests can also be run by executing `./inf.json`. If the `#!/usr/bin/env inf` shebang is missing from `inf.json` it can be run using `inf inf.json`.
 
+`inf` can be [browserified](https://github.com/browserify/browserify) to make it lightweight & portable for use in projects. Look for `inf.bundle*` files after running `./inf.json`.
+
 
 API
 ===

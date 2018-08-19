@@ -25,6 +25,7 @@ const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
 });
 
 const CRYPTO = require("crypto");
+const MINIMIST = require("minimist");
 
 
 // ####################################################################################################
@@ -41,14 +42,20 @@ function log () {
 }
 
 setImmediate(function () {
-    if (require.main === module) {
+    if (
+        // If running after being browserified
+        (typeof require.main === "undefined") ||
+        // If running in NodeJS
+        require.main === module
+    ) {
         async function main () {
             try {
 
                 let cwd = process.cwd();
-                let filepath = process.argv[2];
+                let args = MINIMIST(process.argv.slice(2));
+                let filepath = args._[0];
 
-                let inf = new INF(cwd);
+                let inf = new INF(cwd, null, args);
 
                 if (/^\{/.test(filepath)) {
                     await inf.runInstructions(filepath);
@@ -71,11 +78,12 @@ setImmediate(function () {
 
 class INF {
 
-    constructor (baseDir, referringNamespace) {
+    constructor (baseDir, referringNamespace, options) {
         let self = this;
 
         self.baseDir = baseDir;
         self.referringNamespace = referringNamespace;
+        self.options = options || {};
     }
 
     async runInstructionsFile (filepath) {
@@ -106,7 +114,7 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(self.baseDir, self.referringNamespace);
+        self.namespace = new Namespace(self.baseDir, self.referringNamespace, self.options);
         self.processor = new Processor(self.namespace);
 
         if (filepath) {
@@ -432,10 +440,11 @@ require.memoize("/main.js", function (require, exports, module) {
 
 class Namespace {
 
-    constructor (baseDir, referringNamespace) {
+    constructor (baseDir, referringNamespace, options) {
         let self = this;
 
         self.baseDir = baseDir;
+        self.options = options || {};
 
         self.referringNamespace = referringNamespace;
 
@@ -528,12 +537,19 @@ class Namespace {
             }    
         }
 
-        var defaultPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
-        if (await FS.existsAsync(defaultPath)) {
-            return defaultPath;
+        if (self.options.vocabularies) {
+            var vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return vocabulariesPath;
+            }
         }
 
-        throw new Error("Component for uri '" + uri + "' not found!");
+        var defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
+        if (await FS.existsAsync(defaultVocabulariesPath)) {
+            return defaultVocabulariesPath;
+        }
+
+        throw new Error("Component for uri '" + uri + "' not found from baseDir '" + self.baseDir + "'!");
     }
 
     async getComponentForUri (uri) {

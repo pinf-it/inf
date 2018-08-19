@@ -9,15 +9,22 @@
         "test": "([ -e node_modules ] || npm install) && bash.origin.test tests"
     },
     "devDependencies": {
+        "babel-cli": "^6.26.0",
+        "babel-plugin-transform-runtime": "^6.23.0",
+        "babel-preset-latest": "^6.24.1",
         "bash.origin.test": "^0.1.39",
+        "browserify": "^16.2.2",
         "jsonrep": "0.0.11",
-        "puppeteer": "^1.7.0"
+        "puppeteer": "^1.7.0",
+        "runbash": "0.0.8",
+        "uglify-js": "^3.4.7"
     },
     "dependencies": {
         "bluebird": "^3.5.1",
         "clarinet": "^0.12.1",
         "codeblock": "^0.3.10",
         "fs-extra": "^7.0.0",
+        "minimist": "^1.2.0",
         "pinf-loader-js": "^0.4.22"
     }
 }
