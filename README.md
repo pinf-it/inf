@@ -22,12 +22,14 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
   * Export resolved `inf` component structure and mapped invocation relationships along with optimized invocation handlers to JavaScript
   * Extendable
+  * Comments
   * Unix CLI interface via `inf`
+  * Browserifyable
+
   * TODO:
     * Layerable
-    * Comments
-    * Highly optimized runtime structure (RTNamespace)
     * NodeJS API interface
+    * Highly optimized runtime structure (RTNamespace)
 
 ### Limitations
 

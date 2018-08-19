@@ -789,6 +789,11 @@ class Processor {
 
         log("Parse instruction:", anchor, ":", value);
 
+        // Detect comment
+        if (anchor === '//') {
+            return;
+        }
+
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
         anchor = Node.WrapInstructionNode(self.namespace, anchor);
         value = Node.WrapInstructionNode(self.namespace, value);

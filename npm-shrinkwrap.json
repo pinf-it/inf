@@ -1232,9 +1232,9 @@
             "dev": true
         },
         "codeblock": {
-            "version": "0.3.10",
-            "resolved": "https://registry.npmjs.org/codeblock/-/codeblock-0.3.10.tgz",
-            "integrity": "sha1-LuKGQio1Lu+dD+IF+xMVeWBITVM=",
+            "version": "0.3.11",
+            "resolved": "https://registry.npmjs.org/codeblock/-/codeblock-0.3.11.tgz",
+            "integrity": "sha512-0JyIIRRQp0/GKRCqvLsZeKGXLSKcW05oA6Y+uVG4ZkkehO3GPMgewMR/5Ixtipzg5mG22LHQvad2KypTtDmAYA==",
             "requires": {
                 "bash.origin": "^0.1.85",
                 "escape-string-regexp": "^1.0.5",
