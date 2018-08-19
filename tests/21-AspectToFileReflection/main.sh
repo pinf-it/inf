@@ -21,19 +21,21 @@ cat .ui.js
 cp -f bundle.inf.js bundle.inf.js~before
 inf {
     "bundle #": "./bundle.",
-
     "bundle # do": "contract"
 }
 
 echo '--- 4 ---'
 
-diff -u .ui.js .ui.js~before
+diff -u .ui.js .ui.js~before || true
 
 echo '--- 5 ---'
 
-diff -u bundle.inf.js bundle.inf.js~before
+diff -u bundle.inf.js bundle.inf.js~before || true
 
 echo '--- 6 ---'
 
+rm -f .ui.js
 mv -f .ui.js~before .ui.js
+
+rm -f bundle.inf.js
 mv -f bundle.inf.js~before bundle.inf.js
