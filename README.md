@@ -27,7 +27,6 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Comments
   * Unix CLI interface via `inf`
   * Browserifyable
-
   * TODO:
     * Layerable
     * NodeJS API interface
