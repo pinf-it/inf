@@ -65,7 +65,7 @@ API
 Details
 =======
 
-Terminilogy
+Terminology
 -----------
 
 *TODO: Complete*
