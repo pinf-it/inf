@@ -11,7 +11,7 @@ TODO:
 const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
 const PATH = require("path");
-const FS = require("fs");
+const FS = require("fs-extra");
 Promise.promisifyAll(FS);
 FS.existsAsync = function (path) {
     return new Promise(function (resolve) {
@@ -20,6 +20,10 @@ FS.existsAsync = function (path) {
 }
 const CLARINET = require("clarinet");
 const CODEBLOCK = require("codeblock");
+const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
+    cacheCompiled: true
+});
+
 const CRYPTO = require("crypto");
 
 
@@ -104,7 +108,14 @@ class INF {
 
         self.namespace = new Namespace(self.baseDir, self.referringNamespace);
         self.processor = new Processor(self.namespace);
-       
+
+        if (filepath) {
+            self.namespace.pathStack.push(PATH.join(self.baseDir, filepath));
+            if (self.referringNamespace) {
+                self.referringNamespace.pathStack.push(PATH.join(self.baseDir, filepath));
+            }
+        }
+
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
             instructionObject = instructionObject.split("\t");
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]));
@@ -267,13 +278,20 @@ class Component {
 
         self.pathHash = CRYPTO.createHash('sha1').update(self.path).digest('hex');
 
-        let mod = require(self.path);
+        let mod = null;
+
+        // Check if module contains a codeblock as we need to purify it first before it can be required.
+        if (/>>>/.test(FS.readFileSync(self.path, "utf8"))) {
+            mod = CODEBLOCK_REQUIRE(self.path);
+        } else {
+            mod = require(self.path);
+        }
 
         if (typeof mod.inf !== "function") {
             throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
         }
 
-        return self.impl = await mod.inf(namespace.componentInitContext);
+        return (self.impl = await mod.inf(namespace.componentInitContext.forNode(self)));
     }
 
     async invoke (pointer, value) {
@@ -283,7 +301,7 @@ class Component {
             throw new Error("Component at path '" + self.path + "' does not export 'inf().invoke(pointer, value)'!");
         }
 
-        return self.impl.invoke(pointer, value);
+        return self.impl.invoke.call(null, pointer, value);
     }
 }
 
@@ -358,6 +376,57 @@ require.memoize("/main.js", function (require, exports, module) {
         self.wrapValue = function (value) {
             return Node.WrapInstructionNode(namespace, value);
         }
+
+        self.forNode = function (node) {
+
+            let context = Object.create(self);
+
+            context.getNodeAspect = function (aspect, args) {
+                if (typeof node.impl[aspect] !== "function") {
+                    throw new Error(`Aspect '${aspect}' for node '${node.path}' does not seem to be a codeblock!`);
+                }
+                let codeblock = node.impl[aspect]();
+                if (
+                    !codeblock ||
+                    codeblock['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock'
+                ) {
+                    throw new Error(`Aspect '${aspect}' for node '${node.path}' is not a codeblock!`);
+                }
+
+                try {
+                    return codeblock.compile(args).getCode();
+                } catch (err) {
+                    console.error(err);
+                    throw new Error(`Error while compiling codeblock for node aspect '${aspect}' for node '${node.path}'`);
+                }
+            }
+
+            context.expandNodeAspectsTo = async function (aspectRe, baseDir, args) {
+
+                let aspects = Object.keys(node.impl).filter(function (key) {
+                    return aspectRe.test(key);
+                });
+
+                await Promise.map(aspects, async function (aspect) {
+
+                    let path = PATH.join(baseDir, aspect);
+
+                    let compileArgs = args;
+                    if (typeof compileArgs === "function") {
+                        compileArgs = function (key) {
+                            return args(aspect, key);
+                        }
+                    }
+
+                    let code = context.getNodeAspect(aspect, compileArgs);
+
+                    // TODO: Fix codeblock inconsistency when dealing with newlines.
+                    await FS.outputFileAsync(path, code + '\n', "utf8");
+                });
+            }
+
+            return context;
+        }
     }
 }
 
@@ -372,6 +441,7 @@ class Namespace {
 
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
+        self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
 
         self.componentInitContext = new ComponentInitContext(self);
 
@@ -395,6 +465,10 @@ class Namespace {
         let domain = uriMatch[1].split(".");
         domain.reverse();
         return (domain.join(".") + (uriMatch[2] || ""));
+    }
+
+    isInheritingFrom (path) {
+        return (this.pathStack.indexOf(path) !== -1);
     }
 
     async resolveInfUri (uri) {
@@ -521,9 +595,58 @@ class Namespace {
                 aspectCode = await aspectCode();
             }
 
-            aspectCode = CODEBLOCK.purifyCode(aspectCode, {
-                freezeToJavaScript: true
-            }).toString();
+            if (typeof aspectCode === "string") {
+                // Purify codeblocks in a string payload which is assumed to be JavaScript so that
+                // the payload becomes valid javascript and can be combined with other JS code without
+                // further processing by the consuming component.
+                aspectCode = CODEBLOCK.purifyCode(aspectCode, {
+                    freezeToJavaScript: true
+                }).toString();
+            } else
+            if (
+                typeof aspectCode === "object" &&
+                aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+            ) {
+                // Compile codeblock with no args so that consuming component does not need to deal
+                // with codeblock processing and is able to use payload as-is.
+
+                aspectCode = aspectCode.compile().getCode();
+            } else
+            if (
+                typeof aspectCode === "object" &&
+                typeof aspectCode.codeblock === "function"
+            ) {
+                // Compile codeblock using provided args so that consuming component does not need to deal
+                // with codeblock processing and is able to use payload as-is.
+                let args = aspectCode.args || [];
+                aspectCode = aspectCode.codeblock();
+                let argsByName = {};
+                if (Array.isArray(args)) {
+                    /*
+                    return {
+                        args: [ arg1 ],
+                        codeblock: (javascript (arg1) >>>
+                        <<<)
+                    };                    
+                    */
+                    aspectCode._args.forEach(function (name, i) {
+                        argsByName[name] = args[i];
+                    });
+                } else
+                if (typeof args === "object") {
+                    /*
+                    return {
+                        args: {
+                            arg1: arg1
+                        },
+                        codeblock: (javascript (arg1) >>>
+                        <<<)
+                    };                    
+                    */
+                    argsByName = args;                    
+                }
+                aspectCode = aspectCode.compile(argsByName).getCode();
+            }
 
             return {
                 uri: uri,
@@ -662,13 +785,21 @@ class Processor {
         // Inherit from another inf.json file
         if (anchor.value === "#") {
 
-            let path = await self.namespace.resolveInfUri(value.value);
+            let uris = Array.isArray(value.value) ? value.value : [ value.value ];
 
-            log("Inherit from inf file:", path);
+            await Promise.mapSeries(uris, async function (uri) {
 
-            let inf = new INF(PATH.dirname(path), self.namespace);
+                let path = await self.namespace.resolveInfUri(uri);
 
-            await inf.runInstructionsFile(PATH.basename(path));
+                if (!self.namespace.isInheritingFrom(path)) {
+
+                    log("Inherit from inf file:", path);
+
+                    let inf = new INF(PATH.dirname(path), self.namespace);
+
+                    await inf.runInstructionsFile(PATH.basename(path));
+                }
+            });
 
         } else
         // Component mapping

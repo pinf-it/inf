@@ -11,7 +11,9 @@ exports.inf = async function (inf) {
         throw new Error("'inf.baseDir' not correct!");
     }
 
+    
     console.log("inf", JSON.stringify(Object.keys(inf)));
+    console.log("inf (proto)", JSON.stringify(Object.keys(inf.__proto__)));
     console.log("inf.LIB", JSON.stringify(Object.keys(inf.LIB)));
 
     return {};

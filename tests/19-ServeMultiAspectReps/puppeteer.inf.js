@@ -19,7 +19,7 @@ exports.inf = async function (inf) {
             if (pointer === 'run') {
 
                 const browser = await PUPPETEER.launch({
-                    headless: true
+                    headless: (!process.env.VERBOSE)
                 });
 
                 const page = await browser.newPage();

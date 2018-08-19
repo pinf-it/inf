@@ -1,3 +1,4 @@
-inf ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toPINFBundle","run","wrapValue"]
+inf ["getNodeAspect","expandNodeAspectsTo"]
+inf (proto) ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toPINFBundle","run","wrapValue","forNode"]
 inf.LIB ["Promise","PATH","FS","CODEBLOCK","CRYPTO","foo"]
 OK

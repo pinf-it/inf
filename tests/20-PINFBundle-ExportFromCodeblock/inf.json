@@ -1,0 +1,30 @@
+{
+    "formatter #": "./formatter.",
+
+    "stdout #": "./stdout.",
+    "stdout # formatter": "formatter # format",
+    "stdout # echo": "Component OK",
+
+    "# echo": "Default OK",
+
+    "# echo": "---",
+
+    "bundle #": "../12-PINFBundle-MountFiles/bundler.",
+
+    "bundle # /inf.js": "# js",
+
+    "bundle # /main.js": (javascript () >>>
+
+        require("./inf").then(function (inf) {
+
+            inf.stdout.echo("Hello from bundle!");
+
+        }, console.error);
+    <<<),
+
+    "# echo": "bundle # bundle",
+
+    "# echo": "---",
+
+    "bundle # eval": "bundle # bundle"
+}
