@@ -18,6 +18,9 @@ FS.existsAsync = function (path) {
         return FS.exists(path, resolve);
     });
 }
+const GLOB = require("glob");
+GLOB.async = Promise.promisify(GLOB);
+
 const CLARINET = require("clarinet");
 const CODEBLOCK = require("codeblock");
 const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
@@ -299,17 +302,70 @@ class Component {
             throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
         }
 
-        return (self.impl = await mod.inf(namespace.componentInitContext.forNode(self)));
-    }
-
-    async invoke (pointer, value) {
-        let self = this;
-
-        if (typeof self.impl.invoke !== "function") {
-            throw new Error("Component at path '" + self.path + "' does not export 'inf().invoke(pointer, value)'!");
+        let instances = {};
+        self.getComponentAliases = function () {
+            return Object.keys(instances.component || {});
         }
+        self.forAlias = async function (type, alias) {
 
-        return self.impl.invoke.call(null, pointer, value);
+            if (!instances[type]) {
+                instances[type] = {};
+            }
+
+            if (!instances[type][alias]) {
+
+                let plugins = namespace.getPluginsForAlias(alias);
+                
+                var componentInitContext = Object.create(namespace.componentInitContext);
+
+                var pluginOverrides = [];
+                plugins.forEach(function (plugin) {
+                    if (
+                        plugin.impl.ComponentInitContext &&
+                        plugin.impl.ComponentInitContext.constructor
+                    ) {
+                        plugin.impl.ComponentInitContext.constructor.call(componentInitContext, namespace);
+                    }
+                });
+
+                let pluginInstance = Object.create(self);
+
+
+                pluginInstance.invoke = async function (pointer, value) {
+            
+                    if (typeof pluginInstance.impl.invoke !== "function") {
+                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().invoke(pointer, value)'!");
+                    }
+
+                    return pluginInstance.impl.invoke.call(null, pointer, value);
+                };
+
+
+                let instance = pluginInstance;
+                plugins.forEach(function (plugin) {
+                    if (plugin.impl.Component) {
+                        Object.keys(plugin.impl.Component).forEach(function (functionName) {
+                            let origInstance = instance;
+                            instance = Object.create(origInstance);
+                            if (/^async /.test(plugin.impl.Component[functionName].toString())) {
+                                instance[functionName] = async function () {
+                                    return plugin.impl.Component[functionName].apply(origInstance, arguments);
+                                };
+                            } else {
+                                instance[functionName] = function () {
+                                    return plugin.impl.Component[functionName].apply(origInstance, arguments);
+                                };    
+                            }
+                        });
+                    }
+                });
+                instances[type][alias] = instance;
+
+                pluginInstance.impl = await mod.inf(componentInitContext.forNode(instance), alias);
+            }
+
+            return instances[type][alias];
+        }
     }
 }
 
@@ -355,16 +411,18 @@ class ComponentInitContext extends EventEmitter {
             let memoizedComponents = {};
 // --------------------------------------------------
 return `return new Promise(function (resolve, reject) { require.sandbox(function (require) {
-${(await Promise.map(namespace.gatherComponentAspect(aspectName), function (component) {
-    memoizedComponents[component.pathHash] = true;
-    return `require.memoize("/${component.pathHash}${options.ext || '.js'}", function (require, exports, module) {\n${component.aspect}\n});`;
-})).join("\n")}
+${(await namespace.gatherComponentAspect(aspectName)).map(function (component) {
+    return Object.keys(component.aspect).map(function (alias) {
+        memoizedComponents[component.pathHash + ":" + alias] = true;
+        return `require.memoize("/${component.pathHash}-${alias}${options.ext || '.js'}", function (require, exports, module) {\n${component.aspect[alias]}\n});`;
+    }).join("\n");
+}).join("\n")}
 require.memoize("/main.js", function (require, exports, module) {
     let rtNamespace = {};
     ${(await Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
-        return (!!memoizedComponents[namespace.aliases[alias].pathHash]);
+        return (!!memoizedComponents[namespace.aliases[alias].pathHash + ":" + alias]);
     }), function (alias) {
-        return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}${options.ext || '.js'}')`;
+        return `rtNamespace['${alias}'] = require('./${namespace.aliases[alias].pathHash}-${alias}${options.ext || '.js'}')`;
     })).join('\n')}
     return rtNamespace;
 });
@@ -389,49 +447,7 @@ require.memoize("/main.js", function (require, exports, module) {
 
             let context = Object.create(self);
 
-            context.getNodeAspect = function (aspect, args) {
-                if (typeof node.impl[aspect] !== "function") {
-                    throw new Error(`Aspect '${aspect}' for node '${node.path}' does not seem to be a codeblock!`);
-                }
-                let codeblock = node.impl[aspect]();
-                if (
-                    !codeblock ||
-                    codeblock['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock'
-                ) {
-                    throw new Error(`Aspect '${aspect}' for node '${node.path}' is not a codeblock!`);
-                }
-
-                try {
-                    return codeblock.compile(args).getCode();
-                } catch (err) {
-                    console.error(err);
-                    throw new Error(`Error while compiling codeblock for node aspect '${aspect}' for node '${node.path}'`);
-                }
-            }
-
-            context.expandNodeAspectsTo = async function (aspectRe, baseDir, args) {
-
-                let aspects = Object.keys(node.impl).filter(function (key) {
-                    return aspectRe.test(key);
-                });
-
-                await Promise.map(aspects, async function (aspect) {
-
-                    let path = PATH.join(baseDir, aspect);
-
-                    let compileArgs = args;
-                    if (typeof compileArgs === "function") {
-                        compileArgs = function (key) {
-                            return args(aspect, key);
-                        }
-                    }
-
-                    let code = context.getNodeAspect(aspect, compileArgs);
-
-                    // TODO: Fix codeblock inconsistency when dealing with newlines.
-                    await FS.outputFileAsync(path, code + '\n', "utf8");
-                });
-            }
+            // TIP: Load additional functionality into the context via a plugin.
 
             return context;
         }
@@ -450,7 +466,9 @@ class Namespace {
 
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
-        self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
+        self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
+        self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
+        //self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
 
         self.componentInitContext = new ComponentInitContext(self);
 
@@ -493,15 +511,19 @@ class Namespace {
         let filepath = uri + "inf.json";
 
         if (/^\./.test(uri)) {
-            var cwdPath = PATH.join(self.baseDir, filepath);
-            if (await FS.existsAsync(cwdPath)) {
-                return cwdPath;
+            let cwdPaths = await GLOB.async(filepath, { cwd: self.baseDir });
+            if (cwdPaths.length) {
+                return cwdPaths.map(function (filepath) {
+                    return PATH.join(self.baseDir, filepath);
+                });
             }
         }
 
-        var defaultPath = PATH.join(__dirname, "vocabularies", filepath);
-        if (await FS.existsAsync(defaultPath)) {
-            return defaultPath;
+        let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
+        if (defaultPaths.length) {
+            return defaultPaths.map(function (filepath) {
+                return PATH.join(__dirname, "vocabularies", filepath);
+            });
         }
 
         throw new Error("Inf file for uri '" + uri + "' not found!");
@@ -542,9 +564,19 @@ class Namespace {
             if (await FS.existsAsync(vocabulariesPath)) {
                 return vocabulariesPath;
             }
+
+            vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return vocabulariesPath;
+            }
         }
 
         var defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
+        if (await FS.existsAsync(defaultVocabulariesPath)) {
+            return defaultVocabulariesPath;
+        }
+
+        defaultVocabulariesPath = PATH.join(__dirname, "vocabularies", filepath);
         if (await FS.existsAsync(defaultVocabulariesPath)) {
             return defaultVocabulariesPath;
         }
@@ -555,9 +587,9 @@ class Namespace {
     async getComponentForUri (uri) {
         let self = this;
 
-        if (!self.components[uri]) {
+        let path = await self.resolveComponentUri(uri);
 
-            let path = await self.resolveComponentUri(uri);
+        if (!self.components[path]) {
 
             log("Load component for uri '" + uri + "' from file:", path);
 
@@ -565,9 +597,9 @@ class Namespace {
 
             await component.init(self);
 
-            self.components[uri] = component;
+            self.components[path] = component;
         }
-        return self.components[uri];
+        return self.components[path];
     }
 
     async mapComponent (alias, uri) {
@@ -581,7 +613,39 @@ class Namespace {
 
         log("Map component for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.aliases[alias] = component;
+        return self.aliases[alias] = await component.forAlias('component', alias);
+    }
+
+    async mapPlugin (match, uri) {
+        let self = this;
+
+        let component =  await self.getComponentForUri(uri);
+
+        log("Map plugin for uri '" + uri + "' to match '" + match + "'");
+
+        self.plugins.push({
+            match: match,
+            re: new RegExp(match),
+            component: await component.forAlias('plugin', match)
+        });
+
+        return component;
+    }
+
+    getPluginsForMatch (match) {
+        return this.plugins.filter(function (plugin) {
+            return (plugin.match === match);
+        }).map(function (plugin) {
+            return plugin.component;
+        });
+    }
+
+    getPluginsForAlias (alias) {
+        return this.plugins.filter(function (plugin) {
+            return plugin.re.test(alias);
+        }).map(function (plugin) {
+            return plugin.component;
+        });
     }
 
     async getComponentForAlias (alias) {
@@ -589,7 +653,7 @@ class Namespace {
 
         if (alias === '') {
             // Default component
-            return self.getComponentForUri("inf.");
+            return (await self.getComponentForUri("inf.")).forAlias('component', '');
         }
 
         if (!self.aliases[alias]) {
@@ -601,73 +665,82 @@ class Namespace {
 
     async gatherComponentAspect (aspectName) {
         let self = this;
-        return Promise.map(Object.keys(self.components).filter(function (uri) {
-            return ( !! self.components[uri].impl['to' + aspectName]);
-        }), async function (uri) {
+        return Promise.map(Object.keys(self.components), async function (uri) {
 
-            let aspectCode = self.components[uri].impl['to' + aspectName];
+            let aliases = self.components[uri].getComponentAliases();
+            let aspectsCode = {};
 
-            if (typeof aspectCode === "function") {
-                aspectCode = await aspectCode();
-            }
+            await Promise.map(aliases, async function (alias) {
 
-            if (typeof aspectCode === "string") {
-                // Purify codeblocks in a string payload which is assumed to be JavaScript so that
-                // the payload becomes valid javascript and can be combined with other JS code without
-                // further processing by the consuming component.
-                aspectCode = CODEBLOCK.purifyCode(aspectCode, {
-                    freezeToJavaScript: true
-                }).toString();
-            } else
-            if (
-                typeof aspectCode === "object" &&
-                aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
-            ) {
-                // Compile codeblock with no args so that consuming component does not need to deal
-                // with codeblock processing and is able to use payload as-is.
+                let aspectCode = (await self.components[uri].forAlias('component', alias)).impl['to' + aspectName];
 
-                aspectCode = aspectCode.compile().getCode();
-            } else
-            if (
-                typeof aspectCode === "object" &&
-                typeof aspectCode.codeblock === "function"
-            ) {
-                // Compile codeblock using provided args so that consuming component does not need to deal
-                // with codeblock processing and is able to use payload as-is.
-                let args = aspectCode.args || [];
-                aspectCode = aspectCode.codeblock();
-                let argsByName = {};
-                if (Array.isArray(args)) {
-                    /*
-                    return {
-                        args: [ arg1 ],
-                        codeblock: (javascript (arg1) >>>
-                        <<<)
-                    };                    
-                    */
-                    aspectCode._args.forEach(function (name, i) {
-                        argsByName[name] = args[i];
-                    });
-                } else
-                if (typeof args === "object") {
-                    /*
-                    return {
-                        args: {
-                            arg1: arg1
-                        },
-                        codeblock: (javascript (arg1) >>>
-                        <<<)
-                    };                    
-                    */
-                    argsByName = args;                    
+                if (!aspectCode) {
+                    return;
                 }
-                aspectCode = aspectCode.compile(argsByName).getCode();
-            }
+
+                if (typeof aspectCode === "function") {
+                    aspectCode = await aspectCode();
+                }
+
+                if (typeof aspectCode === "string") {
+                    // Purify codeblocks in a string payload which is assumed to be JavaScript so that
+                    // the payload becomes valid javascript and can be combined with other JS code without
+                    // further processing by the consuming component.
+                    aspectCode = CODEBLOCK.purifyCode(aspectCode, {
+                        freezeToJavaScript: true
+                    }).toString();
+                } else
+                if (
+                    typeof aspectCode === "object" &&
+                    aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+                ) {
+                    // Compile codeblock with no args so that consuming component does not need to deal
+                    // with codeblock processing and is able to use payload as-is.
+
+                    aspectCode = aspectCode.compile().getCode();
+                } else
+                if (
+                    typeof aspectCode === "object" &&
+                    typeof aspectCode.codeblock === "function"
+                ) {
+                    // Compile codeblock using provided args so that consuming component does not need to deal
+                    // with codeblock processing and is able to use payload as-is.
+                    let args = aspectCode.args || [];
+                    aspectCode = aspectCode.codeblock();
+                    let argsByName = {};
+                    if (Array.isArray(args)) {
+                        /*
+                        return {
+                            args: [ arg1 ],
+                            codeblock: (javascript (arg1) >>>
+                            <<<)
+                        };                    
+                        */
+                        aspectCode._args.forEach(function (name, i) {
+                            argsByName[name] = args[i];
+                        });
+                    } else
+                    if (typeof args === "object") {
+                        /*
+                        return {
+                            args: {
+                                arg1: arg1
+                            },
+                            codeblock: (javascript (arg1) >>>
+                            <<<)
+                        };                    
+                        */
+                        argsByName = args;                    
+                    }
+                    aspectCode = aspectCode.compile(argsByName).getCode();
+                }
+                aspectsCode[alias] = aspectCode;
+            });
 
             return {
                 uri: uri,
                 pathHash: self.components[uri].pathHash,
-                aspect: aspectCode
+                aspect: aspectsCode
             };
         });
     }    
@@ -728,7 +801,7 @@ class ReferenceNode extends Node {
     static handlesValue (value) {
         return (
             typeof value === "string" &&
-            value.match(/^([^#]*?)\s*#\s*(.*?)(\s+\+([^\+]+))?$/)
+            value.match(/^([^#]*?)\s*(##?)\s*(.*?)(\s+\+([^\+]+))?$/)
         );
     }
 
@@ -736,7 +809,8 @@ class ReferenceNode extends Node {
         super(namespace, value);
         let keyMatch = ReferenceNode.handlesValue(value);
         this.alias = keyMatch[1];
-        this.pointer = keyMatch[2];
+        this.type = keyMatch[2] === '##' ? 'plugin' : 'component';
+        this.pointer = keyMatch[3];
     }
 
     toString () {
@@ -777,7 +851,7 @@ class Processor {
                 });
 
                 value.alias = referenceMatch[1];
-                value.jsId = "./" + referencedComponent.pathHash;
+                value.jsId = "./" + referencedComponent.pathHash + "-" + value.alias;
             }
         }
 
@@ -810,33 +884,59 @@ class Processor {
 
             await Promise.mapSeries(uris, async function (uri) {
 
-                let path = await self.namespace.resolveInfUri(uri);
+                let paths = await self.namespace.resolveInfUri(uri);
 
-                if (!self.namespace.isInheritingFrom(path)) {
+                await Promise.mapSeries(paths, async function (path) {
 
-                    log("Inherit from inf file:", path);
+                    if (!self.namespace.isInheritingFrom(path)) {
 
-                    let inf = new INF(PATH.dirname(path), self.namespace);
+                        log("Inherit from inf file:", path);
 
-                    await inf.runInstructionsFile(PATH.basename(path));
-                }
+                        let inf = new INF(PATH.dirname(path), self.namespace);
+
+                        await inf.runInstructionsFile(PATH.basename(path));
+                    }
+                });
             });
 
         } else
         // Component mapping
         if (anchor.pointer === '') {
 
-            await self.namespace.mapComponent(anchor.alias, value.value);
+            if (anchor.type === 'component') {
+
+                await self.namespace.mapComponent(anchor.alias, value.value);
+
+            } else
+            if (anchor.type === 'plugin') {
+
+                await self.namespace.mapPlugin(anchor.alias, value.value);
+
+            }
 
         } else
         // Mapped component instruction
         if (anchor.pointer != '') {
 
-            let component = await self.namespace.getComponentForAlias(anchor.alias);
-
             value = await self.closureForValueIfReference(value);
 
-            return component.invoke(anchor.pointer, value);
+            if (anchor.type === 'component') {
+
+                let component = await self.namespace.getComponentForAlias(anchor.alias);
+
+                log(`Invoke component '${component.path}' for alias '${anchor.alias}'`);
+
+                return component.invoke(anchor.pointer, value);
+
+            } else
+            if (anchor.type === 'plugin') {
+
+                let plugins = self.namespace.getPluginsForMatch(anchor.alias);
+
+                await Promise.mapSeries(plugins, function (plugin) {
+                    return plugin.invoke(anchor.pointer, value);
+                });
+            }
 
         } else {
             console.error("instruction:", anchor, ":", value);

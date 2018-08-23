@@ -21,7 +21,7 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Great compile target
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
   * Export resolved `inf` component structure and mapped invocation relationships along with optimized invocation handlers to JavaScript
-  * Extendable
+  * Extendable via plugins
   * Comments
   * Unix CLI interface via `inf`
   * Browserifyable

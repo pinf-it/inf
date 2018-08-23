@@ -20,8 +20,10 @@ cat .ui.js
 
 cp -f bundle.inf.js bundle.inf.js~before
 inf {
+    "bundle ##": "inf.pinf.it/plugins/node-aspect-utils.",
+    "bundle ##": "./reflector.",
     "bundle #": "./bundle.",
-    "bundle # do": "contract"
+    "bundle # reflect": "contract"
 }
 
 echo '--- 4 ---'

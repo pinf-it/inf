@@ -1,6 +1,0 @@
-#!/usr/bin/env inf
-{
-    "bundle #": "./bundle.",
-
-    "bundle # do": "expand"
-}

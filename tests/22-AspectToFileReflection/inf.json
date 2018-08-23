@@ -1,0 +1,9 @@
+#!/usr/bin/env inf
+{
+    "bundle ##": "inf.pinf.it/plugins/node-aspect-utils.",
+    "bundle ##": "./reflector.",
+
+    "bundle #": "./bundle.",
+
+    "bundle # reflect": "expand"
+}

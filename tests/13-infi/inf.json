@@ -1,5 +1,5 @@
 {
-    "bundle #": "../12-PINFBundle-MountFiles/bundler.",
+    "#": "./lib/lib.",
 
     "bundle # /main.js": (javascript () >>>
 
