@@ -14,7 +14,7 @@ echo "--- 2 ---"
 
 cp -f ../../inf.js .inf.js
 node .inf.bundle.js --vocabularies ../../vocabularies {
-    "#": "inf.pinf.it/bo/",
+    "#": "it.pinf.inf/bo/",
 
     "bundle # nodejs-script": ".inf.js"
 }

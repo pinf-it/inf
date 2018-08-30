@@ -3,5 +3,5 @@
 echo ">>>TEST_IGNORE_LINE:^>\s<<<"
 
 inf {
-    "#": "inf.pinf.it/npm/"
+    "#": "it.pinf.inf/npm/"
 }

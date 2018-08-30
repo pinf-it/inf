@@ -485,7 +485,7 @@ class Namespace {
             });
         }
     }
-
+/*
     flipDomainInUri (uri) {
         if (/^(\/|\.)/.test(uri)) {
             // There is no domain when using an absolute or relative path.
@@ -500,7 +500,7 @@ class Namespace {
         domain.reverse();
         return (domain.join(".") + (uriMatch[2] || ""));
     }
-
+*/
     isInheritingFrom (path) {
         return (this.pathStack.indexOf(path) !== -1);
     }
@@ -508,7 +508,7 @@ class Namespace {
     async resolveInfUri (uri) {
         let self = this;
 
-        uri = self.flipDomainInUri(uri);
+//        uri = self.flipDomainInUri(uri);
 
         if (!/(\/|\.)$/.test(uri)) {
             console.error("uri", uri);
@@ -543,7 +543,7 @@ class Namespace {
             throw new Error("Component uri '" + uri + "' may not end with '/'!");
         }
 
-        uri = self.flipDomainInUri(uri);
+//        uri = self.flipDomainInUri(uri);
 
         if (/^\./.test(uri)) {
             var exactPath = PATH.resolve(self.baseDir || "", uri);

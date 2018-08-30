@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "#": "inf.pinf.it/bo/",
+    "#": "it.pinf.inf/bo/",
 
     "test # dir": "tests"
 }
@@ -9,7 +9,7 @@ inf {
 echo "---"
 
 inf {
-    "#": "inf.pinf.it/bo.",
+    "#": "it.pinf.inf/bo.",
 
     "test # dir": "tests"
 }
