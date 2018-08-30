@@ -14,6 +14,9 @@ exports.inf = async function (inf) {
     function logKeys (label, obj) {
         var keys = Object.keys(obj);
         keys.sort();
+        keys = keys.filter(function (name) {
+            return (name !== "domain");
+        });
         console.log(label, JSON.stringify(keys));
     }
     
