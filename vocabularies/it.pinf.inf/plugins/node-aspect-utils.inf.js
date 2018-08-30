@@ -42,7 +42,7 @@ exports.inf = async function (inf) {
             
                         await inf.LIB.Promise.map(aspects, async function (aspect) {
             
-                            let path = PATH.join(baseDir, aspect);
+                            let path = inf.LIB.PATH.join(baseDir, aspect);
             
                             let compileArgs = args;
                             if (typeof compileArgs === "function") {
@@ -54,7 +54,7 @@ exports.inf = async function (inf) {
                             let code = context.getNodeAspect(aspect, compileArgs);
             
                             // TODO: Fix codeblock inconsistency when dealing with newlines.
-                            await FS.outputFileAsync(path, code + '\n', "utf8");
+                            await inf.LIB.FS.outputFileAsync(path, code + '\n', "utf8");
                         });
                     }
 
