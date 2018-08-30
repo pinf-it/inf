@@ -3,7 +3,7 @@
 Files
 =====
 
-## /NOTES.md (size: 627 bytes)
+## /NOTES.md (size: 746 bytes)
 
 ```javascript
     
@@ -28,6 +28,12 @@ Files
     %%%code['/inf.json']%%%
     ```
     
+    ## /reflector.inf.js (size: %%%size['/reflector.inf.js']%%% bytes)
+    
+    ```javascript
+    %%%code['/reflector.inf.js']%%%
+    ```
+    
     ## /bundle.inf.js (size: %%%size['/bundle.inf.js']%%% bytes)
     
     ```javascript
@@ -48,7 +54,7 @@ Files
     
 ```
 
-## /main.sh (size: 634 bytes)
+## /main.sh (size: 718 bytes)
 
 ```javascript
 #!/usr/bin/env bash.origin.script
@@ -73,8 +79,10 @@ cat .ui.js
 
 cp -f bundle.inf.js bundle.inf.js~before
 inf {
+    "bundle ##": "inf.pinf.it/plugins/node-aspect-utils.",
+    "bundle ##": "./reflector.",
     "bundle #": "./bundle.",
-    "bundle # do": "contract"
+    "bundle # reflect": "contract"
 }
 
 echo '--- 4 ---'
@@ -87,26 +95,145 @@ diff -u bundle.inf.js bundle.inf.js~before || true
 
 echo '--- 6 ---'
 
-rm -f .ui.js
-mv -f .ui.js~before .ui.js
+rm -f .ui.js .ui.js~before
 
 rm -f bundle.inf.js
 mv -f bundle.inf.js~before bundle.inf.js
 
 ```
 
-## /inf.json (size: 80 bytes)
+## /inf.json (size: 178 bytes)
 
 ```javascript
 #!/usr/bin/env inf
 {
+    "bundle ##": "inf.pinf.it/plugins/node-aspect-utils.",
+    "bundle ##": "./reflector.",
+
     "bundle #": "./bundle.",
 
-    "bundle # do": "expand"
+    "bundle # reflect": "expand"
 }
 ```
 
-## /bundle.inf.js (size: 5479 bytes)
+## /reflector.inf.js (size: 5906 bytes)
+
+```javascript
+
+'use strict';
+
+exports.inf = async function (inf) {
+   
+    return {
+
+        inf: async function (inf) {
+            
+            return {
+
+                Component: {
+
+                    invoke: async function (pointer, value) {
+                        let self = this;
+
+                        if (pointer === "reflect") {
+                            
+                            let reflectionDir = inf.LIB.PATH.dirname(self.path);
+
+                            if (value.value === "expand") {
+
+                                function varPlaceholder (key) {
+                                    const val = new String(`${key}`);
+                                    val.replaceVariables = false;
+                                    return val;
+                                }
+            
+                                return inf.expandNodeAspectsTo(/^\//, reflectionDir, function (aspect, key) {
+            
+                                    if (aspect === '/.NOTES.md') {
+                                        var keyParts = key.match(/^([^\[]+)\['([^']+)'\]$/);
+                                        if (!keyParts) {
+                                            return key;
+                                        }
+                                        if (keyParts[1] === 'size') {
+                                            if (
+                                                keyParts[2] === '/.NOTES.md' ||
+                                                keyParts[2] === '/.ui.js'
+                                            ) {
+                                                return inf.getNodeAspect(keyParts[2], varPlaceholder).length;
+                                            }
+                                            if (!inf.LIB.FS.existsSync(inf.LIB.PATH.join(reflectionDir, keyParts[2]))) {
+                                                return '0';
+                                            }
+                                            return inf.LIB.FS.statSync(inf.LIB.PATH.join(reflectionDir, keyParts[2])).size;
+                                        } else
+                                        if (keyParts[1] === 'code') {
+                                            if (
+                                                keyParts[2] === '/.NOTES.md' ||
+                                                keyParts[2] === '/.ui.js'
+                                            ) {
+                                                let code = inf.getNodeAspect(keyParts[2], varPlaceholder);
+                                                code = new String(code);
+                                                code.replaceVariables = false;
+                                                return code;
+                                            }
+                                            if (!inf.LIB.FS.existsSync(inf.LIB.PATH.join(reflectionDir, keyParts[2]))) {
+                                                return '';
+                                            }
+                                            let code = inf.LIB.FS.readFileSync(inf.LIB.PATH.join(reflectionDir, keyParts[2]), 'utf8');
+                                            if (keyParts[2] === '/bundle.inf.js') {
+                                                code = new String(code);
+                                                code.replaceVariables = false;
+                                            }
+                                            return code;
+                                        }
+            
+                                        throw new Error(`No value for key '${key}' in aspet '${aspect}'!`);
+                                    }
+                                });
+                            } else
+                            if (value.value === "contract") {
+            
+                                let code = await inf.LIB.FS.readFileAsync(inf.LIB.PATH.join(reflectionDir, '/.ui.js'), 'utf8');
+                                let bundlePath = inf.LIB.PATH.join(reflectionDir, '/bundle.inf.js');
+                                let bundle = await inf.LIB.FS.readFileAsync(bundlePath, 'utf8');
+            
+                                // TODO: Fix codeblock parsing so we can use codeblock syntax in regexp without interference.
+                                let indentRe = new RegExp('^([\\s\\t]*)"\\/\\.ui\\.js": \\(javascript \\(\\) >' + '>>', 'm');
+                                let indent = bundle.match(indentRe)[1];
+                                if (/\s$/.test(indent)) {
+                                    indent += '    ';   // 4 spaces soft tab
+                                } else
+                                if (/\s$/.test(indent)) {
+                                    indent += ' ';      // 1 hard tab
+                                }
+                                code = code.split("\n").map(function (line, i) {
+                                    return indent + line;
+                                });
+                                code = code.slice(1, code.length - 2).join("\n").replace(/(^\n|\n$)/g, "");
+            
+                                // TODO: Fix codeblock parsing so we can use codeblock syntax in regexp without interference.
+                                let bundleRe = new RegExp('("\\/\\.ui\\.js": \\(javascript \\(\\) >' + '>>\\s*\\n)[\\s\\S]+?(\\s*<<' + '<\\),)');
+                                bundle = bundle.replace(bundleRe, "$1" + code + "$2");
+            
+                                await inf.LIB.FS.writeFileAsync(bundlePath, bundle, 'utf8');
+            
+                                return;
+                            }
+
+                            throw new Error("NYI");
+                        }
+
+                        return self.invoke(pointer, value);
+                    }
+                }
+            };
+        }
+    };
+}
+
+```
+
+## /bundle.inf.js (size: 1338 bytes)
 
 ```javascript
 
@@ -115,92 +242,6 @@ mv -f bundle.inf.js~before bundle.inf.js
 exports.inf = async function (inf) {
 
     return {
-
-        invoke: async function (pointer, value) {
-
-            if (pointer === "do") {
-                if (value.value === "expand") {
-
-                    function varPlaceholder (key) {
-                        const val = new String(`%%%${key}%%%`);
-                        val.replaceVariables = false;
-                        return val;
-                    }
-
-                    return inf.expandNodeAspectsTo(/^\//, __dirname, function (aspect, key) {
-
-                        if (aspect === '/.NOTES.md') {
-                            var keyParts = key.match(/^([^\[]+)\['([^']+)'\]$/);
-
-                            if (keyParts[1] === 'size') {
-                                if (
-                                    keyParts[2] === '/.NOTES.md' ||
-                                    keyParts[2] === '/.ui.js'
-                                ) {
-                                    return inf.getNodeAspect(keyParts[2], varPlaceholder).length;
-                                }
-                                if (!inf.LIB.FS.existsSync(inf.LIB.PATH.join(__dirname, keyParts[2]))) {
-                                    return '0';
-                                }
-                                return inf.LIB.FS.statSync(inf.LIB.PATH.join(__dirname, keyParts[2])).size;
-                            } else
-                            if (keyParts[1] === 'code') {
-                                if (
-                                    keyParts[2] === '/.NOTES.md' ||
-                                    keyParts[2] === '/.ui.js'
-                                ) {
-                                    let code = inf.getNodeAspect(keyParts[2], varPlaceholder);
-                                    code = new String(code);
-                                    code.replaceVariables = false;
-                                    return code;
-                                }
-                                if (!inf.LIB.FS.existsSync(inf.LIB.PATH.join(__dirname, keyParts[2]))) {
-                                    return '';
-                                }
-                                let code = inf.LIB.FS.readFileSync(inf.LIB.PATH.join(__dirname, keyParts[2]), 'utf8');
-                                if (keyParts[2] === '/bundle.inf.js') {
-                                    code = new String(code);
-                                    code.replaceVariables = false;
-                                }
-                                return code;
-                            }
-
-                            throw new Error(`No value for key '${key}' in aspet '${aspect}'!`);
-                        }
-                    });
-                } else
-                if (value.value === "contract") {
-
-                    let code = await inf.LIB.FS.readFileAsync(inf.LIB.PATH.join(__dirname, '/.ui.js'), 'utf8');
-                    let bundlePath = inf.LIB.PATH.join(__dirname, '/bundle.inf.js');
-                    let bundle = await inf.LIB.FS.readFileAsync(bundlePath, 'utf8');
-
-                    // TODO: Fix codeblock parsing so we can use codeblock syntax in regexp without interference.
-                    let indentRe = new RegExp('^([\\s\\t]*)"\\/\\.ui\\.js": \\(javascript \\(\\) >' + '>>', 'm');
-                    let indent = bundle.match(indentRe)[1];
-                    if (/\s$/.test(indent)) {
-                        indent += '    ';   // 4 spaces soft tab
-                    } else
-                    if (/\s$/.test(indent)) {
-                        indent += ' ';      // 1 hard tab
-                    }
-                    code = code.split("\n").map(function (line, i) {
-                        return indent + line;
-                    });
-                    code = code.slice(1, code.length - 2).join("\n").replace(/(^\n|\n$)/g, "");
-
-                    // TODO: Fix codeblock parsing so we can use codeblock syntax in regexp without interference.
-                    let bundleRe = new RegExp('("\\/\\.ui\\.js": \\(javascript \\(\\) >' + '>>\\s*\\n)[\\s\\S]+?(\\s*<<' + '<\\),)');
-                    bundle = bundle.replace(bundleRe, "$1" + code + "$2");
-
-                    await inf.LIB.FS.writeFileAsync(bundlePath, bundle, 'utf8');
-
-                    return;
-                }
-            }
-
-            throw new Error("NYI");
-        },
 
         "/.ui.js": (javascript () >>>
 
@@ -231,6 +272,12 @@ exports.inf = async function (inf) {
             %%%code['/inf.json']%%%
             ```
 
+            ## /reflector.inf.js (size: %%%size['/reflector.inf.js']%%% bytes)
+
+            ```javascript
+            %%%code['/reflector.inf.js']%%%
+            ```
+
             ## /bundle.inf.js (size: %%%size['/bundle.inf.js']%%% bytes)
 
             ```javascript
@@ -255,11 +302,13 @@ exports.inf = async function (inf) {
 
 ```
 
-## /.~inf.json~infi.log (size: 41 bytes)
+## /.~inf.json~infi.log (size: 122 bytes)
 
 ```javascript
+bundle ##	"inf.pinf.it/plugins/node-aspect-utils."
+bundle ##	"./reflector."
 bundle #	"./bundle."
-bundle # do	"expand"
+bundle # reflect	"expand"
 ```
 
 ## /ui.js (size: 26 bytes)

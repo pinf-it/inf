@@ -36,8 +36,7 @@ diff -u bundle.inf.js bundle.inf.js~before || true
 
 echo '--- 6 ---'
 
-rm -f .ui.js
-mv -f .ui.js~before .ui.js
+rm -f .ui.js .ui.js~before
 
 rm -f bundle.inf.js
 mv -f bundle.inf.js~before bundle.inf.js

@@ -33,15 +33,20 @@ exports.inf = async function (inf) {
             }
         },
 
-        Component: {
+        inf: async function (inf) {
+            
+            return {
+                Component: {
 
-            invoke: async function (pointer, value) {
-                let orig = this;
+                    invoke: async function (pointer, value) {
+                        let orig = this;
 
-                value.value = prefix + value.value;
+                        value.value = prefix + value.value;
 
-                return orig.invoke(pointer, value);
-            }            
+                        return orig.invoke(pointer, value);
+                    }            
+                }
+            };
         }
     };
 }

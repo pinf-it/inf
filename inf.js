@@ -341,28 +341,34 @@ class Component {
                     return pluginInstance.impl.invoke.call(null, pointer, value);
                 };
 
+                componentInitContext = componentInitContext.forNode(pluginInstance);
 
                 let instance = pluginInstance;
-                plugins.forEach(function (plugin) {
-                    if (plugin.impl.Component) {
-                        Object.keys(plugin.impl.Component).forEach(function (functionName) {
-                            let origInstance = instance;
-                            instance = Object.create(origInstance);
-                            if (/^async /.test(plugin.impl.Component[functionName].toString())) {
-                                instance[functionName] = async function () {
-                                    return plugin.impl.Component[functionName].apply(origInstance, arguments);
-                                };
-                            } else {
-                                instance[functionName] = function () {
-                                    return plugin.impl.Component[functionName].apply(origInstance, arguments);
-                                };    
-                            }
-                        });
+                await Promise.mapSeries(plugins, async function (plugin) {
+
+                    if (plugin.impl.inf) {
+                        let impl = await plugin.impl.inf(componentInitContext, alias);
+
+                        if (impl.Component) {
+                            Object.keys(impl.Component).forEach(function (functionName) {
+                                let origInstance = instance;
+                                instance = Object.create(origInstance);
+                                if (/^async /.test(impl.Component[functionName].toString())) {
+                                    instance[functionName] = async function () {
+                                        return impl.Component[functionName].apply(origInstance, arguments);
+                                    };
+                                } else {
+                                    instance[functionName] = function () {
+                                        return impl.Component[functionName].apply(origInstance, arguments);
+                                    };    
+                                }
+                            });
+                        }
                     }
                 });
                 instances[type][alias] = instance;
 
-                pluginInstance.impl = await mod.inf(componentInitContext.forNode(instance), alias);
+                pluginInstance.impl = await mod.inf(componentInitContext, alias);
             }
 
             return instances[type][alias];
