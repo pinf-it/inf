@@ -11,10 +11,15 @@ exports.inf = async function (inf) {
         throw new Error("'inf.baseDir' not correct!");
     }
 
+    function logKeys (label, obj) {
+        var keys = Object.keys(obj);
+        keys.sort();
+        console.log(label, JSON.stringify(keys));
+    }
     
-    console.log("inf", JSON.stringify(Object.keys(inf)));
-    console.log("inf (proto)", JSON.stringify(Object.keys(inf.__proto__)));
-    console.log("inf.LIB", JSON.stringify(Object.keys(inf.LIB)));
+    logKeys("inf", inf);
+    logKeys("inf (proto)", inf.__proto__);
+    logKeys("inf.LIB", inf.LIB);
 
     return {};
 }

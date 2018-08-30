@@ -1,4 +1,4 @@
 inf []
-inf (proto) ["domain","_events","_eventsCount","_maxListeners","LIB","baseDir","toPINFBundle","run","wrapValue","forNode"]
-inf.LIB ["Promise","PATH","FS","CODEBLOCK","CRYPTO","foo"]
+inf (proto) ["LIB","_events","_eventsCount","_maxListeners","baseDir","forNode","run","toPINFBundle","wrapValue"]
+inf.LIB ["CODEBLOCK","CRYPTO","FS","PATH","Promise","foo"]
 OK

@@ -287,7 +287,8 @@ class Component {
     async init (namespace) {
         let self = this;
 
-        self.pathHash = CRYPTO.createHash('sha1').update(self.path).digest('hex');
+        // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
+        self.pathHash = CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
 
         let mod = null;
 

@@ -4,16 +4,16 @@ Default OK
 PINF.bundle("", function (require) {
     require.memoize("/inf.js", function (require, exports, module) {
 return new Promise(function (resolve, reject) { require.sandbox(function (require) {
-require.memoize("/ef5ed5822c5380a7e603499949df2886a96b5ea2-formatter.js", function (require, exports, module) {
+require.memoize("/9daf636c0645526375d1ff39de60a76eb65f88c7-formatter.js", function (require, exports, module) {
 
 exports.format = function (value) {
 
     return value.toUpperCase();
 }
 });
-require.memoize("/63dda7a7a2cc5d4cd0186e7fa8fe4363d7e40b06-stdout.js", function (require, exports, module) {
+require.memoize("/6d3136d3a9bf613a5a1d26e8f27a6dee0e60a752-stdout.js", function (require, exports, module) {
 
-let formatter = require("./ef5ed5822c5380a7e603499949df2886a96b5ea2-formatter");
+let formatter = require("./9daf636c0645526375d1ff39de60a76eb65f88c7-formatter");
 
 exports.echo = function (value) {
 
@@ -27,8 +27,8 @@ exports.echo = function (value) {
 
 require.memoize("/main.js", function (require, exports, module) {
     let rtNamespace = {};
-    rtNamespace['formatter'] = require('./ef5ed5822c5380a7e603499949df2886a96b5ea2-formatter.js')
-rtNamespace['stdout'] = require('./63dda7a7a2cc5d4cd0186e7fa8fe4363d7e40b06-stdout.js')
+    rtNamespace['formatter'] = require('./9daf636c0645526375d1ff39de60a76eb65f88c7-formatter.js')
+rtNamespace['stdout'] = require('./6d3136d3a9bf613a5a1d26e8f27a6dee0e60a752-stdout.js')
     return rtNamespace;
 });
 }, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });
