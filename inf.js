@@ -30,6 +30,8 @@ const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
 const CRYPTO = require("crypto");
 const MINIMIST = require("minimist");
 
+const LODASH_GET = require("lodash/get");
+
 
 // ####################################################################################################
 // # Bootstrap
@@ -128,6 +130,12 @@ class INF {
         }
 
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
+
+            // Replace variables
+            instructionObject = instructionObject.replace(/%%args\.([^%]+)%%/g, function () {
+                return LODASH_GET(self.options, arguments[1], arguments[0]);    
+            });
+
             instructionObject = instructionObject.split("\t");
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]));
         });
