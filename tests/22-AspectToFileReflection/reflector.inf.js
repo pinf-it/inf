@@ -26,7 +26,7 @@ exports.inf = async function (inf) {
                                     return val;
                                 }
             
-                                return inf.expandNodeAspectsTo(/^\//, reflectionDir, function (aspect, key) {
+                                let filenames = await inf.expandNodeAspectsTo(/^\//, reflectionDir, function (aspect, key) {
             
                                     if (aspect === '/.NOTES.md') {
                                         var keyParts = key.match(/^([^\[]+)\['([^']+)'\]$/);
@@ -69,6 +69,10 @@ exports.inf = async function (inf) {
                                         throw new Error(`No value for key '${key}' in aspet '${aspect}'!`);
                                     }
                                 });
+
+                                console.log("filenames", filenames);
+
+                                return;
                             } else
                             if (value.value === "contract") {
             
