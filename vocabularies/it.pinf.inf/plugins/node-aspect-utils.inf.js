@@ -39,8 +39,8 @@ exports.inf = async function (inf) {
                         let aspects = Object.keys(node.impl).filter(function (key) {
                             return aspectRe.test(key);
                         });
-            
-                        await inf.LIB.Promise.map(aspects, async function (aspect) {
+
+                        return await inf.LIB.Promise.map(aspects, async function (aspect) {
             
                             let path = inf.LIB.PATH.join(baseDir, aspect);
             
@@ -55,6 +55,8 @@ exports.inf = async function (inf) {
             
                             // TODO: Fix codeblock inconsistency when dealing with newlines.
                             await inf.LIB.FS.outputFileAsync(path, code + '\n', "utf8");
+
+                            return inf.LIB.PATH.relative(baseDir, path);
                         });
                     }
 

@@ -24,7 +24,9 @@ GLOB.async = Promise.promisify(GLOB);
 const CLARINET = require("clarinet");
 const CODEBLOCK = require("codeblock");
 const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
-    cacheCompiled: true
+    cacheCompiled: true,
+    stripComments: false,
+    codeblockPackageUri: "codeblock"
 });
 
 const CRYPTO = require("crypto");
@@ -56,6 +58,9 @@ setImmediate(function () {
 
                 let cwd = process.cwd();
                 let args = MINIMIST(process.argv.slice(2));
+                if (args.verbose && !process.env.VERBOSE) {
+                    process.env.VERBOSE = "1";
+                }
                 let filepath = args._[0];
 
                 let inf = new INF(cwd, null, args);
@@ -441,7 +446,7 @@ require.memoize("/main.js", function (require, exports, module) {
 
             let path = PATH.resolve(namespace.baseDir || "", filepath);
 
-            let inf = new INF(PATH.dirname(path));
+            let inf = new INF(PATH.dirname(path), null, namespace.options);
 
             return inf.runInstructionsFile(PATH.basename(path));
         }
@@ -526,6 +531,18 @@ class Namespace {
             }
         }
 
+        if (self.options.vocabularies) {
+            var vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return [ vocabulariesPath ];
+            }
+
+            vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return [ vocabulariesPath ];
+            }
+        }
+
         let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
         if (defaultPaths.length) {
             return defaultPaths.map(function (filepath) {
@@ -533,23 +550,27 @@ class Namespace {
             });
         }
 
-        throw new Error("Inf file for uri '" + uri + "' not found!");
+        console.error("self.options.vocabularies", self.options.vocabularies);
+        throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+
     }
 
     async resolveComponentUri (uri) {
         let self = this;
 
-        if (/\/$/.test(uri)) {
-            throw new Error("Component uri '" + uri + "' may not end with '/'!");
-        }
+//        if (/\/$/.test(uri)) {
+//            throw new Error("Component uri '" + uri + "' may not end with '/'!");
+//        }
 
 //        uri = self.flipDomainInUri(uri);
 
         if (/^\./.test(uri)) {
             var exactPath = PATH.resolve(self.baseDir || "", uri);
             if (await FS.existsAsync(exactPath)) {
-                return exactPath;
-            }    
+                if ((await FS.statAsync(exactPath)).isFile()) {
+                    return exactPath;
+                }
+            }
         }
 
         if (!/(\/|\.)$/.test(uri)) {
@@ -588,7 +609,7 @@ class Namespace {
             return defaultVocabulariesPath;
         }
 
-        throw new Error("Component for uri '" + uri + "' not found from baseDir '" + self.baseDir + "'!");
+        throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
     }
 
     async getComponentForUri (uri) {
@@ -899,7 +920,7 @@ class Processor {
 
                         log("Inherit from inf file:", path);
 
-                        let inf = new INF(PATH.dirname(path), self.namespace);
+                        let inf = new INF(PATH.dirname(path), self.namespace, self.namespace.options);
 
                         await inf.runInstructionsFile(PATH.basename(path));
                     }
