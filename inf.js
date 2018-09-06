@@ -31,8 +31,10 @@ const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
 
 const CRYPTO = require("crypto");
 const MINIMIST = require("minimist");
+const TRAVERSE = require("traverse");
 
 const LODASH_GET = require("lodash/get");
+const LODASH_VALUES = require("lodash/values");
 
 
 // ####################################################################################################
@@ -137,8 +139,18 @@ class INF {
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
 
             // Replace variables
-            instructionObject = instructionObject.replace(/%%args\.([^%]+)%%/g, function () {
-                return LODASH_GET(self.options, arguments[1], arguments[0]);    
+            instructionObject = instructionObject.replace(/%%([^%]+)%%/g, function () {
+
+                if (/^\{.+\}$/.test(arguments[1])) {
+                    // Executable expression
+                    let args = self.options;
+                    return eval(arguments[1].replace(/(^\{|\}$)/g, ""));
+                } else {
+                    // Simple varibale reference
+                    return LODASH_GET({
+                        args: self.options
+                    }, arguments[1], arguments[0]);    
+                }
             });
 
             instructionObject = instructionObject.split("\t");
@@ -394,7 +406,8 @@ const LIB = {
     PATH: PATH,
     FS: FS,
     CODEBLOCK: CODEBLOCK,
-    CRYPTO: CRYPTO
+    CRYPTO: CRYPTO,
+    INF: exports
 };
 LIB.Promise.defer = function () {
     var deferred = {};
@@ -815,6 +828,7 @@ class Node {
         return this.value;
     }
 }
+exports.Node = Node;
 
 class CodeblockNode extends Node {
 
@@ -866,7 +880,7 @@ class Processor {
     async closureForValueIfReference (value) {
         let self = this;
 
-        if (typeof value.value === "string") {
+        async function wrapValue (value) {
 
             // See if we are referencing an aliased component. If we are we resolve the reference
             // and pass it along with the component invocation.
@@ -889,6 +903,45 @@ class Processor {
                 value.alias = referenceMatch[1];
                 value.jsId = "./" + referencedComponent.pathHash + "-" + value.alias;
             }
+
+            return value;
+        }
+
+        if (typeof value.value === "string") {
+
+            value = await wrapValue(value);
+
+        } else
+        if (typeof value.value === "object") {
+
+            let wrappedValues = {};
+            let wrappedValuesIndex = 0;
+
+            TRAVERSE(value.value).forEach(function (obj) {
+                if (
+                    typeof obj === "string" &&
+                    /^([^#]*?)\s*#\s*(.+?)$/.test(obj)
+                ) {
+                    wrappedValuesIndex++;
+                    wrappedValues[wrappedValuesIndex] = wrapValue({
+                        value: obj
+                    });
+                    this.update(`___WRAPPED_VALUE_${wrappedValuesIndex}___`, true);
+                }
+            });
+
+            await Promise.mapSeries(Object.keys(wrappedValues), async function (key) {
+                wrappedValues[key] = await wrappedValues[key];
+            });
+
+            TRAVERSE(value.value).forEach(function (obj) {
+                if (
+                    typeof obj === "string" &&
+                    /^___WRAPPED_VALUE_/.test(obj)
+                ) {
+                    this.update(wrappedValues[parseInt(obj.replace(/^.+_(\d+)_.+$/, "$1"))], true);
+                }
+            });
         }
 
         return value;
