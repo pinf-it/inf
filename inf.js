@@ -525,7 +525,7 @@ class Namespace {
 
         if (!/(\/|\.)$/.test(uri)) {
             console.error("uri", uri);
-            throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
+            throw new Error(`Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.`);
         }
 
         let filepath = uri + "inf.json";
@@ -549,6 +549,17 @@ class Namespace {
             if (await FS.existsAsync(vocabulariesPath)) {
                 return [ vocabulariesPath ];
             }
+        } else
+        if (process.env.INF_VOCABULARIES) {
+            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return [ vocabulariesPath ];
+            }
+
+            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return [ vocabulariesPath ];
+            }
         }
 
         let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
@@ -559,6 +570,7 @@ class Namespace {
         }
 
         console.error("self.options.vocabularies", self.options.vocabularies);
+        console.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
         throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
 
     }
@@ -605,7 +617,18 @@ class Namespace {
             if (await FS.existsAsync(vocabulariesPath)) {
                 return vocabulariesPath;
             }
-        }
+        } else
+        if (process.env.INF_VOCABULARIES) {
+            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return vocabulariesPath;
+            }
+
+            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+            if (await FS.existsAsync(vocabulariesPath)) {
+                return vocabulariesPath;
+            }
+        }            
 
         var defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
         if (await FS.existsAsync(defaultVocabulariesPath)) {
