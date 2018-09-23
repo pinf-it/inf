@@ -27,8 +27,8 @@ exports.inf = async function (inf) {
                                 }
             
                                 let filenames = await inf.expandNodeAspectsTo(/^\//, reflectionDir, function (aspect, key) {
-            
-                                    if (aspect === '/.NOTES.md') {
+
+                                    if (aspect === '/.NOTES') {
                                         var keyParts = key.match(/^([^\[]+)\['([^']+)'\]$/);
                                         if (!keyParts) {
                                             return key;
@@ -38,7 +38,7 @@ exports.inf = async function (inf) {
                                                 keyParts[2] === '/.NOTES.md' ||
                                                 keyParts[2] === '/.ui.js'
                                             ) {
-                                                return inf.getNodeAspect(keyParts[2], varPlaceholder).length;
+                                                return inf.getNodeAspect(keyParts[2].replace(/\.md$/, ""), varPlaceholder).length;
                                             }
                                             if (!inf.LIB.FS.existsSync(inf.LIB.PATH.join(reflectionDir, keyParts[2]))) {
                                                 return '0';
@@ -50,7 +50,7 @@ exports.inf = async function (inf) {
                                                 keyParts[2] === '/.NOTES.md' ||
                                                 keyParts[2] === '/.ui.js'
                                             ) {
-                                                let code = inf.getNodeAspect(keyParts[2], varPlaceholder);
+                                                let code = inf.getNodeAspect(keyParts[2].replace(/\.md$/, ""), varPlaceholder);
                                                 code = new String(code);
                                                 code.replaceVariables = false;
                                                 return code;
@@ -66,7 +66,16 @@ exports.inf = async function (inf) {
                                             return code;
                                         }
             
-                                        throw new Error(`No value for key '${key}' in aspet '${aspect}'!`);
+                                        throw new Error(`No value for key '${key}' in aspect '${aspect}'!`);
+                                    } else {
+                                        throw new Error(`Unknown aspect '${aspect}'!`);
+                                    }
+                                }, {
+                                    mapFilepath: function (filepath) {
+                                        if (filepath === '/.NOTES') {
+                                            return '/.NOTES.md';
+                                        }
+                                        return filepath;
                                     }
                                 });
 

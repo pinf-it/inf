@@ -11,7 +11,7 @@ exports.inf = async function (inf) {
 
         <<<),
 
-        "/.NOTES.md": (markdown (code, size) >>>
+        "/.NOTES": (markdown (code, size) >>>
 
             Files
             =====

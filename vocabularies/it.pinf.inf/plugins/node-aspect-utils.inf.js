@@ -33,16 +33,16 @@ exports.inf = async function (inf) {
                             throw new Error(`Error while compiling codeblock for node aspect '${aspect}' for node '${node.path}'`);
                         }
                     }
-            
-                    context.expandNodeAspectsTo = async function (aspectRe, baseDir, args) {
-            
+
+                    context.expandNodeAspectsTo = async function (aspectRe, baseDir, args, options) {
+
+                        options = options || {};
+
                         let aspects = Object.keys(node.impl).filter(function (key) {
                             return aspectRe.test(key);
                         });
 
                         return await inf.LIB.Promise.map(aspects, async function (aspect) {
-            
-                            let path = inf.LIB.PATH.join(baseDir, aspect);
             
                             let compileArgs = args;
                             if (typeof compileArgs === "function") {
@@ -52,7 +52,13 @@ exports.inf = async function (inf) {
                             }
             
                             let code = context.getNodeAspect(aspect, compileArgs);
-            
+
+                            let pathAspect = aspect;
+                            if (options.mapFilepath) {
+                                pathAspect = options.mapFilepath(aspect);
+                            }                            
+                            let path = inf.LIB.PATH.join(baseDir, pathAspect);
+
                             // TODO: Fix codeblock inconsistency when dealing with newlines.
                             await inf.LIB.FS.outputFileAsync(path, code + '\n', "utf8");
 
