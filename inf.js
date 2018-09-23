@@ -8,6 +8,11 @@ TODO:
 
 'use strict'
 
+const CONSOLE = {};
+Object.keys(console).forEach(function (name) {
+    CONSOLE[name] = console[name];
+});
+
 const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
 const PATH = require("path");
@@ -47,7 +52,7 @@ function log () {
     if (!process.env.VERBOSE) return;
     var args = Array.from(arguments);
     args.unshift("[inf]");
-    console.log.apply(console, args);
+    CONSOLE.log.apply(CONSOLE, args);
 }
 
 setImmediate(function () {
@@ -76,7 +81,7 @@ setImmediate(function () {
                 }
 
             } catch (err) {
-                console.error("[inf]", err);
+                CONSOLE.error("[inf]", err);
                 process.exit(1);
             }
         }
@@ -202,7 +207,7 @@ class Parser {
             freezeToJSON: true
         }).toString();
 
-        if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions(instructions)", instructions);
+        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions(instructions)", instructions);
 
         let instructionObjects = [];
 
@@ -213,10 +218,10 @@ class Parser {
             }
             let parser = CLARINET.parser();
             parser.onerror = function (err) {
-                console.error("err", err); 
-                console.error("self.baseDir", self.baseDir);
-                console.error("filepath", self.filepath);
-                console.error("instructions", instructions);
+                CONSOLE.error("err", err); 
+                CONSOLE.error("self.baseDir", self.baseDir);
+                CONSOLE.error("filepath", self.filepath);
+                CONSOLE.error("instructions", instructions);
                 reject(new Error("Error parsing instructions!"));
             };
             let rootObj = null;
@@ -225,7 +230,7 @@ class Parser {
             let previousKeyStack = [];
             let previousObjectStack = [];
             parser.onopenobject = function (key) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
                 if (this.depth === 0) {
                     currentObject = rootObj = {};
                 } else {
@@ -244,7 +249,7 @@ class Parser {
                 currentKey = key;
             };
             parser.onvalue = function (value) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onvalue", value);
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onvalue", value);
                 if (currentKey === null) {
                     currentObject.push(value);
                 } else {
@@ -252,7 +257,7 @@ class Parser {
                 }
             };
             parser.onkey = function (key) {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onkey", key);
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
                     currentObject = rootObj = {};
@@ -260,7 +265,7 @@ class Parser {
                 currentKey = key;
             };
             parser.oncloseobject = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:oncloseobject");
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:oncloseobject");
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
                 } else {
@@ -269,14 +274,14 @@ class Parser {
                 }
             };
             parser.onopenarray = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onopenarray");
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenarray");
                 previousObjectStack.push(currentObject);
                 currentObject = currentObject[currentKey] = [];
                 previousKeyStack.push(currentKey);
                 currentKey = null;
             };
             parser.onclosearray = function () {
-                if (PARSER_EVENT_DEBUG) console.log("[inf] Parser:parseInstructions():parser:onclosearray");
+                if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onclosearray");
                 currentKey = previousKeyStack.pop();
                 currentObject = previousObjectStack.pop();
             };
@@ -425,6 +430,8 @@ class ComponentInitContext extends EventEmitter {
 
         let self = this;
 
+        self.setMaxListeners(9999);
+
         self.LIB = LIB;
 
         self.baseDir = namespace.baseDir;
@@ -537,7 +544,7 @@ class Namespace {
 //        uri = self.flipDomainInUri(uri);
 
         if (!/(\/|\.)$/.test(uri)) {
-            console.error("uri", uri);
+            CONSOLE.error("uri", uri);
             throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
         }
 
@@ -571,7 +578,7 @@ class Namespace {
             });
         }
 
-        console.error("self.options.vocabularies", self.options.vocabularies);
+        CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
         throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
 
     }
@@ -595,7 +602,7 @@ class Namespace {
         }
 
         if (!/(\/|\.)$/.test(uri)) {
-            console.error("uri", uri);
+            CONSOLE.error("uri", uri);
             throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
         }
 
@@ -901,6 +908,7 @@ class Processor {
                 });
 
                 value.alias = referenceMatch[1];
+                value.pointer = referenceMatch[2];
                 value.jsId = "./" + referencedComponent.pathHash + "-" + value.alias;
             }
 
@@ -962,7 +970,7 @@ class Processor {
         value = Node.WrapInstructionNode(self.namespace, value);
 
         if (! anchor instanceof ReferenceNode) {
-            console.error("anchor", anchor);
+            CONSOLE.error("anchor", anchor);
             throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
         }
 
@@ -1028,9 +1036,9 @@ class Processor {
             }
 
         } else {
-            console.error("instruction:", anchor, ":", value);
-            console.error("anchor.alias:", anchor.alias);
-            console.error("anchor.pointer:", anchor.pointer);
+            CONSOLE.error("instruction:", anchor, ":", value);
+            CONSOLE.error("anchor.alias:", anchor.alias);
+            CONSOLE.error("anchor.pointer:", anchor.pointer);
             throw new Error("Unknown instruction!");
         }
     }
