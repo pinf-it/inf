@@ -20,10 +20,11 @@ exports.inf = async function (inf) {
 
                 testDir = value.value;
 
+                return true;
             } else
             if (pointer === "run") {
 
-                if (!testDir) return;
+                if (!testDir) return false;
 
                 await ensureDependencies();
 

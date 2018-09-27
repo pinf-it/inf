@@ -1,0 +1,14 @@
+{
+    "resolver #": "../",
+
+    "resolver # resolve": "./foo.txt",
+
+    "resolver # resolve": "foo.txt",
+
+    "resolver # resolve": {
+        "path1": "./foo.txt",
+        "sub": {
+            "path2": "foo.txt"
+        }
+    }
+}

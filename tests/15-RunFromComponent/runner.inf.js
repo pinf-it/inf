@@ -9,7 +9,7 @@ exports.inf = async function (inf) {
 
             if (pointer === "run") {
 
-                await inf.run(value.value + "inf.json");
+                return inf.run(value.value + "inf.json");
             }
         }
     };

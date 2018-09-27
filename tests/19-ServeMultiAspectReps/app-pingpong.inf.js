@@ -13,6 +13,7 @@ exports.inf = async function (inf) {
 
                 serverApi.resolve(value);
 
+                return true;
             } else
             if (pointer === "app") {
 

@@ -39,6 +39,7 @@ fs[pointer] = `function (require, exports, module) {
 ${value.toString()}
     }`
 // --------------------------------------------------
+                    return true;
                 }
             } else
             if (pointer === 'eval') {
@@ -52,7 +53,7 @@ ${value.toString()}
 
                 await inf.LIB.FS.writeFileAsync(inf.LIB.PATH.join(__dirname, ".~bundle.js"), bundle, "utf8");
 
-                await new Promise(function (resolve, reject) {
+                return new Promise(function (resolve, reject) {
                     PINF.sandbox("", {
                         load: function (uri, loadedCallback) {
                             try {

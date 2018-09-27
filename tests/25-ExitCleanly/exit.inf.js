@@ -21,6 +21,8 @@ exports.inf = async function (inf) {
                 if (requests.length) {
                     console.error("requests", requests);
                 }
+
+                return true;
             }
         }
     };

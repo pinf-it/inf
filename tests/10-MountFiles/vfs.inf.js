@@ -17,6 +17,7 @@ exports.inf = async function (inf) {
 
                     fs[pointer] = value;
 
+                    return true;
                 } else {
 
                     return fs[pointer];

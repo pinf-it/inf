@@ -45,6 +45,7 @@ exports.inf = async function (inf) {
 
                 server.close();
 
+                return true;
             } else
             if (pointer === 'api') {
 
@@ -64,6 +65,8 @@ exports.inf = async function (inf) {
                     },
                     app: app
                 });
+
+                return true;
             }
         },
 

@@ -25,6 +25,7 @@
         "codeblock": "^0.3.11",
         "fs-extra": "^7.0.0",
         "glob": "^7.1.2",
+        "json-stable-stringify": "^1.0.1",
         "lodash": "^4.17.10",
         "minimist": "^1.2.0",
         "pinf-loader-js": "^0.4.22",

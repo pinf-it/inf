@@ -15,6 +15,7 @@ exports.inf = async function (inf) {
 
                 options.prefix = value;
 
+                return true;
             } else
             if (pointer === "options") {
 
@@ -22,10 +23,13 @@ exports.inf = async function (inf) {
                     options[name] = value[name];
                 });
 
+                return true;
             } else
             if (pointer === "echo") {
 
                 process.stdout.write(options.prefix + value + options.suffix + "\n");
+
+                return true;
             }
         }
     };

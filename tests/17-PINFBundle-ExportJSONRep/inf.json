@@ -38,6 +38,7 @@
                     return Promise.resolve(reps[alias]);
                 };
 
+console.log("JSONREP:::", JSONREP);                
                 return JSONREP.markupNode({
                     "@stdout": "Hello from rep!"
                 }).then(function (code) {

@@ -10,6 +10,8 @@ exports.inf = async function (inf) {
             if (pointer === "echo") {
 
                 process.stdout.write(value + "\n");
+
+                return true;
             }
         }
     };

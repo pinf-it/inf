@@ -15,12 +15,15 @@ exports.inf = async function (inf) {
 
                 formatter = value.formatter.value;
 
+                return true;
             } else
             if (pointer === "echo") {
 
                 let message = await formatter(value);
                 
                 process.stdout.write(message.toString() + "\n");
+
+                return true;
             }
         }
     };

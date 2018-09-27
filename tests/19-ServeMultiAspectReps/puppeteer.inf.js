@@ -15,6 +15,7 @@ exports.inf = async function (inf) {
 
                 serverApi = (await value.value()).value;
 
+                return true;
             } else
             if (pointer === 'run') {
 
@@ -29,6 +30,8 @@ exports.inf = async function (inf) {
                 await exports.run(inf, page, serverApi.baseUrl);
 
                 await browser.close();
+
+                return true;
             }
         }
     };

@@ -15,6 +15,7 @@ exports.inf = async function (inf) {
 
                 mode = value;
 
+                return true;
             } else
             if (pointer === "format") {
 

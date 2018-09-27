@@ -50,10 +50,12 @@ exports.inf = async function (inf) {
 
                 process.stdout.write(value + "\n");
 
+                return true;
             } else
             if (/^\//.test(pointer)) {
 
                 let path = inf.LIB.PATH.join(inf.rootDir, pointer);
+
                 return inf.LIB.FS.readFileAsync(path);
 
             } else
@@ -61,6 +63,7 @@ exports.inf = async function (inf) {
 
                 on.turn.push(value);
 
+                return true;
             } else {
                 throw new Error("Pointer '" + pointer + "' not found in component '" +  __filename + "'!");
             }

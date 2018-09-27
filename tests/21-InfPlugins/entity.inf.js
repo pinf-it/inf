@@ -13,6 +13,8 @@ exports.inf = async function (inf) {
                 value = inf.capitalize(value.toString());
 
                 process.stdout.write(value + "\n");
+
+                return true;
             }
         }
     };

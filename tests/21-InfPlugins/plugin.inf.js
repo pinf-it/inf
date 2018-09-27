@@ -12,6 +12,8 @@ exports.inf = async function (inf) {
             if (pointer === "prefix") {
 
                 prefix = value.value;
+
+                return true;
             }
         },
 

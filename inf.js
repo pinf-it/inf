@@ -15,6 +15,7 @@ Object.keys(console).forEach(function (name) {
 
 const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
+const ASSERT = require("ASSERT");
 const PATH = require("path");
 const FS = require("fs-extra");
 Promise.promisifyAll(FS);
@@ -125,19 +126,23 @@ class INF {
     async runInstructions (instructions, filepath) {
         let self = this;
 
-        self.parser = new Parser(self.baseDir, filepath);
+        filepath = PATH.join(self.baseDir, filepath);
+        const baseDir = PATH.dirname(filepath);
+        filepath = PATH.basename(filepath);
+
+        self.parser = new Parser(baseDir, filepath);
         // TODO: Instead of first populating 'instructionObjects' and then processing them we should
         //       process instruction objects as they come in. This will allow for faster processing of
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(self.baseDir, self.referringNamespace, self.options);
+        self.namespace = new Namespace(baseDir, self.referringNamespace, self.options);
         self.processor = new Processor(self.namespace);
 
         if (filepath) {
-            self.namespace.pathStack.push(PATH.join(self.baseDir, filepath));
+            self.namespace.pathStack.push(PATH.join(baseDir, filepath));
             if (self.referringNamespace) {
-                self.referringNamespace.pathStack.push(PATH.join(self.baseDir, filepath));
+                self.referringNamespace.pathStack.push(PATH.join(baseDir, filepath));
             }
         }
 
@@ -167,6 +172,8 @@ class INF {
         }
 
         // TODO: Dump state
+
+        return true;
     }
 }
 
@@ -368,7 +375,14 @@ class Component {
                         throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().invoke(pointer, value)'!");
                     }
 
-                    return pluginInstance.impl.invoke.call(null, pointer, value);
+                    return Promise.resolve(pluginInstance.impl.invoke.call(null, pointer, value)).then(function (result) {
+
+                        if (typeof result === "undefined") {
+                            return badInvocation(pointer, value, self);
+                        }
+
+                        return result;
+                    });
                 };
 
                 componentInitContext = componentInitContext.forNode(pluginInstance);
@@ -408,6 +422,7 @@ class Component {
 
 const LIB = {
     Promise: Promise,
+    ASSERT: ASSERT,
     PATH: PATH,
     FS: FS,
     CODEBLOCK: CODEBLOCK,
@@ -422,6 +437,32 @@ LIB.Promise.defer = function () {
     });
     return deferred;
 }
+Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
+Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("lodash/merge"); } });
+Object.defineProperty(LIB, 'LODASH', { get: function() { return require("lodash"); } });
+
+Object.defineProperty(LIB, 'STABLE_JSON', { get: function() {
+    const SORTED_JSON_STRINGIFY = require("json-stable-stringify");
+    return {
+        parse: JSON.parse,
+        stringify: function (obj, replacer, space) {
+            if (space) {
+                return SORTED_JSON_STRINGIFY(obj, {
+                    space: ((function () {
+                        var indent = "";
+                        for (var i=0;i<space;i++) indent += " ";
+                        return indent;
+                    })())
+                });
+            } else {
+                return SORTED_JSON_STRINGIFY(obj);
+            }
+        }
+    };
+} });
+
+
+
 
 class ComponentInitContext extends EventEmitter {
 
@@ -472,6 +513,13 @@ require.memoize("/main.js", function (require, exports, module) {
 
         self.run = async function (filepath) {
 
+            if (/\{/.test(filepath)) {
+
+                let inf = new INF(self.baseDir, null, namespace.options);
+
+                return inf.runInstructions(filepath);
+            }
+
             let path = PATH.resolve(namespace.baseDir || "", filepath);
 
             let inf = new INF(PATH.dirname(path), null, namespace.options);
@@ -482,6 +530,8 @@ require.memoize("/main.js", function (require, exports, module) {
         self.wrapValue = function (value) {
             return Node.WrapInstructionNode(namespace, value);
         }
+
+        self.badInvocation = badInvocation;
 
         self.forNode = function (node) {
 
@@ -538,6 +588,15 @@ class Namespace {
         return (this.pathStack.indexOf(path) !== -1);
     }
 
+    async findInParentTree (dir, filepath) {
+        let path = PATH.join(dir, filepath);
+        const exits = await FS.existsAsync(path);
+        if (exits) return path;
+        const newPath = PATH.dirname(dir);
+        if (newPath === dir) return null;
+        return this.findInParentTree(newPath, filepath);
+    }
+
     async resolveInfUri (uri) {
         let self = this;
 
@@ -550,6 +609,7 @@ class Namespace {
 
         let filepath = uri + "inf.json";
 
+        // 1. Relative paths
         if (/^\./.test(uri)) {
             let cwdPaths = await GLOB.async(filepath, { cwd: self.baseDir });
             if (cwdPaths.length) {
@@ -559,8 +619,10 @@ class Namespace {
             }
         }
 
+        // 2. Explicityly configured
+        let vocabulariesPath = null;
         if (self.options.vocabularies) {
-            var vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+            vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
             if (await FS.existsAsync(vocabulariesPath)) {
                 return [ vocabulariesPath ];
             }
@@ -570,6 +632,7 @@ class Namespace {
                 return [ vocabulariesPath ];
             }
         } else
+        // 3. Environment variable
         if (process.env.INF_VOCABULARIES) {
             vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
             if (await FS.existsAsync(vocabulariesPath)) {
@@ -582,6 +645,13 @@ class Namespace {
             }
         }
 
+        // 4. Walk up parent tree
+        let parentTreePath = await self.findInParentTree(self.baseDir, filepath);
+        if (parentTreePath) {
+            return [ parentTreePath ];
+        }
+
+        // 5. Fallback to bundled defaults
         let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
         if (defaultPaths.length) {
             return defaultPaths.map(function (filepath) {
@@ -589,6 +659,7 @@ class Namespace {
             });
         }
 
+        // 6. Not found
         CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
         CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
         throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
@@ -838,7 +909,13 @@ class Node {
             return new Node(namespace, value);
         } else
         if (CodeblockNode.handlesValue(value)) {
-            return new CodeblockNode(namespace, value);
+            const codeblock = new CodeblockNode(namespace, value);
+
+            if (codeblock.getFormat() === 'inf') {
+                return new InfNode(namespace, codeblock);
+            }
+
+            return codeblock;
         } else
         if (ReferenceNode.handlesValue(value)) {
             return new ReferenceNode(namespace, value);
@@ -857,8 +934,34 @@ class Node {
         if (typeof this.value === "object") return JSON.stringify(this.value, null, 4);
         return this.value;
     }
+
+    propertyToPath (propertyPath) {
+        const value = (propertyPath && LODASH_GET(this.value, propertyPath, null)) || this.value;
+        if (!value) throw new Error(`No value at property path '${propertyPath}'!`);
+        if (/^\//.test(value)) {
+            return value;
+        } else
+        if (/^\.\.?\//.test(value)) {
+            return PATH.join(this.baseDir, value);
+        } else
+        if (/^~\//.test(value)) {
+            return PATH.join(process.env.HOME, value.substring(2));
+        }
+        return PATH.join(process.cwd(), value);
+    }
+
+    toPath () {
+        return this.propertyToPath();
+    }
 }
 exports.Node = Node;
+
+
+function badInvocation (pointer, value, component) {
+    console.error("value", value);
+    throw new Error(`Invocation for pointer '${pointer}' is not supported${component ? ` in component '${component.path}'` : ''}`);
+}
+
 
 class CodeblockNode extends Node {
 
@@ -869,10 +972,23 @@ class CodeblockNode extends Node {
         );
     }
 
-    toString () {
+    getFormat () {
+        return CODEBLOCK.thawFromJSON(this.value).getFormat();
+    }
+
+    toString (args) {
         let codeblock = CODEBLOCK.thawFromJSON(this.value);
 
+        codeblock = codeblock.compile(args);
+
         return codeblock.getCode();
+    }
+}
+
+class InfNode extends Node {
+
+    async toInstructions (vars) {
+        return this.value.toString(vars);
     }
 }
 
@@ -938,6 +1054,10 @@ class Processor {
             return value;
         }
 
+        if (value instanceof InfNode) {
+            // An InfNode is not a reference.
+            return value;
+        } else
         if (typeof value.value === "string") {
 
             value = await wrapValue(value);

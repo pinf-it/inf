@@ -23,6 +23,7 @@ exports.inf = async function (inf) {
 
                 routes[pointer] = value;
 
+                return true;
             } else
             if (pointer === 'app') {
                 return function (req, res) {

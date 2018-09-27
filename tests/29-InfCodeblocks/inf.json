@@ -1,0 +1,15 @@
+{
+    "# echo": "Before",
+
+    "runner #": "./",
+
+    "runner # message": "Our Message", 
+
+    "runner # run": (inf (message) >>>
+        {
+            "# echo": "Hello from sub inf: %%%message%%%"
+        }
+    <<<),
+
+    "# echo": "After"
+}
