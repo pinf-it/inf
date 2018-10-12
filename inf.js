@@ -41,6 +41,7 @@ const TRAVERSE = require("traverse");
 
 const LODASH_GET = require("lodash/get");
 const LODASH_VALUES = require("lodash/values");
+const LODASH_MERGE = require("lodash/merge");
 
 
 // ####################################################################################################
@@ -66,12 +67,12 @@ setImmediate(function () {
         async function main () {
             try {
 
-                let cwd = process.cwd();
+                var cwd = process.cwd();
                 let args = MINIMIST(process.argv.slice(2));
                 if (args.verbose && !process.env.VERBOSE) {
                     process.env.VERBOSE = "1";
                 }
-                let filepath = args._[0];
+                var filepath = args._[0];
 
                 let inf = new INF(cwd, null, args);
 
@@ -82,6 +83,8 @@ setImmediate(function () {
                 }
 
             } catch (err) {
+                CONSOLE.error("[inf] cwd:", cwd);
+                CONSOLE.error("[inf] filepath:", filepath);
                 CONSOLE.error("[inf]", err);
                 process.exit(1);
             }
@@ -126,6 +129,10 @@ class INF {
     async runInstructions (instructions, filepath) {
         let self = this;
 
+        if (!filepath) {
+            filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
+        }
+
         filepath = PATH.join(self.baseDir, filepath);
         const baseDir = PATH.dirname(filepath);
         filepath = PATH.basename(filepath);
@@ -149,6 +156,19 @@ class INF {
         await Promise.mapSeries(instructionObjects, await function (instructionObject) {
 
             // Replace variables
+            instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
+
+                if (/^\{.+\}$/.test(arguments[1])) {
+                    // Executable expression
+                    let args = self.options;
+                    return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")));
+                } else {
+                    // Simple varibale reference
+                    return JSON.stringify(LODASH_GET({
+                        args: self.options
+                    }, arguments[1], arguments[0]));
+                }
+            });
             instructionObject = instructionObject.replace(/%%([^%]+)%%/g, function () {
 
                 if (/^\{.+\}$/.test(arguments[1])) {
@@ -425,6 +445,7 @@ const LIB = {
     ASSERT: ASSERT,
     PATH: PATH,
     FS: FS,
+    GLOB: GLOB,
     CODEBLOCK: CODEBLOCK,
     CRYPTO: CRYPTO,
     INF: exports
@@ -511,18 +532,20 @@ require.memoize("/main.js", function (require, exports, module) {
 // --------------------------------------------------
         }
 
-        self.run = async function (filepath) {
+        self.run = async function (filepath, options) {
 
+            let opts = LODASH_MERGE({}, namespace.options, options || {});
+            
             if (/\{/.test(filepath)) {
 
-                let inf = new INF(self.baseDir, null, namespace.options);
+                let inf = new INF(self.baseDir, null, opts);
 
                 return inf.runInstructions(filepath);
             }
 
             let path = PATH.resolve(namespace.baseDir || "", filepath);
 
-            let inf = new INF(PATH.dirname(path), null, namespace.options);
+            let inf = new INF(PATH.dirname(path), null, opts);
 
             return inf.runInstructionsFile(PATH.basename(path));
         }
