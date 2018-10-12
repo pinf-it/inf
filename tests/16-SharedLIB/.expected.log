@@ -1,4 +1,4 @@
 inf []
 inf (proto) ["LIB","_events","_eventsCount","_maxListeners","badInvocation","baseDir","forNode","run","toPINFBundle","wrapValue"]
-inf.LIB ["ASSERT","CODEBLOCK","CRYPTO","FS","INF","PATH","Promise","foo"]
+inf.LIB ["ASSERT","CODEBLOCK","CRYPTO","FS","GLOB","INF","PATH","Promise","foo"]
 OK
