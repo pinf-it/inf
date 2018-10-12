@@ -15,7 +15,7 @@ Object.keys(console).forEach(function (name) {
 
 const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
-const ASSERT = require("ASSERT");
+const ASSERT = require("assert");
 const PATH = require("path");
 const FS = require("fs-extra");
 Promise.promisifyAll(FS);
