@@ -441,6 +441,7 @@ class Component {
 }
 
 const LIB = {
+    verbose: !!process.env.VERBOSE,
     Promise: Promise,
     ASSERT: ASSERT,
     PATH: PATH,
