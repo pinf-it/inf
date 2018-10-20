@@ -6,3 +6,4 @@
 /inf.bundle.*
 /.installed*
 *~.pure.js
+/package-lock.json
