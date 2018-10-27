@@ -1,2 +1,2 @@
-process.cwd() TeStLoCaLiZeD/sub
-inf.rootDir TeStLoCaLiZeD/sub
+process.cwd(): TeStLoCaLiZeD/sub
+inf.rootDir: TeStLoCaLiZeD/sub

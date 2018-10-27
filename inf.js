@@ -596,6 +596,8 @@ class Namespace {
                 self.componentInitContext.emit("processed");
             });
         }
+
+        self.mappedNamespaceAliases = {};
     }
 /*
     flipDomainInUri (uri) {
@@ -1135,6 +1137,30 @@ class Processor {
         // Detect comment
         if (anchor === '//') {
             return;
+        }
+
+        // Handle namespaces
+        if (/^[^@]+?\s*@$/.test(anchor)) {
+            // Namespace mapping
+            const alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
+
+            log(`Map namespace alias '${alias}' to:`, value);
+
+            self.namespace.mappedNamespaceAliases[alias] = value;
+            return;
+        } else
+        if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
+            // Namespace usage
+
+            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
+
+            if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
+                throw new Error(`Namespace alias '${alias}' is not mapped!`);
+            }
+
+            log(`Replace namespace alias '${alias}' with:`, self.namespace.mappedNamespaceAliases[alias]);
+
+            anchor = anchor.replace(/^[^@]+?\s*@\s*([^#]+\s*#)/, `${self.namespace.mappedNamespaceAliases[alias]}$1`);
         }
 
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
