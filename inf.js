@@ -72,6 +72,10 @@ setImmediate(function () {
                 if (args.verbose && !process.env.VERBOSE) {
                     process.env.VERBOSE = "1";
                 }
+                if (args.cwd) {
+                    cwd = PATH.resolve(cwd, args.cwd);
+                    process.chdir(cwd);
+                }
                 var filepath = args._[0];
 
                 let inf = new INF(cwd, null, args);
@@ -497,6 +501,7 @@ class ComponentInitContext extends EventEmitter {
 
         self.LIB = LIB;
 
+        self.options = namespace.options;
         self.baseDir = namespace.baseDir;
 
         Object.defineProperty(self, 'rootDir', {
@@ -971,7 +976,7 @@ class Node {
         if (/^~\//.test(value)) {
             return PATH.join(process.env.HOME, value.substring(2));
         }
-        return PATH.join(process.cwd(), value);
+        return PATH.join(this.baseDir, value);
     }
 
     toPath () {
