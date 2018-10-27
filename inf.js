@@ -76,7 +76,7 @@ setImmediate(function () {
                     cwd = PATH.resolve(cwd, args.cwd);
                     process.chdir(cwd);
                 }
-                var filepath = args._[0];
+                var filepath = args._.shift();
 
                 let inf = new INF(cwd, null, args);
 
@@ -114,7 +114,9 @@ class INF {
     async runInstructionsFile (filepath) {
         let self = this;
 
-        filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
+        if (/~infi\.log$/.test(filepath)) {
+            filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
+        }
 
         let path = PATH.join(self.baseDir, filepath);
         let exists = await FS.existsAsync(path);
@@ -1063,8 +1065,10 @@ class Processor {
             // and pass it along with the component invocation.
             let referenceMatch = value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
 
-            if (referenceMatch) {
-
+            if (
+                referenceMatch &&
+                !/_#_/.test(referenceMatch[0])
+            ) {
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceMatch[1]);
 
                 // We create an invocation wrapper to avoid leaking references.
