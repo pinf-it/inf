@@ -9,9 +9,16 @@ exports.inf = async function (inf) {
 
             return async function (value) {
 
-                value.value = value.value.toUpperCase();
+                if (
+                    value.protocol[0] === "pattern.stream" &&
+                    value.protocol[1].alias === "pattern.stream" &&
+                    value.protocol[1].impl.id === "tests/*/stream"
+                ) {
 
-                return value;
+                    value.value = value.value.toUpperCase();
+
+                    return value;
+                }
             }
         }
     };

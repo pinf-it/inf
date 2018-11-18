@@ -193,13 +193,19 @@ class INF {
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]));
         });
 
+        if (self.referringNamespace) {
+            Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
+                if (typeof self.referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+                    self.referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
+                }
+            });
+        }
+
         if (!self.namespace.referringNamespace) {
             self.namespace.componentInitContext.emit("processed");
         }
-
-        // TODO: Dump state
-
-        return true;
+        
+        return self.namespace.apis;
     }
 }
 exports.INF = INF;
@@ -422,6 +428,7 @@ class Component {
                 });
                 instances[type][alias] = instance;
 
+                pluginInstance.alias = alias;
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
 
                 if (pluginInstance.impl.protocol) {
@@ -614,7 +621,17 @@ class Namespace {
             });
         }
 
-        self.mappedNamespaceAliases = {};
+        if (self.referringNamespace && self.referringNamespace.mappedNamespaceAliases) {
+            self.mappedNamespaceAliases = {};
+            Object.keys(self.referringNamespace.mappedNamespaceAliases).forEach(function (key) {
+                self.mappedNamespaceAliases[key] = self.referringNamespace.mappedNamespaceAliases[key];
+            });
+        } else {
+            self.mappedNamespaceAliases = {};    
+        }
+
+        self.apis = {};
+
     }
 /*
     flipDomainInUri (uri) {
@@ -1242,6 +1259,7 @@ class Processor {
             const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
 
             if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
+                console.error("self.namespace", self.namespace);
                 throw new Error(`Namespace alias '${alias}' is not mapped!`);
             }
 
@@ -1306,12 +1324,14 @@ class Processor {
         if (anchor.pointer != '') {
 
             if (value.protocol) {
-                value = await value.protocol[1].$instance(value);
+                const protocol = value.protocol;
+                value.protocol = anchor.protocol || value.protocol;
+                value = await protocol[1].$instance(value);
             }
-
             if (anchor.protocol) {
                 value = await anchor.protocol[1].$instance(value);
             }
+            value.protocol = anchor.protocol || value.protocol;
 
             value = await self.closureForValueIfReference(value);
 
@@ -1321,7 +1341,11 @@ class Processor {
 
                 log(`Invoke component '${component.path}' for alias '${anchor.alias}'`);
 
-                return component.invoke(anchor.pointer, value);
+                const response = await component.invoke(anchor.pointer, value);
+
+                self.namespace.apis[anchor.alias] = response;
+
+                return response;
 
             } else
             if (anchor.type === 'plugin') {

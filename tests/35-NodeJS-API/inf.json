@@ -1,4 +1,6 @@
 #!/usr/bin/env inf
 {
-    "#echo": "OK"
+    "stdout #": "../03-MapComponentToAlias/stdout.",
+
+    "stdout # echo": "OK"
 }

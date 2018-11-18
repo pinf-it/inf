@@ -3,9 +3,15 @@
 
 exports.inf = async function (inf, alias) {
 
-
     console.log("alias:", alias);
 
+    return {
+        invoke: function (pointer, value) {
 
-    return {};
+            if (pointer === "log()") {
+                console.log("log():", value.value);
+                return true;
+            }
+        }
+    };
 }
