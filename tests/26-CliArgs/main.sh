@@ -3,7 +3,7 @@
 inf inf.json --opt1 val1 arg1
 
 inf {
-    "#echo": "OK : [opt1: %%args.opt1%%, arg1: %%args._[1]%%]"
+    "#echo": "OK : [opt1: %%args.opt1%%, arg1: %%args._[0]%%]"
 } --opt1 val1 arg1
 
 inf {

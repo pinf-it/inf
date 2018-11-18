@@ -149,7 +149,7 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(baseDir, self.referringNamespace, self.options);
+        self.namespace = new Namespace(self, baseDir, self.referringNamespace, self.options);
         self.processor = new Processor(self.namespace);
 
         if (filepath) {
@@ -394,23 +394,6 @@ class Component {
 
                 let pluginInstance = Object.create(self);
 
-
-                pluginInstance.invoke = async function (pointer, value) {
-            
-                    if (typeof pluginInstance.impl.invoke !== "function") {
-                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().invoke(pointer, value)'!");
-                    }
-
-                    return Promise.resolve(pluginInstance.impl.invoke.call(null, pointer, value)).then(function (result) {
-
-                        if (typeof result === "undefined") {
-                            return badInvocation(pointer, value, self);
-                        }
-
-                        return result;
-                    });
-                };
-
                 componentInitContext = componentInitContext.forNode(pluginInstance);
 
                 let instance = pluginInstance;
@@ -439,6 +422,35 @@ class Component {
                 instances[type][alias] = instance;
 
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
+
+                if (pluginInstance.impl.protocol) {
+                    pluginInstance.protocol = function (alias, node) {
+                        const result = pluginInstance.impl.protocol.call(null, alias, node);
+                        if (typeof result === "undefined") {
+                            return badInvocation(alias, null, self);
+                        }
+                        return result;
+                    };
+                } else {
+                    pluginInstance.protocol = function (alias, node) {
+                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().protocol(alias, node)'!");
+                    }                    
+                }
+
+                if (pluginInstance.impl.invoke) {
+                    pluginInstance.invoke = async function (pointer, value) {
+                        return Promise.resolve(pluginInstance.impl.invoke.call(null, pointer, value)).then(function (result) {
+                            if (typeof result === "undefined") {
+                                return badInvocation(pointer, value, self);
+                            }
+                            return result;
+                        });
+                    };
+                } else {
+                    pluginInstance.invoke = async function (pointer, value) {
+                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().invoke(pointer, value)'!");
+                    }
+                }
             }
 
             return instances[type][alias];
@@ -577,9 +589,10 @@ require.memoize("/main.js", function (require, exports, module) {
 
 class Namespace {
 
-    constructor (baseDir, referringNamespace, options) {
+    constructor (inf, baseDir, referringNamespace, options) {
         let self = this;
 
+        self.inf = inf;
         self.baseDir = baseDir;
         self.options = options || {};
 
@@ -587,6 +600,7 @@ class Namespace {
 
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
+        self.protocols = (self.referringNamespace && self.referringNamespace.protocols) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
         //self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
@@ -799,6 +813,20 @@ class Namespace {
         return self.aliases[alias] = await component.forAlias('component', alias);
     }
 
+    async mapProtocol (alias, uri) {
+        let self = this;
+
+        let component = await self.getComponentForUri(uri);
+
+        if (self.protocols[alias]) {
+            throw new Error("Cannot map protocol '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.protocols[alias].path + "'!");
+        }
+
+        log("Map protocol for uri '" + uri + "' to alias '" + alias + "'");
+
+        return self.protocols[alias] = await component.forAlias('protocol', alias);
+    }
+
     async mapPlugin (match, uri) {
         let self = this;
 
@@ -829,6 +857,13 @@ class Namespace {
         }).map(function (plugin) {
             return plugin.component;
         });
+    }
+
+    getProtocolForAlias (alias) {
+        if (!this.protocols[alias].$instance) {
+            this.protocols[alias].$instance = this.protocols[alias].protocol(alias, this.protocols[alias]);
+        }
+        return this.protocols[alias];
     }
 
     async getComponentForAlias (alias) {
@@ -950,6 +985,9 @@ class Node {
 
             return codeblock;
         } else
+        if (ProtocolReferenceNode.handlesValue(value)) {
+            return new ProtocolReferenceNode(namespace, value);
+        } else
         if (ReferenceNode.handlesValue(value)) {
             return new ReferenceNode(namespace, value);
         }
@@ -958,29 +996,43 @@ class Node {
     }
 
     constructor (namespace, value) {
-        this.value = value;
+        const self = this;
+        self.value = value;
 
-        this.baseDir = namespace.baseDir;
+        self.baseDir = namespace.baseDir;
+
+        self.propertyToPath = function (propertyPath) {
+            const value = (propertyPath && LODASH_GET(this.value, propertyPath, null)) || this.value;
+            if (!value) throw new Error(`No value at property path '${propertyPath}'!`);
+            if (/^\//.test(value)) {
+                return value;
+            } else
+            if (/^\.\.?\//.test(value)) {
+                return PATH.join(this.baseDir, value);
+            } else
+            if (/^~\//.test(value)) {
+                return PATH.join(process.env.HOME, value.substring(2));
+            }
+            return PATH.join(namespace.inf.baseDir, value);
+        }
+
+        self._finalize = function () {
+            if (self.pointer) {
+                const m = self.pointer.match(/^\s*:([^:]+):\s*(.*)$/);
+                if (m) {
+                    self.protocol = [
+                        m[1],
+                        namespace.getProtocolForAlias(m[1])
+                    ];
+                    self.pointer = m[2];
+                }
+            }
+        }
     }
 
     toString () {
         if (typeof this.value === "object") return JSON.stringify(this.value, null, 4);
         return this.value;
-    }
-
-    propertyToPath (propertyPath) {
-        const value = (propertyPath && LODASH_GET(this.value, propertyPath, null)) || this.value;
-        if (!value) throw new Error(`No value at property path '${propertyPath}'!`);
-        if (/^\//.test(value)) {
-            return value;
-        } else
-        if (/^\.\.?\//.test(value)) {
-            return PATH.join(this.baseDir, value);
-        } else
-        if (/^~\//.test(value)) {
-            return PATH.join(process.env.HOME, value.substring(2));
-        }
-        return PATH.join(this.baseDir, value);
     }
 
     toPath () {
@@ -1037,13 +1089,39 @@ class ReferenceNode extends Node {
     constructor (namespace, value) {
         super(namespace, value);
         let keyMatch = ReferenceNode.handlesValue(value);
-        this.alias = keyMatch[1];
-        this.type = keyMatch[2] === '##' ? 'plugin' : 'component';
-        this.pointer = keyMatch[3];
+        if (keyMatch) {
+            this.alias = keyMatch[1];
+            this.type = keyMatch[2] === '##' ? 'plugin' : 'component';
+            this.pointer = keyMatch[3];
+            this._finalize();
+        }
     }
 
     toString () {
         return (this.alias + '#' + this.pointer);
+    }
+}
+
+class ProtocolReferenceNode extends ReferenceNode {
+
+    static handlesValue (value) {
+        return (
+            typeof value === "string" &&
+            value.match(/^:\s*([^:]+)\s*:$/)
+        );
+    }
+
+    constructor (namespace, value) {
+        super(namespace, value);
+        let keyMatch = ProtocolReferenceNode.handlesValue(value);
+        this.alias = keyMatch[1];
+        this.type = 'protocol';
+        this.pointer = '';
+        this._finalize();
+    }
+
+    toString () {
+        return (':' + this.alias + ':');
     }
 }
 
@@ -1207,6 +1285,11 @@ class Processor {
                 await self.namespace.mapComponent(anchor.alias, value.value);
 
             } else
+            if (anchor.type === 'protocol') {
+
+                await self.namespace.mapProtocol(anchor.alias, value.value);
+
+            } else
             if (anchor.type === 'plugin') {
 
                 await self.namespace.mapPlugin(anchor.alias, value.value);
@@ -1216,6 +1299,10 @@ class Processor {
         } else
         // Mapped component instruction
         if (anchor.pointer != '') {
+
+            if (anchor.protocol) {
+                value = await anchor.protocol[1].$instance(value);
+            }
 
             value = await self.closureForValueIfReference(value);
 

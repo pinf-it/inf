@@ -1,2 +1,4 @@
 >>>TEST_IGNORE_LINE:^\s+at\s+<<<
+[inf] cwd: TeStLoCaLiZeD
+[inf] filepath: {"# __non_existent_pointer__":"OK"}
 [inf] Error: Pointer '__non_existent_pointer__' not found in component 'TeStLoCaLiZeD/vocabularies/it.pinf.inf/inf.inf.js'!
