@@ -1002,6 +1002,22 @@ class Node {
 
         self.baseDir = namespace.baseDir;
 
+        self._finalizeProperty = function (name) {
+            if (
+                self[name] &&
+                typeof self[name] === "string"
+            ) {
+                const m = self[name].match(/^\s*:([^:]+):\s*(.+)$/);
+                if (m) {
+                    self.protocol = [
+                        m[1],
+                        namespace.getProtocolForAlias(m[1])
+                    ];
+                    self[name] = m[2];
+                }
+            }
+        }
+        
         self.propertyToPath = function (propertyPath) {
             const value = (propertyPath && LODASH_GET(this.value, propertyPath, null)) || this.value;
             if (!value) throw new Error(`No value at property path '${propertyPath}'!`);
@@ -1017,20 +1033,9 @@ class Node {
             return PATH.join(namespace.inf.baseDir, value);
         }
 
-        self._finalize = function () {
-            if (self.pointer) {
-                const m = self.pointer.match(/^\s*:([^:]+):\s*(.*)$/);
-                if (m) {
-                    self.protocol = [
-                        m[1],
-                        namespace.getProtocolForAlias(m[1])
-                    ];
-                    self.pointer = m[2];
-                }
-            }
-        }
+        self._finalizeProperty("value");
     }
-
+    
     toString () {
         if (typeof this.value === "object") return JSON.stringify(this.value, null, 4);
         return this.value;
@@ -1094,7 +1099,7 @@ class ReferenceNode extends Node {
             this.alias = keyMatch[1];
             this.type = keyMatch[2] === '##' ? 'plugin' : 'component';
             this.pointer = keyMatch[3];
-            this._finalize();
+            this._finalizeProperty("pointer");
         }
     }
 
@@ -1118,7 +1123,6 @@ class ProtocolReferenceNode extends ReferenceNode {
         this.alias = keyMatch[1];
         this.type = 'protocol';
         this.pointer = '';
-        this._finalize();
     }
 
     toString () {
@@ -1300,6 +1304,10 @@ class Processor {
         } else
         // Mapped component instruction
         if (anchor.pointer != '') {
+
+            if (value.protocol) {
+                value = await value.protocol[1].$instance(value);
+            }
 
             if (anchor.protocol) {
                 value = await anchor.protocol[1].$instance(value);

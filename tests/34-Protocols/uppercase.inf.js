@@ -9,11 +9,7 @@ exports.inf = async function (inf) {
 
             return async function (value) {
 
-                value.value = {
-                    messages: [
-                        value.value
-                    ]
-                };
+                value.value = value.value.toUpperCase();
 
                 return value;
             }
