@@ -202,6 +202,7 @@ class INF {
         return true;
     }
 }
+exports.INF = INF;
 
 
 class Parser {

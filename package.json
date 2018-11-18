@@ -5,6 +5,7 @@
     "bin": {
         "inf": "inf.js"
     },
+    "main": "inf.js",
     "scripts": {
         "test": "([ -e node_modules ] || npm install) && bash.origin.test tests"
     },
