@@ -10,9 +10,9 @@ exports.inf = async function (inf) {
             if (pointer === "out") {
 
                 if (
-                    value.protocol[0] !== "pattern.stream" ||
-                    value.protocol[1].alias !== "pattern.stream" ||
-                    value.protocol[1].impl.id !== "tests/*/stream"
+                    value.interface[0] !== "pattern.stream" ||
+                    value.interface[1].alias !== "pattern.stream" ||
+                    value.interface[1].impl.id !== "tests/*/stream"
                 ) {
                     throw new Error("Value does not implement interface 'tests/*/stream'");
                 }

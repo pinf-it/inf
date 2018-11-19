@@ -431,17 +431,17 @@ class Component {
                 pluginInstance.alias = alias;
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
 
-                if (pluginInstance.impl.protocol) {
-                    pluginInstance.protocol = function (alias, node) {
-                        const result = pluginInstance.impl.protocol.call(null, alias, node);
+                if (pluginInstance.impl.interface) {
+                    pluginInstance.interface = function (alias, node) {
+                        const result = pluginInstance.impl.interface.call(null, alias, node);
                         if (typeof result === "undefined") {
                             return badInvocation(alias, null, self);
                         }
                         return result;
                     };
                 } else {
-                    pluginInstance.protocol = function (alias, node) {
-                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().protocol(alias, node)'!");
+                    pluginInstance.interface = function (alias, node) {
+                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().interface(alias, node)'!");
                     }                    
                 }
 
@@ -608,7 +608,7 @@ class Namespace {
 
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
-        self.protocols = (self.referringNamespace && self.referringNamespace.protocols) || {};
+        self.interfaces = (self.referringNamespace && self.referringNamespace.interfaces) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
         //self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
@@ -831,18 +831,18 @@ class Namespace {
         return self.aliases[alias] = await component.forAlias('component', alias);
     }
 
-    async mapProtocol (alias, uri) {
+    async mapInterface (alias, uri) {
         let self = this;
 
         let component = await self.getComponentForUri(uri);
 
-        if (self.protocols[alias]) {
-            throw new Error("Cannot map protocol '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.protocols[alias].path + "'!");
+        if (self.interfaces[alias]) {
+            throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
         }
 
-        log("Map protocol for uri '" + uri + "' to alias '" + alias + "'");
+        log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.protocols[alias] = await component.forAlias('protocol', alias);
+        return self.interfaces[alias] = await component.forAlias('interface', alias);
     }
 
     async mapPlugin (match, uri) {
@@ -877,11 +877,11 @@ class Namespace {
         });
     }
 
-    getProtocolForAlias (alias) {
-        if (!this.protocols[alias].$instance) {
-            this.protocols[alias].$instance = this.protocols[alias].protocol(alias, this.protocols[alias]);
+    getInterfaceForAlias (alias) {
+        if (!this.interfaces[alias].$instance) {
+            this.interfaces[alias].$instance = this.interfaces[alias].interface(alias, this.interfaces[alias]);
         }
-        return this.protocols[alias];
+        return this.interfaces[alias];
     }
 
     async getComponentForAlias (alias) {
@@ -1003,8 +1003,8 @@ class Node {
 
             return codeblock;
         } else
-        if (ProtocolReferenceNode.handlesValue(value)) {
-            return new ProtocolReferenceNode(namespace, value);
+        if (InterfaceReferenceNode.handlesValue(value)) {
+            return new InterfaceReferenceNode(namespace, value);
         } else
         if (ReferenceNode.handlesValue(value)) {
             return new ReferenceNode(namespace, value);
@@ -1026,9 +1026,9 @@ class Node {
             ) {
                 const m = self[name].match(/^\s*:([^:]+):\s*(.+)$/);
                 if (m) {
-                    self.protocol = [
+                    self.interface = [
                         m[1],
-                        namespace.getProtocolForAlias(m[1])
+                        namespace.getInterfaceForAlias(m[1])
                     ];
                     self[name] = m[2];
                 }
@@ -1125,7 +1125,7 @@ class ReferenceNode extends Node {
     }
 }
 
-class ProtocolReferenceNode extends ReferenceNode {
+class InterfaceReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
         return (
@@ -1136,9 +1136,9 @@ class ProtocolReferenceNode extends ReferenceNode {
 
     constructor (namespace, value) {
         super(namespace, value);
-        let keyMatch = ProtocolReferenceNode.handlesValue(value);
+        let keyMatch = InterfaceReferenceNode.handlesValue(value);
         this.alias = keyMatch[1];
-        this.type = 'protocol';
+        this.type = 'interface';
         this.pointer = '';
     }
 
@@ -1308,9 +1308,9 @@ class Processor {
                 await self.namespace.mapComponent(anchor.alias, value.value);
 
             } else
-            if (anchor.type === 'protocol') {
+            if (anchor.type === 'interface') {
 
-                await self.namespace.mapProtocol(anchor.alias, value.value);
+                await self.namespace.mapInterface(anchor.alias, value.value);
 
             } else
             if (anchor.type === 'plugin') {
@@ -1323,15 +1323,15 @@ class Processor {
         // Mapped component instruction
         if (anchor.pointer != '') {
 
-            if (value.protocol) {
-                const protocol = value.protocol;
-                value.protocol = anchor.protocol || value.protocol;
-                value = await protocol[1].$instance(value);
+            if (value.interface) {
+                const $interface = value.interface;
+                value.interface = anchor.interface || value.interface;
+                value = await $interface[1].$instance(value);
             }
-            if (anchor.protocol) {
-                value = await anchor.protocol[1].$instance(value);
+            if (anchor.interface) {
+                value = await anchor.interface[1].$instance(value);
             }
-            value.protocol = anchor.protocol || value.protocol;
+            value.interface = anchor.interface || value.interface;
 
             value = await self.closureForValueIfReference(value);
 

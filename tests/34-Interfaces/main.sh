@@ -8,7 +8,7 @@ inf {
 }
 
 exit 0
-# Will throw "Undeclared Protocol Error"
+# Will throw "Undeclared Interface Error"
 inf {
     "stdout #": "./stdout.",
     "stdout # :pattern.stream: out": ":transform.uppercase: hello world"
