@@ -431,34 +431,39 @@ class Component {
                 pluginInstance.alias = alias;
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
 
-                if (pluginInstance.impl.interface) {
-                    pluginInstance.interface = function (alias, node) {
-                        const result = pluginInstance.impl.interface.call(null, alias, node);
-                        if (typeof result === "undefined") {
-                            return badInvocation(alias, null, self);
-                        }
-                        return result;
-                    };
-                } else {
-                    pluginInstance.interface = function (alias, node) {
-                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().interface(alias, node)'!");
-                    }                    
-                }
+                Object.keys(pluginInstance.impl).forEach(function (method) {
 
-                if (pluginInstance.impl.invoke) {
-                    pluginInstance.invoke = async function (pointer, value) {
-                        return Promise.resolve(pluginInstance.impl.invoke.call(null, pointer, value)).then(function (result) {
-                            if (typeof result === "undefined") {
-                                return badInvocation(pointer, value, self);
+                    if (typeof pluginInstance.impl[method] === "function") {
+
+                        pluginInstance[method] = function (arg1, arg2) {
+
+                            if (!pluginInstance.impl[method]) {
+                                if (method === "invoke") {
+                                    throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
+                                }
+                                throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
+                            }
+    
+                            const result = pluginInstance.impl[method].call(null, arg1, arg2);
+
+                            if (method === "invoke") {
+                                if (typeof result === "undefined") {
+                                    return badInvocation(arg1, arg2, self);
+                                }
+                            } else {
+                                if (typeof result !== "function") {
+                                    return noFactory(method, arg1, arg2, self);
+                                }
                             }
                             return result;
-                        });
-                    };
-                } else {
-                    pluginInstance.invoke = async function (pointer, value) {
-                        throw new Error("Component at path '" + pluginInstance.path + "' does not export 'inf().invoke(pointer, value)'!");
+                        }
                     }
+                });
+                /*
+                if (!pluginInstance[method]) {
+                    throw new Error(`Component at path '${pluginInstance.path}' does not export '${method}()'!`);
                 }
+                */
             }
 
             return instances[type][alias];
@@ -609,6 +614,7 @@ class Namespace {
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
         self.interfaces = (self.referringNamespace && self.referringNamespace.interfaces) || {};
+        self.contracts = (self.referringNamespace && self.referringNamespace.contracts) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
         //self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
@@ -845,6 +851,20 @@ class Namespace {
         return self.interfaces[alias] = await component.forAlias('interface', alias);
     }
 
+    async mapContract (alias, uri) {
+        let self = this;
+
+        let component = await self.getComponentForUri(uri);
+
+        if (self.contracts[alias]) {
+            throw new Error("Cannot map contract '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.contracts[alias].path + "'!");
+        }
+
+        log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+
+        return self.contracts[alias] = await component.forAlias('contract', alias);
+    }
+
     async mapPlugin (match, uri) {
         let self = this;
 
@@ -878,10 +898,21 @@ class Namespace {
     }
 
     getInterfaceForAlias (alias) {
-        if (!this.interfaces[alias].$instance) {
+        if (!this.interfaces[alias].$instance) {            
             this.interfaces[alias].$instance = this.interfaces[alias].interface(alias, this.interfaces[alias]);
         }
         return this.interfaces[alias];
+    }
+
+    getContractForAlias (alias) {
+        if (!this.contracts[alias].$instance) {
+            if (!this.contracts[alias].contract) {
+                console.error("this.contracts[alias]", this.contracts[alias]);
+                throw new Error(`Contract for alias '${alias}' not initialized! Does the component export a 'contract()' method!`);
+            }
+            this.contracts[alias].$instance = this.contracts[alias].contract(alias, this.contracts[alias]);
+        }
+        return this.contracts[alias];
     }
 
     async getComponentForAlias (alias) {
@@ -1004,11 +1035,25 @@ class Node {
             return codeblock;
         } else
         if (InterfaceReferenceNode.handlesValue(value)) {
+
+            log("new InterfaceReferenceNode for value:", value);
+
             return new InterfaceReferenceNode(namespace, value);
         } else
-        if (ReferenceNode.handlesValue(value)) {
+        if (ContractReferenceNode.handlesValue(value)) {
+
+            log("new ContractReferenceNode for value:", value);
+
+            return new ContractReferenceNode(namespace, value);
+        } else
+       if (ReferenceNode.handlesValue(value)) {
+
+            log("new ReferenceNode for value:", value);
+
             return new ReferenceNode(namespace, value);
         }
+
+        log("new Node for value type:", typeof value);
 
         return new Node(namespace, value);
     }
@@ -1024,7 +1069,7 @@ class Node {
                 self[name] &&
                 typeof self[name] === "string"
             ) {
-                const m = self[name].match(/^\s*:([^:]+):\s*(.+)$/);
+                let m = self[name].match(/^\s*:([^:\s]+):\s*(.+)$/);
                 if (m) {
                     self.interface = [
                         m[1],
@@ -1032,9 +1077,17 @@ class Node {
                     ];
                     self[name] = m[2];
                 }
+                m = self[name].match(/^\s*<([^<>\s]+)>\s*(.+)$/);
+                if (m) {
+                    self.contract = [
+                        m[1],
+                        namespace.getContractForAlias(m[1])
+                    ];
+                    self[name] = m[2];
+                }
             }
         }
-        
+
         self.propertyToPath = function (propertyPath) {
             const value = (propertyPath && LODASH_GET(this.value, propertyPath, null)) || this.value;
             if (!value) throw new Error(`No value at property path '${propertyPath}'!`);
@@ -1068,6 +1121,12 @@ exports.Node = Node;
 function badInvocation (pointer, value, component) {
     console.error("value", value);
     throw new Error(`Invocation for pointer '${pointer}' is not supported${component ? ` in component '${component.path}'` : ''}`);
+}
+
+function noFactory (method, alias, node, component) {
+    console.error("alias", alias);
+    console.error("node", node);
+    throw new Error(`Call to factory '${method}' did not retrurn a function${component ? ` for component '${component.path}'` : ''}`);
 }
 
 
@@ -1128,18 +1187,25 @@ class ReferenceNode extends Node {
 class InterfaceReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
+
+//console.log("InterfaceReferenceNode:handlesValue", value, value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/));
+
         return (
             typeof value === "string" &&
-            value.match(/^:\s*([^:]+)\s*:$/)
+            value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/)
+//            value.match(/^:\s*([^:]+)\s*:$/)
         );
     }
 
     constructor (namespace, value) {
-        super(namespace, value);
+        super(namespace, '');
         let keyMatch = InterfaceReferenceNode.handlesValue(value);
         this.alias = keyMatch[1];
         this.type = 'interface';
         this.pointer = '';
+        if (keyMatch[2]) {
+            this.contract = keyMatch[3];
+        }
     }
 
     toString () {
@@ -1147,6 +1213,27 @@ class InterfaceReferenceNode extends ReferenceNode {
     }
 }
 
+class ContractReferenceNode extends ReferenceNode {
+
+    static handlesValue (value) {
+        return (
+            typeof value === "string" &&
+            value.match(/^<\s*([^<>]+)\s*>$/)
+        );
+    }
+
+    constructor (namespace, value) {
+        super(namespace, '');
+        let keyMatch = ContractReferenceNode.handlesValue(value);
+        this.alias = keyMatch[1];
+        this.type = 'contract';
+        this.pointer = '';
+    }
+
+    toString () {
+        return ('<' + this.alias + '>');
+    }
+}
 
 class Processor {
 
@@ -1156,7 +1243,7 @@ class Processor {
         self.namespace = namespace;
     }
 
-    async closureForValueIfReference (value) {
+    async closureForValueIfReference (value, valueProcessor) {
         let self = this;
 
         async function wrapValue (value) {
@@ -1178,9 +1265,16 @@ class Processor {
 
                     value = await referencedComponent.invoke(referenceMatch[2], value);
 
-                    return Node.WrapInstructionNode(self.namespace, value);
+                    value = Node.WrapInstructionNode(self.namespace, value);
+
+                    if (valueProcessor) {
+                        value = await valueProcessor(value);
+                    }
+
+                    return value;
                 });
 
+                value.wrapped = true;
                 value.alias = referenceMatch[1];
                 value.pointer = referenceMatch[2];
                 value.jsId = "./" + referencedComponent.pathHash + "-" + value.alias;
@@ -1277,6 +1371,8 @@ class Processor {
             throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
         }
 
+        log("anchor.type:", anchor.type);
+
         // Inherit from another inf.json file
         if (anchor.value === "#") {
 
@@ -1310,7 +1406,19 @@ class Processor {
             } else
             if (anchor.type === 'interface') {
 
-                await self.namespace.mapInterface(anchor.alias, value.value);
+                const interfaceComponent = await self.namespace.mapInterface(anchor.alias, value.value);
+
+                if (anchor.contract) {
+                    interfaceComponent.contract = [
+                        anchor.contract,
+                        self.namespace.getContractForAlias(anchor.contract)
+                    ];
+                }
+
+            } else
+            if (anchor.type === 'contract') {
+
+                await self.namespace.mapContract(anchor.alias, value.value);
 
             } else
             if (anchor.type === 'plugin') {
@@ -1323,17 +1431,74 @@ class Processor {
         // Mapped component instruction
         if (anchor.pointer != '') {
 
-            if (value.interface) {
-                const $interface = value.interface;
-                value.interface = anchor.interface || value.interface;
-                value = await $interface[1].$instance(value);
-            }
-            if (anchor.interface) {
-                value = await anchor.interface[1].$instance(value);
-            }
-            value.interface = anchor.interface || value.interface;
+            value = await self.closureForValueIfReference(value, async function (value) {
 
-            value = await self.closureForValueIfReference(value);
+                if (anchor.interface) {
+                    // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
+                    value.contract = anchor.interface[1].contract || null;
+                    const _interface = anchor.interface;
+                    delete anchor.interface;
+                    value = await _interface[1].$instance(value);
+                    if (typeof value === "undefined") {
+                        throw new Error(`Value is undefined after processing by remlocalove interface '${_interface[0]}'!`);
+                    }
+                    if (value.contract) {
+                        // Verify output of interface via contract
+                        log(`Verify local interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
+                        value = await value.contract[1].$instance(value);
+                    }
+                }
+
+                return value;
+            });
+
+            if (!value.wrapped) {
+
+                if (value.interface) {
+                    value.contract = value.interface[1].contract || null;
+                    const _interface = value.interface;
+                    delete value.interface;
+                    value = await _interface[1].$instance(value);
+                    if (typeof value === "undefined") {
+                        throw new Error(`Value is undefined after processing by remove interface '${_interface[0]}'!`);
+                    }
+                    if (value.contract) {
+                        // Verify output of interface via contract
+                        log(`Verify remote interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
+                        value = await value.contract[1].$instance(value);
+                    }
+                }
+
+                if (anchor.interface) {
+                    // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
+                    value.contract = anchor.interface[1].contract || null;
+                    const _interface = anchor.interface;
+                    delete anchor.interface;
+                    value = await _interface[1].$instance(value);
+                    if (typeof value === "undefined") {
+                        throw new Error(`Value is undefined after processing by remlocalove interface '${_interface[0]}'!`);
+                    }
+                    if (value.contract) {
+                        // Verify output of interface via contract
+                        log(`Verify local interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
+                        value = await value.contract[1].$instance(value);
+                    }
+                } else
+                if (anchor.contract) {
+                    // Verify value via contract
+                    log(`Verify value using contract '${anchor.contract[1].alias}'`);
+
+                    value = await anchor.contract[1].$instance(value);
+                }
+
+                if (anchor.contract) {
+                    value.contract = anchor.contract || null;
+                }
+            } else {
+                if (anchor.interface) {
+                    value.contract = anchor.interface[1].contract || null;
+                }
+            }
 
             if (anchor.type === 'component') {
 
