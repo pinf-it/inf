@@ -20,6 +20,10 @@ exports.inf = async function (inf) {
                         (
                             value.contract[0] === "MessageAlso" &&
                             value.contract[1].alias === "MessageAlso"
+                        ) ||
+                        (
+                            value.contract[0] === "our/Message" &&
+                            value.contract[1].alias === "our/Message"
                         )
                     ) &&
                     value.contract[1].impl.id === "tests/*/message"

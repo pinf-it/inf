@@ -437,6 +437,8 @@ class Component {
 
                         pluginInstance[method] = function (arg1, arg2) {
 
+                            const self = this;
+
                             if (!pluginInstance.impl[method]) {
                                 if (method === "invoke") {
                                     throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
@@ -444,7 +446,7 @@ class Component {
                                 throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
                             }
     
-                            const result = pluginInstance.impl[method].call(null, arg1, arg2);
+                            const result = pluginInstance.impl[method].call(self, arg1, arg2);
 
                             if (typeof result === "undefined") {
                                 if (method === "invoke") {
@@ -849,8 +851,9 @@ class Namespace {
         return self.interfaces[alias] = await component.forAlias('interface', alias);
     }
 
-    async mapContract (alias, uri) {
+    async mapContract (anchor, uri) {
         let self = this;
+        const alias = anchor.alias;
 
         let component = await self.getComponentForUri(uri);
 
@@ -860,7 +863,11 @@ class Namespace {
 
         log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.contracts[alias] = await component.forAlias('contract', alias);
+        self.contracts[alias] = await component.forAlias('contract', alias);
+
+        self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
+
+        return self.contracts[alias];
     }
 
     async mapPlugin (match, uri) {
@@ -1345,6 +1352,7 @@ class Processor {
         }
 
         // Handle namespaces
+        let anchorNamespacePrefix = null;
         if (/^[^@]+?\s*@$/.test(anchor)) {
             // Namespace mapping
             const alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
@@ -1354,10 +1362,35 @@ class Processor {
             self.namespace.mappedNamespaceAliases[alias] = value;
             return;
         } else
-        if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
-            // Namespace usage
+        if (/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
+            // Namespace usage for contracts
 
-            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
+            const m = anchor.match(/^.*?<\s*([^@]+?)\s*@\s*([\S]+)\s*>.*?$/);
+            const alias = m[1];
+            const pointer = m[2];
+            
+            if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
+                console.error("self.namespace", self.namespace);
+                throw new Error(`Namespace alias '${alias}' is not mapped!`);
+            }
+
+            log(`Replace namespace alias '${alias}' with:`, self.namespace.mappedNamespaceAliases[alias]);
+
+            anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, "");
+
+            anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, `$1${[
+                self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, ""),
+                pointer.replace(/^\//, "")
+            ].join("/").replace(/\/$/, "")}$2`);
+
+        } else
+        if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
+            // Namespace usage for anchors
+//            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
+
+            const m = anchor.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
+            const alias = m[1];
+            const pointer = m[2];
 
             if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
                 console.error("self.namespace", self.namespace);
@@ -1366,12 +1399,21 @@ class Processor {
 
             log(`Replace namespace alias '${alias}' with:`, self.namespace.mappedNamespaceAliases[alias]);
 
-            anchor = anchor.replace(/^[^@]+?\s*@\s*([^#]+\s*#)/, `${self.namespace.mappedNamespaceAliases[alias]}$1`);
+            anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, "");
+
+            anchor = anchor.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, `${[
+                self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, ""),
+                pointer.replace(/^\//, "")
+            ].join("/").replace(/\/$/, "")}$1`);
         }
 
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
         anchor = Node.WrapInstructionNode(self.namespace, anchor);
         value = Node.WrapInstructionNode(self.namespace, value);
+        if (anchorNamespacePrefix) {
+            anchor.namespacePrefix = anchorNamespacePrefix;
+//            value.anchorNamespacePrefix = anchor.namespacePrefix;
+        }
 
         if (! anchor instanceof ReferenceNode) {
             CONSOLE.error("anchor", anchor);
@@ -1425,7 +1467,7 @@ class Processor {
             } else
             if (anchor.type === 'contract') {
 
-                await self.namespace.mapContract(anchor.alias, value.value);
+                await self.namespace.mapContract(anchor, value.value);
 
             } else
             if (anchor.type === 'plugin') {

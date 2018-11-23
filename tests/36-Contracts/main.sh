@@ -29,7 +29,15 @@ inf {
     "# echo + 2": "---",
 
     ":pattern.stream2: <Message>": "./stream2.",
-    "stdout # :pattern.stream2: out +5": "messenger # queue"
+    "stdout # :pattern.stream2: out +5": "messenger # queue",
+
+    "# echo + 3": "---",
+
+    "ns @": "our",
+    "<ns @ Message>": "./message.",
+    "ns @ stdout #": "./stdout.",
+    "messenger # <ns @ Message> enqueue + 4": "hello world - 4",
+    "ns @ stdout # :pattern.stream2: out +5": "messenger # queue"
 }
 
 exit 0
