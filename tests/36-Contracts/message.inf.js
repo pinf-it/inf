@@ -9,9 +9,6 @@ exports.inf = async function (inf) {
 
         contract: function (alias, node) {
 
-console.log("NODE", node);
-
-
             return async function (value) {
 
                 if (
@@ -33,6 +30,24 @@ console.log("NODE", node);
 
                 return value;
             }
+        },
+
+        interfaceWrapper: function (interfaceComponent) {
+
+            return function (alias, node) {
+
+                return async function (value) {
+
+                    if (typeof interfaceComponent[value.contract[0]] !== "function") {
+                        throw new Error(`Interface at '${interfaceComponent.alias}' does not export '${value.contract[0]}' as required by contract '${value.contract[1].impl.id}'!`);
+                    }
+
+                    // Only give the value to the interface implementation
+                    value.value = interfaceComponent[value.contract[0]].call(null, value.value);
+
+                    return value;
+                }
+            };
         }
     };
 }

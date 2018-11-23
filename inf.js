@@ -446,12 +446,10 @@ class Component {
     
                             const result = pluginInstance.impl[method].call(null, arg1, arg2);
 
-                            if (method === "invoke") {
-                                if (typeof result === "undefined") {
+                            if (typeof result === "undefined") {
+                                if (method === "invoke") {
                                     return badInvocation(arg1, arg2, self);
-                                }
-                            } else {
-                                if (typeof result !== "function") {
+                                } else {
                                     return noFactory(method, arg1, arg2, self);
                                 }
                             }
@@ -898,8 +896,17 @@ class Namespace {
     }
 
     getInterfaceForAlias (alias) {
-        if (!this.interfaces[alias].$instance) {            
-            this.interfaces[alias].$instance = this.interfaces[alias].interface(alias, this.interfaces[alias]);
+        if (!this.interfaces[alias].$instance) {
+            if (!this.interfaces[alias].interface) {
+                if (
+                    !this.interfaces[alias].contract ||
+                    !this.interfaces[alias].contract[1].impl.interfaceWrapper
+                ) {
+                    throw new Error(`Interface with alias '${alias}' does not export 'interface()' nor does it's contract provide a wrapper.`);
+                }
+                this.interfaces[alias].interface = this.interfaces[alias].contract[1].impl.interfaceWrapper(this.interfaces[alias]);
+            }
+            this.interfaces[alias].$instance = this.interfaces[alias].interface.call(null, alias, this.interfaces[alias]);
         }
         return this.interfaces[alias];
     }
@@ -1124,8 +1131,8 @@ function badInvocation (pointer, value, component) {
 }
 
 function noFactory (method, alias, node, component) {
-    console.error("alias", alias);
-    console.error("node", node);
+    console.error("ERROR alias", alias);
+    console.error("ERROR node", node);
     throw new Error(`Call to factory '${method}' did not retrurn a function${component ? ` for component '${component.path}'` : ''}`);
 }
 
