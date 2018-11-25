@@ -38,10 +38,12 @@ const CODEBLOCK_REQUIRE = CODEBLOCK.makeRequire(require, {
 const CRYPTO = require("crypto");
 const MINIMIST = require("minimist");
 const TRAVERSE = require("traverse");
+const ESCAPE_REGEXP = require("escape-regexp");
 
 const LODASH_GET = require("lodash/get");
 const LODASH_VALUES = require("lodash/values");
 const LODASH_MERGE = require("lodash/merge");
+const LODASH_TO_PATH = require("lodash/topath")
 
 
 // ####################################################################################################
@@ -614,6 +616,7 @@ class Namespace {
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
         self.interfaces = (self.referringNamespace && self.referringNamespace.interfaces) || {};
+        self.variables = (self.referringNamespace && self.referringNamespace.variables) || {};
         self.contracts = (self.referringNamespace && self.referringNamespace.contracts) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
@@ -886,6 +889,18 @@ class Namespace {
         return component;
     }
 
+    async mapVariables (alias, value) {
+        let self = this;
+
+        if (self.variables[alias]) {
+            throw new Error("Cannot map variables '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.variables[alias].path + "'!");
+        }
+
+        log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
+
+        return self.variables[alias] = value;
+    }
+
     getPluginsForMatch (match) {
         return this.plugins.filter(function (plugin) {
             return (plugin.match === match);
@@ -903,6 +918,9 @@ class Namespace {
     }
 
     getInterfaceForAlias (alias) {
+        if (!this.interfaces[alias]) {
+            throw new Error(`Interface for alias '${alias}' not mapped!`);
+        }
         if (!this.interfaces[alias].$instance) {
             if (!this.interfaces[alias].interface) {
                 if (
@@ -919,6 +937,9 @@ class Namespace {
     }
 
     getContractForAlias (alias) {
+        if (!this.contracts[alias]) {
+            throw new Error(`Contract for alias '${alias}' not mapped!`);
+        }
         if (!this.contracts[alias].$instance) {
             if (!this.contracts[alias].contract) {
                 console.error("this.contracts[alias]", this.contracts[alias]);
@@ -927,6 +948,46 @@ class Namespace {
             this.contracts[alias].$instance = this.contracts[alias].contract(alias, this.contracts[alias]);
         }
         return this.contracts[alias];
+    }
+
+    async getValueForVariablePath (path) {
+        const parts = LODASH_TO_PATH(path);
+        if (!this.variables[parts[0]]) {
+            throw new Error(`Variables for alias '${parts[0]}' not mapped! Needed for resolving '${path}'.`);
+        }
+        if (!this.variables[parts[0]].$instance) {
+            this.variables[parts[0]].$instance = (await (await this.variables[parts[0]]).value({
+                // TODO: Provide full calling context?
+                value: parts
+            })).value;
+        }
+        // TODO: Provide full calling context?
+        return this.variables[parts[0]].$instance(parts.slice(1));
+    }
+
+    async replaceVariablesInString (value) {
+        const self = this;
+        if (
+            typeof value === "string" &&
+            /\$\{([^\}]+)\}/.test(value)
+        ) {
+            const re = /\$\{([^\}]+)\}/g;
+            let m;
+            let vars = {};
+            while ( m = re.exec(value) ) {
+                vars[m[0]] = await self.getValueForVariablePath(m[1]);
+                if (typeof vars[m[0]] === "undefined") {
+                    throw new Error(`Value for variable '${m[1]}' came back as undefined!`);
+                }
+            }
+            let keys = Object.keys(vars);
+            if (keys.length) {
+                keys.forEach(function (key) {
+                    value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
+                });
+            }
+        }
+        return value;
     }
 
     async getComponentForAlias (alias) {
@@ -1059,6 +1120,12 @@ class Node {
             log("new ContractReferenceNode for value:", value);
 
             return new ContractReferenceNode(namespace, value);
+        } else
+        if (VariablesReferenceNode.handlesValue(value)) {
+
+            log("new VariablesReferenceNode for value:", value);
+
+            return new VariablesReferenceNode(namespace, value);
         } else
        if (ReferenceNode.handlesValue(value)) {
 
@@ -1246,6 +1313,28 @@ class ContractReferenceNode extends ReferenceNode {
 
     toString () {
         return ('<' + this.alias + '>');
+    }
+}
+
+class VariablesReferenceNode extends ReferenceNode {
+
+    static handlesValue (value) {
+        return (
+            typeof value === "string" &&
+            value.match(/^([^\$]+?)\s*\$$/)
+        );
+    }
+
+    constructor (namespace, value) {
+        super(namespace, '');
+        let keyMatch = VariablesReferenceNode.handlesValue(value);
+        this.alias = keyMatch[1];
+        this.type = 'variables';
+        this.pointer = '';
+    }
+
+    toString () {
+        return (this.alias + '$');
     }
 }
 
@@ -1474,11 +1563,22 @@ class Processor {
 
                 await self.namespace.mapPlugin(anchor.alias, value.value);
 
+            } else
+            if (anchor.type === 'variables') {
+
+                await self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value));
+
+            } else {
+                throw new Error(`Anchor of type '${anchor.type}' not supported!`);
             }
 
         } else
         // Mapped component instruction
         if (anchor.pointer != '') {
+
+            // Replace variables            
+            anchor.pointer = await self.namespace.replaceVariablesInString(anchor.pointer);
+            value.value = await self.namespace.replaceVariablesInString(value.value);
 
             value = await self.closureForValueIfReference(value, async function (value) {
 
