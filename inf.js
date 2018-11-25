@@ -1655,6 +1655,18 @@ class Processor {
 
                 log(`Invoke component '${component.path}' for alias '${anchor.alias}'`);
 
+                // TODO: Move to 'component.ensureInvoke()'
+                if (!component.invoke) {
+                    if (
+                        !anchor.interface ||
+                        !anchor.interface[1].contract ||
+                        !anchor.interface[1].contract[1].impl.invokeWrapper
+                    ) {
+                        throw new Error(`Component at path '${component.path}' does not export 'invoke()' nor does it have a contract that exports 'invokeWrapper()'!`);
+                    }
+                    component.invoke = (anchor.interface[1].contract[1].impl.invokeWrapper(component)).call(null, anchor.interface[1].contract[0]);
+                }
+
                 const response = await component.invoke(anchor.pointer, value);
 
                 self.namespace.apis[anchor.alias] = response;

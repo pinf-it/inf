@@ -35,7 +35,7 @@ inf {
 
     "ns @": "our",
     "<ns @ Message>": "./message.",
-    "ns @ stdout #": "./stdout.",
+    "ns @ stdout #": "./stdout2.",
     "messenger # <ns @ Message> enqueue + 4": "hello world - 4",
     "ns @ stdout # :pattern.stream2: out +5": "messenger # queue"
 }

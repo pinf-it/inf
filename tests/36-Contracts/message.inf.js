@@ -48,6 +48,35 @@ exports.inf = async function (inf) {
                     return value;
                 }
             };
+        },
+
+        invokeWrapper: function (component) {
+
+            return function (alias) {
+
+                return async function (pointer, value) {
+
+                    if (typeof component[value.contract[0]] !== "function") {
+                        throw new Error(`Component at '${component.alias}' does not export '${value.contract[0]}' as required by contract '${value.contract[1].impl.id}'!`);
+                    }
+
+                    // Only give the value to the interface implementation
+                    if (typeof value.value === "function") {
+                        const orig = value.value;
+                        value.value = async function (instruction) {
+                            return (await orig(instruction)).value;
+                        }
+                    }
+
+                    const response = await component[value.contract[0]].call(null, pointer, value.value);
+
+                    if (typeof response === "undefined") {
+                        throw new Error(`Contract invocation method '${value.contract[0]}' for component '${component.alias}' did not return anything!`);
+                    }
+
+                    return response;
+                };
+            };
         }
     };
 }
