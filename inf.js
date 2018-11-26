@@ -1655,19 +1655,30 @@ class Processor {
 
                 log(`Invoke component '${component.path}' for alias '${anchor.alias}'`);
 
-                // TODO: Move to 'component.ensureInvoke()'
-                if (!component.invoke) {
-                    if (
-                        !anchor.interface ||
-                        !anchor.interface[1].contract ||
-                        !anchor.interface[1].contract[1].impl.invokeWrapper
-                    ) {
-                        throw new Error(`Component at path '${component.path}' does not export 'invoke()' nor does it have a contract that exports 'invokeWrapper()'!`);
+                let response;
+                if (
+                    anchor.contract &&
+                    anchor.contract[1].impl.invokeWrapper
+                ) {
+                    if (!component.$wrappedInvoke) {
+                        component.$wrappedInvoke = await (anchor.contract[1].impl.invokeWrapper(component)).call(null, anchor.contract[0]);
+                    }                    
+                    response = await component.$wrappedInvoke(anchor.pointer, value);
+                } else
+                if (
+                    anchor.interface &&
+                    anchor.interface[1].contract &&
+                    anchor.interface[1].contract[1].impl.invokeWrapper
+                ) {
+                    if (!component.$wrappedInvoke) {
+                        component.$wrappedInvoke = await (anchor.interface[1].contract[1].impl.invokeWrapper(component)).call(null, anchor.interface[1].contract[0]);
                     }
-                    component.invoke = (anchor.interface[1].contract[1].impl.invokeWrapper(component)).call(null, anchor.interface[1].contract[0]);
+                    response = await component.$wrappedInvoke(anchor.pointer, value);
                 }
 
-                const response = await component.invoke(anchor.pointer, value);
+                if (typeof response === "undefined") {
+                    response = await component.invoke(anchor.pointer, value);
+                }
 
                 self.namespace.apis[anchor.alias] = response;
 

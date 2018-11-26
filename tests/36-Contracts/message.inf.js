@@ -55,9 +55,9 @@ exports.inf = async function (inf) {
             return function (alias) {
 
                 return async function (pointer, value) {
-
+                    
                     if (typeof component[value.contract[0]] !== "function") {
-                        throw new Error(`Component at '${component.alias}' does not export '${value.contract[0]}' as required by contract '${value.contract[1].impl.id}'!`);
+                        return;
                     }
 
                     // Only give the value to the interface implementation
@@ -68,13 +68,7 @@ exports.inf = async function (inf) {
                         }
                     }
 
-                    const response = await component[value.contract[0]].call(null, pointer, value.value);
-
-                    if (typeof response === "undefined") {
-                        throw new Error(`Contract invocation method '${value.contract[0]}' for component '${component.alias}' did not return anything!`);
-                    }
-
-                    return response;
+                    return component[value.contract[0]].call(null, pointer, value.value);
                 };
             };
         }
