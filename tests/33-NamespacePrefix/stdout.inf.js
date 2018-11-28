@@ -1,15 +1,21 @@
 
 'use strict';
 
-exports.inf = async function (inf, alias) {
+exports.inf = function (inf, alias) {
 
-    console.log("alias:", alias);
+    console.log("stdout alias:", alias);
 
     return {
-        invoke: function (pointer, value) {
+        invoke: async function (pointer, value) {
 
             if (pointer === "log()") {
-                console.log("log():", value.value);
+
+                let val = value.value;
+                if (typeof val === "function") {
+                    val = (await val()).value;
+                }
+
+                console.log(`[${alias}] log():`, val);
                 return true;
             }
         }

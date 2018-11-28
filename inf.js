@@ -59,6 +59,17 @@ function log () {
     CONSOLE.log.apply(CONSOLE, args);
 }
 
+let exitContext = null;
+
+function exitWithError (err) {
+    if (exitContext) {
+        CONSOLE.error("[inf] cwd:", exitContext.cwd);
+        CONSOLE.error("[inf] filepath:", exitContext.filepath);
+    }
+    CONSOLE.error("[inf]", err);
+    process.exit(1);
+}
+
 setImmediate(function () {
     if (
         // If running after being browserified
@@ -80,6 +91,11 @@ setImmediate(function () {
                 }
                 var filepath = args._.shift();
 
+                exitContext = {
+                    cwd: cwd,
+                    filepath: filepath
+                };
+
                 let inf = new INF(cwd, null, args);
 
                 if (/^\{/.test(filepath)) {
@@ -89,10 +105,7 @@ setImmediate(function () {
                 }
 
             } catch (err) {
-                CONSOLE.error("[inf] cwd:", cwd);
-                CONSOLE.error("[inf] filepath:", filepath);
-                CONSOLE.error("[inf]", err);
-                process.exit(1);
+                exitWithError(err);
             }
         }
         main();
@@ -111,6 +124,8 @@ class INF {
         self.baseDir = baseDir;
         self.referringNamespace = referringNamespace;
         self.options = options || {};
+
+        log("INF filename", __filename);
     }
 
     async runInstructionsFile (filepath) {
@@ -455,16 +470,33 @@ class Component {
                                 }
                                 throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
                             }
+
+//console.log("CALL", pluginInstance.impl[method]);                            
     
                             const result = pluginInstance.impl[method].call(self, arg1, arg2);
 
-                            if (typeof result === "undefined") {
-                                if (method === "invoke") {
-                                    return badInvocation(arg1, arg2, self);
-                                } else {
-                                    return noFactory(method, arg1, arg2, self);
+                            function checkResult (result) {
+                                if (typeof result === "undefined") {
+                                    if (method === "invoke") {
+                                        badInvocation(arg1, arg2, self);
+                                    } else {
+                                        noFactory(method, arg1, arg2, self);
+                                    }
+                                    return false;
+                                }
+                                return true;
+                            }
+
+                            if (checkResult(result)) {
+                                // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
+                                if (
+                                    typeof result === "object" &&
+                                    typeof result.then === 'function'
+                                ) {
+                                    result.then(checkResult).catch(exitWithError);
                                 }
                             }
+
                             return result;
                         }
                     }
@@ -482,7 +514,6 @@ class Component {
 }
 
 const LIB = {
-    verbose: !!process.env.VERBOSE,
     Promise: Promise,
     ASSERT: ASSERT,
     PATH: PATH,
@@ -500,6 +531,7 @@ LIB.Promise.defer = function () {
     });
     return deferred;
 }
+Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.VERBOSE; } });
 Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
 Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("lodash/merge"); } });
 Object.defineProperty(LIB, 'LODASH', { get: function() { return require("lodash"); } });
@@ -1426,7 +1458,7 @@ class Processor {
 
                     let wrappedValue = Node.WrapInstructionNode(self.namespace, instruction);
 
-                    wrappedValue = await referencedComponent.invoke(referenceMatch[2], wrappedValue);
+                    wrappedValue = await referencedComponent.invoke(referenceValue.pointer, wrappedValue);
 
                     wrappedValue = Node.WrapInstructionNode(self.namespace, wrappedValue);
 
@@ -1441,8 +1473,8 @@ class Processor {
                 _value.contract = value.contract || null;
 
                 _value.wrapped = true;
-                _value.alias = referenceMatch[1];
-                _value.pointer = referenceMatch[2];
+                _value.alias = referenceValue.alias;
+                _value.pointer = referenceValue.pointer;
                 _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
             }
 
@@ -1509,6 +1541,24 @@ class Processor {
             // Namespace mapping
             const alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
 
+            const m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
+            if (m) {
+                const valueAlias = m[1];
+                const valuePointer = m[2];
+
+                if (typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined") {
+                    console.error("self.namespace", self.namespace);
+                    throw new Error(`Namespace alias '${valueAlias}' is not mapped!`);
+                }
+
+                log(`Replace namespace alias '${valueAlias}' with:`, self.namespace.mappedNamespaceAliases[valueAlias]);
+                
+                value = [
+                    self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""),
+                    valuePointer.replace(/^\//, "")
+                ].join("/").replace(/\/$/, "");
+            }
+
             log(`Map namespace alias '${alias}' to:`, value);
 
             self.namespace.mappedNamespaceAliases[alias] = value;
@@ -1556,6 +1606,26 @@ class Processor {
             anchor = anchor.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, `${[
                 self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, ""),
                 pointer.replace(/^\//, "")
+            ].join("/").replace(/\/$/, "")}$1`);
+        }
+
+        if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
+            // Namespace usage for value
+
+            const valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
+            const valueAlias = valueM[1];
+            const valuePointer = valueM[2];
+
+            if (typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined") {
+                console.error("self.namespace", self.namespace);
+                throw new Error(`Namespace alias '${valueAlias}' is not mapped!`);
+            }
+
+            log(`Replace namespace alias '${valueAlias}' with:`, self.namespace.mappedNamespaceAliases[valueAlias]);
+
+            value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, `${[
+                self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""),
+                valuePointer.replace(/^\//, "")
             ].join("/").replace(/\/$/, "")}$1`);
         }
 
