@@ -11,9 +11,17 @@ exports.inf = async function (inf) {
 
             return async function (value) {
 
+                let message = value.value;
+                if (
+                    typeof message === "object" &&
+                    message.get instanceof inf.LIB.INF.Node
+                ) {
+                    message = (await message.get.value()).value;
+                }
+
                 value.value = {
                     messages: [
-                        value.value
+                        message
                     ]
                 };
 

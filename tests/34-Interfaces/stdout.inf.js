@@ -3,15 +3,28 @@
 
 exports.inf = async function (inf) {
 
+    let lastMessage = null;
+
     return {
 
-        invoke: function (pointer, value) {
+        invoke: async function (pointer, value) {
 
             if (pointer === "out") {
 
-                process.stdout.write(value.value.messages.join("\n") + "\n");
+                let val = value.value;
+                if (typeof val === "function") {
+                    val = (await val()).value;
+                }
+                
+                lastMessage = val.messages[val.messages.length-1];
+
+                process.stdout.write(val.messages.join("\n") + "\n");
 
                 return true;
+            } else
+            if (pointer === "getlast") {
+
+                return lastMessage;
             }
         }
     };
