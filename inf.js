@@ -1089,6 +1089,7 @@ class Namespace {
     async getValueForVariablePath (path) {
         const parts = LODASH_TO_PATH(path);
         if (!this.variables[parts[0]]) {
+            console.error("this.variables", this.variables);
             throw new Error(`Variables for alias '${parts[0]}' not mapped! Needed for resolving '${path}'.`);
         }
         if (!this.variables[parts[0]].$instance) {
@@ -1363,10 +1364,17 @@ class CodeblockNode extends Node {
     }
 
     getFormat () {
+        if (!CodeblockNode.handlesValue(this.value)) {
+            throw new Error("Value no longer a codeblock!");
+        }
         return CODEBLOCK.thawFromJSON(this.value).getFormat();
     }
 
     toString (args) {
+        if (!CodeblockNode.handlesValue(this.value)) {
+            return super.toString();
+        }
+
         let codeblock = CODEBLOCK.thawFromJSON(this.value);
 
         codeblock = codeblock.compile(args);
@@ -1700,6 +1708,46 @@ class Processor {
         }
 
         log("anchor.type:", anchor.type);
+
+
+        // Run various codeblocks if applicable.
+        if (value instanceof CodeblockNode) {
+
+            if (value.getFormat() === 'bash') {
+
+                let codeblock = CODEBLOCK.thawFromJSON(value.value);
+
+                const vars = {};
+                await Promise.map(codeblock._args, async function (name) {
+                    vars[name] = await self.namespace.getValueForVariablePath([name]);
+                });
+
+                codeblock = codeblock.compile(vars);
+
+                const code = codeblock.getCode();
+
+                const RUNBASH = require("runbash");
+
+                log("Running bash code");
+
+                const result = await RUNBASH(codeblock.getCode(), {
+                    progress: !!process.env.VERBOSE,
+                    wait: true
+                });
+
+                if (result.code !== 0) {
+                    console.error("code", code);
+                    console.error("result", result);
+                    throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+                }
+                if (result.stderr) {
+                    log('Discarding stderr:', result.stderr);
+                }
+
+                value.value = result.stdout;
+            }
+        }
+
 
         // Inherit from another inf.json file
         if (anchor.value === "#") {
