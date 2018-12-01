@@ -2,7 +2,7 @@
 
 inf {
     "formatter #": "./formatter.",
-    "formatter # setMode()": "UPPERCASE",
+    "formatter # set() mode": "UPPERCASE",
     "stdout #": "./stdout.",
     "stdout # setFormatter()": "formatter # getFormatter()",
     "stdout # echo()": "Component OK"

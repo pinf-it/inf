@@ -7,8 +7,10 @@ exports.inf = async function (inf) {
 
     return {
 
-        setMode: function (_mode) {
-            mode = _mode;
+        set: function (type, value) {
+            if (type === 'mode') {
+                mode = value;
+            }
         },
 
         getFormatter: function () {

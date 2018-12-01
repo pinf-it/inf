@@ -465,10 +465,16 @@ class Component {
                         // See if there is a component method instead of using generic 'invoke'.
                         if (
                             method === "invoke" &&
-                            /\(\)$/.test(arg1) &&
-                            typeof pluginInstance.impl[arg1.replace(/\(\)$/, "")] === "function"
+                            /^[a-zA-z0-9_]+\(\)/.test(arg1) &&
+                            typeof pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")] === "function"
                         ) {
-                            log(`Calling method '${arg1.replace(/\(\)$/, "")}' in component '${pluginInstance.path}' with arg:`, arg2.value);
+                            const args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
+
+                            if (args1_parts[2]) {
+                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with arguments:`, args1_parts[2], arg2.value);
+                            } else {
+                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with argument:`, arg2.value);
+                            }
 
                             let value = arg2.value;
                             // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
@@ -479,9 +485,16 @@ class Component {
                                 }
                             }
 
+                            let args = [
+                                value
+                            ];
+                            if (args1_parts[2]) {
+                                args.unshift(args1_parts[2]);
+                            }
+
                             // NOTE: We only pass in the value (not the wrapper).
                             // TODO: Optionally pass in the wrapper?
-                            let result = pluginInstance.impl[arg1.replace(/\(\)$/, "")].call(self, value);
+                            let result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(self, args);
                             // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
                             //       'invoke()' in contrast must always return something to ensure the invocation was handled.
 
