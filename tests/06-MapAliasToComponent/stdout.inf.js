@@ -19,7 +19,7 @@ exports.inf = async function (inf) {
             } else
             if (pointer === "echo") {
 
-                let message = await formatter(value);
+                const message = await formatter(value);
                 
                 process.stdout.write(message.toString() + "\n");
 

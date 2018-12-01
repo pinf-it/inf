@@ -456,56 +456,99 @@ class Component {
                 pluginInstance.alias = alias;
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
 
-                Object.keys(pluginInstance.impl).forEach(function (method) {
+                function makeMethodWrapper (type, method) {
 
-                    if (typeof pluginInstance.impl[method] === "function") {
+                    return function (arg1, arg2) {
 
-                        pluginInstance[method] = function (arg1, arg2) {
+                        const self = this;
 
-                            const self = this;
+                        // See if there is a component method instead of using generic 'invoke'.
+                        if (
+                            method === "invoke" &&
+                            /\(\)$/.test(arg1) &&
+                            typeof pluginInstance.impl[arg1.replace(/\(\)$/, "")] === "function"
+                        ) {
+                            log(`Calling method '${arg1.replace(/\(\)$/, "")}' in component '${pluginInstance.path}' with arg:`, arg2.value);
 
-                            if (!pluginInstance.impl[method]) {
-                                if (method === "invoke") {
-                                    throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
-                                }
-                                throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
-                            }
-
-//console.log("CALL", pluginInstance.impl[method]);                            
-    
-                            const result = pluginInstance.impl[method].call(self, arg1, arg2);
-
-                            function checkResult (result) {
-                                if (typeof result === "undefined") {
-                                    if (method === "invoke") {
-                                        badInvocation(arg1, arg2, self);
-                                    } else {
-                                        noFactory(method, arg1, arg2, self);
-                                    }
-                                    return false;
-                                }
-                                return true;
-                            }
-
-                            if (checkResult(result)) {
-                                // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
-                                if (
-                                    typeof result === "object" &&
-                                    typeof result.then === 'function'
-                                ) {
-                                    result.then(checkResult).catch(exitWithError);
+                            let value = arg2.value;
+                            // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
+                            if (arg2.wrapped) {
+                                value = async function () {
+                                    const result = await arg2.value.apply(this, arguments);
+                                    return result.value;
                                 }
                             }
+
+                            // NOTE: We only pass in the value (not the wrapper).
+                            // TODO: Optionally pass in the wrapper?
+                            let result = pluginInstance.impl[arg1.replace(/\(\)$/, "")].call(self, value);
+                            // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
+                            //       'invoke()' in contrast must always return something to ensure the invocation was handled.
 
                             return result;
                         }
+
+                        log(`Calling method '${method}' in component '${pluginInstance.path}' with args:`, arg1, arg2);
+
+                        if (!pluginInstance.impl[method]) {
+                            if (method === "invoke") {
+                                throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
+                            }
+                            throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
+                        }
+
+                        let result = pluginInstance.impl[method].call(self, arg1, arg2);
+
+                        function checkResult (result) {
+                            if (typeof result === "undefined") {
+                                if (type === "invoke") {
+                                    badInvocation(arg1, arg2, self);
+                                } else {
+                                    noFactory(method, arg1, arg2, self);
+                                }
+                                return false;
+                            }
+                            return true;
+                        }
+
+                        if (checkResult(result)) {
+                            // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
+                            if (
+                                typeof result === "object" &&
+                                typeof result.then === 'function'
+                            ) {
+                                result.then(checkResult).catch(exitWithError);
+                            }
+                        }
+
+                        return result;
+                    }                    
+                }
+
+                [
+                    "invoke",
+                    "interface",
+                    "contract",
+                ].forEach(function (method) {
+                    if (typeof pluginInstance.impl[method] === "function") {
+                        pluginInstance[method] = makeMethodWrapper(
+                            (method === "invoke") ? "invoke": "factory",
+                            method
+                        );
                     }
                 });
-                /*
-                if (!pluginInstance[method]) {
-                    throw new Error(`Component at path '${pluginInstance.path}' does not export '${method}()'!`);
+
+                if (
+                    type === "component" &&
+                    !pluginInstance.invoke
+                ) {
+                    pluginInstance.invoke = makeMethodWrapper("invoke", "invoke");
                 }
-                */
+
+                pluginInstance.invokeContractAliasMethod = function (method, args) {
+                    const wrapper = makeMethodWrapper("invoke", method);
+                    return wrapper.apply(this, args);
+                }
             }
 
             return instances[type][alias];
@@ -1528,7 +1571,8 @@ class Processor {
     async processInstruction (anchor, value) {
         let self = this;
 
-        log("Parse instruction:", anchor, ":", value);
+        log("");
+        log(" ", anchor, ":", value);
 
         // Detect comment
         if (anchor === '//') {
@@ -1563,7 +1607,7 @@ class Processor {
 
             self.namespace.mappedNamespaceAliases[alias] = value;
             return;
-        } else
+        }
         if (/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
             // Namespace usage for contracts
 
@@ -1585,7 +1629,7 @@ class Processor {
                 pointer.replace(/^\//, "")
             ].join("/").replace(/\/$/, "")}$2`);
 
-        } else
+        }
         if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
             // Namespace usage for anchors
 //            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
@@ -1824,6 +1868,11 @@ class Processor {
                 }
 
                 if (typeof response === "undefined") {
+                    if (!component.invoke) {
+                        console.error("anchor", anchor);
+                        console.error("component", component);
+                        throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
+                    }
                     response = await component.invoke(anchor.pointer, value);
                 }
 

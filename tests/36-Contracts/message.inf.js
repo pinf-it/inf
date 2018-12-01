@@ -38,12 +38,12 @@ exports.inf = async function (inf) {
 
                 return async function (value) {
 
-                    if (typeof interfaceComponent[value.contract[0]] !== "function") {
+                    if (typeof interfaceComponent.impl[value.contract[0]] !== "function") {
                         throw new Error(`Interface at '${interfaceComponent.alias}' does not export '${value.contract[0]}' as required by contract '${value.contract[1].impl.id}'!`);
                     }
 
                     // Only give the value to the interface implementation
-                    value.value = interfaceComponent[value.contract[0]].call(null, value.value);
+                    value.value = interfaceComponent.invokeContractAliasMethod(value.contract[0], [value.value]);
 
                     return value;
                 }
@@ -56,7 +56,7 @@ exports.inf = async function (inf) {
 
                 return async function (pointer, value) {
                     
-                    if (typeof component[value.contract[0]] !== "function") {
+                    if (typeof component.impl[value.contract[0]] !== "function") {
                         return;
                     }
 
@@ -68,7 +68,7 @@ exports.inf = async function (inf) {
                         }
                     }
 
-                    return component[value.contract[0]].call(null, pointer, value.value);
+                    return component.invokeContractAliasMethod(value.contract[0], [pointer, value.value]);
                 };
             };
         }
