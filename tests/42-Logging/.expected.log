@@ -1,0 +1,15 @@
+[90m[1m[inf][formatter] Log	[22m[39m set mode UPPERCASE
+[34m[1m[inf][stdout] Info	[22m[39m got formatter: [90mfunction (value) {[39m
+
+[90m                inf.console.info(`format value '${value}' using mode '${mode}'`);[39m
+
+[90m                if (mode === "UPPERCASE") {[39m
+[90m                    value = value.toUpperCase();[39m
+[90m                }[39m
+[90m                return value;[39m
+[90m            }[39m
+[34m[1m[inf][formatter] Info	[22m[39m format value 'Component OK' using mode 'UPPERCASE'
+[90m[1m[inf][stdout] Log	[22m[39m log message: COMPONENT OK
+[33m[1m[inf][stdout] Warning	[22m[39m Message is longer than 5 characters!
+COMPONENT OK
+[31m[1m[inf][stdout] Error	[22m[39m Test error message!

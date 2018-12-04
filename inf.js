@@ -471,9 +471,9 @@ class Component {
                             const args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
 
                             if (args1_parts[2]) {
-                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with arguments:`, args1_parts[2], arg2.value);
+                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with arguments:`, args1_parts[2], typeof arg2.value);
                             } else {
-                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with argument:`, arg2.value);
+                                log(`Calling method '${args1_parts[0]}' in component '${pluginInstance.path}' with argument:`, typeof arg2.value);
                             }
 
                             let value = arg2.value;
@@ -501,7 +501,7 @@ class Component {
                             return result;
                         }
 
-                        log(`Calling method '${method}' in component '${pluginInstance.path}' with args:`, arg1, arg2);
+                        log(`Calling method '${method}' in component '${pluginInstance.path}' with args:`, arg1, typeof arg2);
 
                         if (!pluginInstance.impl[method]) {
                             if (method === "invoke") {
@@ -588,9 +588,12 @@ LIB.Promise.defer = function () {
     return deferred;
 }
 Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.VERBOSE; } });
+Object.defineProperty(LIB, 'UTIL', { get: function() { return require("util"); } });
 Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
 Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("lodash/merge"); } });
 Object.defineProperty(LIB, 'LODASH', { get: function() { return require("lodash"); } });
+Object.defineProperty(LIB, 'RUNBASH', { get: function() { return require("runbash"); } });
+Object.defineProperty(LIB, 'COLORS', { get: function() { return require("colors/safe"); } });
 
 Object.defineProperty(LIB, 'STABLE_JSON', { get: function() {
     const SORTED_JSON_STRINGIFY = require("json-stable-stringify");
@@ -697,6 +700,56 @@ require.memoize("/main.js", function (require, exports, module) {
             let context = Object.create(self);
 
             // TIP: Load additional functionality into the context via a plugin.
+
+            function formatMessage (args) {
+                return args.map(function (arg) {
+                    if (
+                        typeof arg === 'function' ||
+                        (typeof arg !== 'string' && typeof arg === 'object')
+                    ) {
+                        return self.LIB.COLORS.gray(arg.toString());
+                    }
+                    return arg;
+                    /*
+                    return self.LIB.UTIL.inspect(arg, {
+                        depth: 3,            // Increase depth in debug mode?
+                        maxArrayLength: 25,  // Increase depth in debug mode?
+                        showHidden: false,   // Enable in debug mode
+                        showProxy: false,    // Enable in debug mode
+                        colors: true,
+                    });
+                    */
+                });
+            }
+
+            // TODO: When running in debug mode, switch on callsite information.
+            context.console = {
+                log: function () {
+                    let args = Array.from(arguments);
+                    args = formatMessage(args);
+                    args.unshift(self.LIB.COLORS.gray.bold(`[inf][${node.alias}] Log\t`));
+                    console.log.apply(console, args);
+                },
+                info: function () {
+                    let args = Array.from(arguments);
+                    args = formatMessage(args);
+                    args.unshift(self.LIB.COLORS.blue.bold(`[inf][${node.alias}] Info\t`));
+                    console.log.apply(console, args);
+                },
+                warn: function () {
+                    let args = Array.from(arguments);
+                    args = formatMessage(args);
+                    args.unshift(self.LIB.COLORS.yellow.bold(`[inf][${node.alias}] Warning\t`));
+                    console.log.apply(console, args);
+                },
+                error: function () {
+                    let args = Array.from(arguments);
+                    args = formatMessage(args);
+                    args.unshift(self.LIB.COLORS.red.bold(`[inf][${node.alias}] Error\t`));
+                    console.log.apply(console, args);
+                }
+            }
+            context.log = context.console.log;
 
             return context;
         }
