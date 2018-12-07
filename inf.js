@@ -67,6 +67,7 @@ function exitWithError (err) {
         CONSOLE.error("[inf] filepath:", exitContext.filepath);
     }
     CONSOLE.error("[inf]", err);
+    CONSOLE.error("[inf]", "Exit with code: 1");
     process.exit(1);
 }
 
@@ -184,29 +185,30 @@ class INF {
 
             // Replace variables
             instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
-
                 if (/^\{.+\}$/.test(arguments[1])) {
                     // Executable expression
                     let args = self.options;
-                    return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")));
+                    return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
                 } else {
                     // Simple varibale reference
                     return JSON.stringify(LODASH_GET({
                         args: self.options
-                    }, arguments[1], arguments[0]));
+                    }, arguments[1], ''));
                 }
             });
-            instructionObject = instructionObject.replace(/%%([^%]+)%%/g, function () {
-
-                if (/^\{.+\}$/.test(arguments[1])) {
+            instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
+                if (arguments[1] !== '%%') {
+                    return arguments[0];
+                }
+                if (/^\{.+\}$/.test(arguments[2])) {
                     // Executable expression
                     let args = self.options;
-                    return eval(arguments[1].replace(/(^\{|\}$)/g, ""));
+                    return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
                 } else {
                     // Simple varibale reference
                     return LODASH_GET({
                         args: self.options
-                    }, arguments[1], arguments[0]);    
+                    }, arguments[2], '');    
                 }
             });
 
@@ -728,25 +730,25 @@ require.memoize("/main.js", function (require, exports, module) {
                     let args = Array.from(arguments);
                     args = formatMessage(args);
                     args.unshift(self.LIB.COLORS.gray.bold(`[inf][${node.alias}] Log\t`));
-                    console.log.apply(console, args);
+                    CONSOLE.log.apply(CONSOLE, args);
                 },
                 info: function () {
                     let args = Array.from(arguments);
                     args = formatMessage(args);
                     args.unshift(self.LIB.COLORS.blue.bold(`[inf][${node.alias}] Info\t`));
-                    console.log.apply(console, args);
+                    CONSOLE.info.apply(CONSOLE, args);
                 },
                 warn: function () {
                     let args = Array.from(arguments);
                     args = formatMessage(args);
                     args.unshift(self.LIB.COLORS.yellow.bold(`[inf][${node.alias}] Warning\t`));
-                    console.log.apply(console, args);
+                    CONSOLE.warn.apply(CONSOLE, args);
                 },
                 error: function () {
                     let args = Array.from(arguments);
                     args = formatMessage(args);
                     args.unshift(self.LIB.COLORS.red.bold(`[inf][${node.alias}] Error\t`));
-                    console.log.apply(console, args);
+                    CONSOLE.error.apply(CONSOLE, args);
                 }
             }
             context.log = context.console.log;
