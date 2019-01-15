@@ -82,7 +82,13 @@ setImmediate(function () {
             try {
 
                 var cwd = process.cwd();
-                let args = MINIMIST(process.argv.slice(2));
+                let args = MINIMIST(process.argv.slice(2), {
+                    boolean: [
+                        'verbose',
+                        'debug',
+                        'progress'
+                    ]
+                });
                 if (args.verbose && !process.env.VERBOSE) {
                     process.env.VERBOSE = "1";
                 }
@@ -96,6 +102,8 @@ setImmediate(function () {
                     cwd: cwd,
                     filepath: filepath
                 };
+
+                // TODO: Implement '--help'
 
                 let inf = new INF(cwd, null, args);
 
@@ -617,7 +625,57 @@ Object.defineProperty(LIB, 'STABLE_JSON', { get: function() {
     };
 } });
 
+exports.LIB = LIB;
 
+
+async function runCodeblock (namespace, value, vars) {
+    vars = vars || {};
+
+    if (value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock') {
+        throw new Error("'value' is not a codeblock!");
+    }
+
+    let codeblock = CODEBLOCK.thawFromJSON(value);
+
+    if (
+        codeblock.getFormat() === 'bash' ||
+        codeblock.getFormat() === 'bash.method'
+    ) {
+
+        await Promise.map(codeblock._args, async function (name) {
+            if (typeof vars[name] === 'undefined') {
+                vars[name] = await namespace.getValueForVariablePath([name]);
+            }
+        });
+
+        codeblock = codeblock.compile(vars);
+
+        const code = codeblock.getCode();
+
+        const RUNBASH = require("runbash");
+
+        log("Running bash code from codeblock");
+
+        const result = await RUNBASH(codeblock.getCode(), {
+            progress: namespace.options.progress || !!process.env.VERBOSE,
+            wait: true
+        });
+
+        if (result.code !== 0) {
+            console.error("code", code);
+            console.error("result", result);
+            throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+        }
+        if (result.stderr) {
+            log('Discarding stderr:', result.stderr);
+        }
+
+        return result.stdout;
+
+    } else {
+        throw new Error(`Unsupported codeblock format '${codeblock.getFormat()}'!`);
+    }
+}
 
 
 class ComponentInitContext extends EventEmitter {
@@ -696,6 +754,17 @@ require.memoize("/main.js", function (require, exports, module) {
         }
 
         self.badInvocation = badInvocation;
+
+        self.isCodeblock = function (value) {
+            return (
+                typeof value === 'object' &&
+                value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+            );
+        }
+
+        self.runCodeblock = async function (value, vars) {
+            return runCodeblock(namespace, value, vars);
+        }
 
         self.forNode = function (node) {
 
@@ -1767,40 +1836,12 @@ class Processor {
 
         // Run various codeblocks if applicable.
         if (value instanceof CodeblockNode) {
-
             if (value.getFormat() === 'bash') {
-
-                let codeblock = CODEBLOCK.thawFromJSON(value.value);
-
-                const vars = {};
-                await Promise.map(codeblock._args, async function (name) {
-                    vars[name] = await self.namespace.getValueForVariablePath([name]);
-                });
-
-                codeblock = codeblock.compile(vars);
-
-                const code = codeblock.getCode();
-
-                const RUNBASH = require("runbash");
-
-                log("Running bash code");
-
-                const result = await RUNBASH(codeblock.getCode(), {
-                    progress: !!process.env.VERBOSE,
-                    wait: true
-                });
-
-                if (result.code !== 0) {
-                    console.error("code", code);
-                    console.error("result", result);
-                    throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
-                }
-                if (result.stderr) {
-                    log('Discarding stderr:', result.stderr);
-                }
-
-                value.value = result.stdout;
+                value.value = await runCodeblock(self.namespace, value.value);
             }
+            // NOTE: To cause a bash codeblock to run on invocation vs when parsing instructions
+            //       use 'bash.method' for the codeblock format. The invoked method can then
+            //       run it via 'INF.runCodeblock(value, vars)'
         }
 
 
