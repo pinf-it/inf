@@ -43,7 +43,7 @@ const ESCAPE_REGEXP = require("escape-regexp");
 const LODASH_GET = require("lodash/get");
 const LODASH_VALUES = require("lodash/values");
 const LODASH_MERGE = require("lodash/merge");
-const LODASH_TO_PATH = require("lodash/topath")
+const LODASH_TO_PATH = require("lodash/toPath")
 
 
 // ####################################################################################################
