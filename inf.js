@@ -24,6 +24,7 @@ FS.existsAsync = function (path) {
         return FS.exists(path, resolve);
     });
 }
+const STREAM = require("stream");
 const GLOB = require("glob");
 GLOB.async = Promise.promisify(GLOB);
 
@@ -43,7 +44,9 @@ const ESCAPE_REGEXP = require("escape-regexp");
 const LODASH_GET = require("lodash/get");
 const LODASH_VALUES = require("lodash/values");
 const LODASH_MERGE = require("lodash/merge");
-const LODASH_TO_PATH = require("lodash/toPath")
+const LODASH_TO_PATH = require("lodash/toPath");
+const LIB_JSON = require("lib.json");
+const MEMORYSTREAM = require("memorystream");
 
 
 // ####################################################################################################
@@ -515,6 +518,7 @@ class Component {
 
                         if (!pluginInstance.impl[method]) {
                             if (method === "invoke") {
+                                console.error("pointer", arg1);
                                 throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
                             }
                             throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
@@ -584,10 +588,12 @@ const LIB = {
     ASSERT: ASSERT,
     PATH: PATH,
     FS: FS,
+    STREAM: STREAM,
     GLOB: GLOB,
     CODEBLOCK: CODEBLOCK,
     CRYPTO: CRYPTO,
-    INF: exports
+    INF: exports,
+    MEMORYSTREAM: MEMORYSTREAM
 };
 LIB.Promise.defer = function () {
     var deferred = {};
@@ -867,6 +873,7 @@ class Namespace {
 
         self.apis = {};
 
+        self.lib = LIB_JSON.forBaseDir(self.baseDir);
     }
 /*
     flipDomainInUri (uri) {
@@ -925,6 +932,16 @@ class Namespace {
                 });
             }
         }
+
+        try {            
+            const resolvedPath = self.lib.js.resolve(filepath);
+
+            log("resolveInfUri()", "resolvedPath", resolvedPath);
+
+            if (await FS.existsAsync(resolvedPath)) {
+                return [ resolvedPath ];
+            }
+        } catch (err) {}
 
         // 2. Explicityly configured
         let vocabulariesPath = null;
@@ -1004,6 +1021,13 @@ class Namespace {
                 return cwdPath;
             }    
         }
+
+        try {
+            const libPath = self.lib.js.resolve(filepath);
+            if (await FS.existsAsync(libPath)) {
+                return libPath;
+            }
+        } catch (err) {}
 
         if (self.options.vocabularies) {
             var vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
@@ -1411,20 +1435,29 @@ class Node {
                 self[name] &&
                 typeof self[name] === "string"
             ) {
-                let m = self[name].match(/^\s*:([^:\s]+):\s*(.+)$/);
-                if (m) {
+                let m;
+                if (/^\s*:([^:\s]+):\s*(.+)$/.test(self[name])) {
 
-                    log(`detected interface '${m[1]}' when finalizing '${self[name]}' with value:`, value);
+                    self.interface = self.interface || [];
 
-                    self.interface = [
-                        m[1],
-                        namespace.getInterfaceForAlias(m[1])
-                    ];
-                    self[name] = m[2];
+                    let instruction = self[name];
+
+                    const re = /^\s*:([^:\s]+):\s*(.+)$/;
+
+                    while ( (m = re.exec(instruction)) ) {
+                        log(`detected interface '${m[1]}' when finalizing '${self[name]}' with value:`, value);
+
+                        self.interface.push([
+                            m[1],
+                            namespace.getInterfaceForAlias(m[1])
+                        ]);
+                        instruction = m[2];
+                    }
+
+                    self[name] = instruction;
                 }
                 m = self[name].match(/^\s*<([^<>\s]+)>\s*(.+)$/);
                 if (m) {
-
                     log(`detected contract '${m[1]}' when finalizing '${self[name]}' with value:`, value);
 
                     self.contract = [
@@ -1852,9 +1885,15 @@ class Processor {
 
             await Promise.mapSeries(uris, async function (uri) {
 
+                log('processInstruction() uri', uri);
+
                 let paths = await self.namespace.resolveInfUri(uri);
 
+                log('processInstruction() paths', paths);
+
                 await Promise.mapSeries(paths, async function (path) {
+
+                    log('processInstruction() path', path);
 
                     if (!self.namespace.isInheritingFrom(path)) {
 
@@ -1918,33 +1957,77 @@ class Processor {
 
                 if (value.interface) {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-                    _value.contract = value.interface[1].contract || null;
-                    const _interface = value.interface;
-                    _value = await _interface[1].$instance(_value);
-                    if (typeof _value === "undefined") {
-                        throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
-                    }
+
+
+
+                    await Promise.mapSeries(value.interface, async function (_interface) {
+                        if (_value.contract) {
+                            if (_interface[1].contract !== _value.contract) {
+                                throw new Error('Contract mis-match!');
+                            }
+                        } else {
+                            _value.contract = _interface[1].contract || null;
+                        }
+
+
+
+                        _value = await _interface[1].$instance(_value);
+
+
+
+                        if (typeof _value === "undefined") {
+                            throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
+                        }
+
+
+                    });
+
+
+
                     if (_value.contract) {
                         // Verify output of interface via contract
-                        log(`Verify local interface output from '${_interface[0]}' using contract '${_value.contract[1].alias}'`);
+                        log(`Verify local interface output from '${value.interface.map(function (_interface) {
+                            return _interface[0];
+                        })}' using contract '${_value.contract[1].alias}'`);
+
+
+
                         _value = await _value.contract[1].$instance(_value);
                     }
+
+
                 }               
 
                 if (anchor.interface) {
+
+
+                    
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-                    _value.contract = anchor.interface[1].contract || null;
-                    const _interface = anchor.interface;
-                    _value = await _interface[1].$instance(_value);
-                    if (typeof _value === "undefined") {
-                        throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
-                    }
+
+                    await Promise.mapSeries(anchor.interface, async function (_interface) {
+                        if (_value.contract) {
+                            if (_interface[1].contract !== _value.contract) {
+                                throw new Error('Contract mis-match!');
+                            }
+                        } else {
+                            _value.contract = _interface[1].contract || null;
+                        }
+
+                        _value = await _interface[1].$instance(_value);
+                        if (typeof _value === "undefined") {
+                            throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
+                        }
+                    });
                     if (_value.contract) {
                         // Verify output of interface via contract
-                        log(`Verify local interface output from '${_interface[0]}' using contract '${_value.contract[1].alias}'`);
+                        log(`Verify local interface output from '${anchor.interface.map(function (_interface) {
+                            return _interface[0];
+                        })}' using contract '${_value.contract[1].alias}'`);
                         _value = await _value.contract[1].$instance(_value);
                     }
                 }
+
+
 
                 return _value;
             });
@@ -1952,32 +2035,67 @@ class Processor {
             if (!value.wrapped) {
 
                 if (value.interface) {
-                    value.contract = value.interface[1].contract || null;
-                    const _interface = value.interface;
+
+
+
+                    const interfaces = value.interface;
                     delete value.interface;
-                    value = await _interface[1].$instance(value);
-                    if (typeof value === "undefined") {
-                        throw new Error(`Value is undefined after processing by remove interface '${_interface[0]}'!`);
-                    }
+
+                    await Promise.mapSeries(interfaces, async function (_interface) {
+
+                        if (value.contract) {
+                            if (_interface[1].contract !== value.contract) {
+                                throw new Error('Contract mis-match!');
+                            }
+                        } else {
+                            value.contract = _interface[1].contract || null;
+                        }
+
+                        value = await _interface[1].$instance(value);
+                        if (typeof value === "undefined") {
+                            throw new Error(`Value is undefined after processing by remote interface '${_interface[0]}'!`);
+                        }
+                    });
                     if (value.contract) {
                         // Verify output of interface via contract
-                        log(`Verify remote interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
+                        log(`Verify remote interface output from '${interfaces.map(function (_interface) {
+                            return _interface[0];
+                        })}' using contract '${value.contract[1].alias}'`);
                         value = await value.contract[1].$instance(value);
                     }
                 }
 
                 if (anchor.interface) {
+
+
+
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-                    value.contract = anchor.interface[1].contract || null;
-                    const _interface = anchor.interface;
+
+                    const interfaces = anchor.interface;
                     delete anchor.interface;
-                    value = await _interface[1].$instance(value);
-                    if (typeof value === "undefined") {
-                        throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
-                    }
+
+                    await Promise.mapSeries(interfaces, async function (_interface) {
+
+                        if (value.contract) {
+                            if (_interface[1].contract !== value.contract) {
+                                if (_interface[1].contract[1].impl.id != value.contract[1].impl.id) {
+                                    throw new Error('Contract mis-match!');
+                                }
+                            }
+                        } else {
+                            value.contract = _interface[1].contract || null;
+                        }
+
+                        value = await _interface[1].$instance(value);
+                        if (typeof value === "undefined") {
+                            throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
+                        }
+                    });
                     if (value.contract) {
                         // Verify output of interface via contract
-                        log(`Verify local interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
+                        log(`Verify local interface output from '${interfaces.map(function (_interface) {
+                            return _interface[0];
+                        })}' using contract '${value.contract[1].alias}'`);
                         value = await value.contract[1].$instance(value);
                     }
                 } else
@@ -1993,7 +2111,18 @@ class Processor {
                 }
             } else {
                 if (anchor.interface) {
-                    value.contract = anchor.interface[1].contract || null;
+
+
+
+                    anchor.interface.forEach(function (_interface) {
+                        if (value.contract) {
+                            if (_interface[1].contract !== value.contract) {
+                                throw new Error('Contract mis-match!');
+                            }
+                        } else {
+                            value.contract = _interface[1].contract || null;
+                        }
+                    });
                 }
             }
 
@@ -2013,15 +2142,34 @@ class Processor {
                     }                    
                     response = await component.$wrappedInvoke(anchor.pointer, value);
                 } else
-                if (
-                    anchor.interface &&
-                    anchor.interface[1].contract &&
-                    anchor.interface[1].contract[1].impl.invokeWrapper
-                ) {
-                    if (!component.$wrappedInvoke) {
-                        component.$wrappedInvoke = await (anchor.interface[1].contract[1].impl.invokeWrapper(component)).call(null, anchor.interface[1].contract[0]);
-                    }
-                    response = await component.$wrappedInvoke(anchor.pointer, value);
+                if (anchor.interface) {
+
+
+
+                    await Promise.mapSeries(anchor.interface, async function (_interface, i) {
+
+
+
+                        component.$wrappedInvoke = component.$wrappedInvoke || [];
+                        if (
+                            _interface[1].contract &&
+                            _interface[1].contract[1].impl.invokeWrapper
+                        ) {
+
+                            if (!component.$wrappedInvoke[i]) {
+                                component.$wrappedInvoke[i] = await (
+                                    _interface[1].contract[1].impl.invokeWrapper(component)
+                                ).call(null, _interface[1].contract[0]);
+                            }
+
+
+                            response = await component.$wrappedInvoke[i](anchor.pointer, response || value);
+
+
+
+                        }
+                    });
+
                 }
 
                 if (typeof response === "undefined") {
@@ -2033,7 +2181,11 @@ class Processor {
                     response = await component.invoke(anchor.pointer, value);
                 }
 
-                self.namespace.apis[anchor.alias] = response;
+                if (typeof response === "object") {
+                    self.namespace.apis[anchor.alias] = LODASH_MERGE(self.namespace.apis[anchor.alias] || {}, response);
+                } else {
+                    self.namespace.apis[anchor.alias] = response;
+                }
 
                 return response;
 
