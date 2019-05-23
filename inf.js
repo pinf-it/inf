@@ -144,7 +144,7 @@ class INF {
             filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
         }
 
-        let path = PATH.join(self.baseDir, filepath);
+        let path = PATH.resolve(self.baseDir, filepath);
         let exists = await FS.existsAsync(path);
 
         if (!exists) {
@@ -165,7 +165,7 @@ class INF {
             filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
         }
 
-        filepath = PATH.join(self.baseDir, filepath);
+        filepath = PATH.resolve(self.baseDir, filepath);
         const baseDir = PATH.dirname(filepath);
         filepath = PATH.basename(filepath);
 
@@ -179,9 +179,9 @@ class INF {
         self.processor = new Processor(self.namespace);
 
         if (filepath) {
-            self.namespace.pathStack.push(PATH.join(baseDir, filepath));
+            self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
             if (self.referringNamespace) {
-                self.referringNamespace.pathStack.push(PATH.join(baseDir, filepath));
+                self.referringNamespace.pathStack.push(PATH.resolve(baseDir, filepath));
             }
         }
 
@@ -747,6 +747,11 @@ require.memoize("/main.js", function (require, exports, module) {
             let inf = new INF(PATH.dirname(path), null, opts);
 
             return inf.runInstructionsFile(PATH.basename(path));
+        }
+
+        self.load = async function (filepath) {
+            let path = PATH.resolve(namespace.baseDir || "", filepath);
+            return namespace.inf.runInstructionsFile(path);
         }
 
         self.wrapValue = function (value) {
