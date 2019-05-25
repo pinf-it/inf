@@ -47,6 +47,7 @@ const LODASH_MERGE = require("lodash/merge");
 const LODASH_TO_PATH = require("lodash/toPath");
 const LIB_JSON = require("lib.json");
 const MEMORYSTREAM = require("memorystream");
+const RESOLVE = require("resolve");
 
 
 // ####################################################################################################
@@ -593,7 +594,8 @@ const LIB = {
     CODEBLOCK: CODEBLOCK,
     CRYPTO: CRYPTO,
     INF: exports,
-    MEMORYSTREAM: MEMORYSTREAM
+    MEMORYSTREAM: MEMORYSTREAM,
+    RESOLVE: RESOLVE
 };
 LIB.Promise.defer = function () {
     var deferred = {};
