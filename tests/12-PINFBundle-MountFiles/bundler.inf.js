@@ -3,7 +3,7 @@
 
 exports.inf = async function (inf) {
 
-    const PINF = require("pinf-loader-js");
+    const PINF_LOADER = require("pinf-loader-js");
 
     var fs = {};
 
@@ -54,6 +54,7 @@ ${value.toString()}
                 await inf.LIB.FS.writeFileAsync(inf.LIB.PATH.join(__dirname, ".~bundle.js"), bundle, "utf8");
 
                 return new Promise(function (resolve, reject) {
+                    const PINF = PINF_LOADER.Loader();
                     PINF.sandbox("", {
                         load: function (uri, loadedCallback) {
                             try {
