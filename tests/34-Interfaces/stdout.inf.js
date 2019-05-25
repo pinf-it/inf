@@ -12,10 +12,11 @@ exports.inf = async function (inf) {
             if (pointer === "out") {
 
                 let val = value.value;
+
                 if (typeof val === "function") {
                     val = (await val()).value;
                 }
-                
+
                 lastMessage = val.messages[val.messages.length-1];
 
                 process.stdout.write(val.messages.join("\n") + "\n");
@@ -23,6 +24,10 @@ exports.inf = async function (inf) {
                 return true;
             } else
             if (pointer === "getlast") {
+
+                if (lastMessage === null) {
+                    throw new Error("'lastMessage' has not yet been set!");
+                }
 
                 return lastMessage;
             }

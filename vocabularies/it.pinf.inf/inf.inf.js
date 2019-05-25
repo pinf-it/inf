@@ -52,6 +52,22 @@ exports.inf = async function (inf) {
 
                 return true;
             } else
+            if (pointer === "stderr") {
+
+                if (typeof value.value === "function") {
+                    value = await value.value();
+                }
+
+                if (value.value instanceof Buffer) {
+                    value = value.value.toString();
+                } else {
+                    value = value.toString();
+                }
+
+                process.stderr.write(value + "\n");
+
+                return true;
+            } else
             if (/^\//.test(pointer)) {
 
                 let path = inf.LIB.PATH.join(inf.rootDir, pointer);
