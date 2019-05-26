@@ -3,5 +3,9 @@
 inf {
     "runner #": "./runner.",
 
-    "runner # run": "../01-RunFile/"
+    "runner # runSandboxed": "../01-RunFile/",
+    "runner # runSandboxed": "../01-RunFile/",
+
+    "runner # runInline": "../01-RunFile/",
+    "runner # runInline": "../01-RunFile/"
 }
