@@ -750,6 +750,11 @@ require.memoize("/main.js", function (require, exports, module) {
         }
 
         self.load = async function (filepath) {
+
+            if (/\{/.test(filepath)) {
+                return namespace.inf.runInstructions(filepath);
+            }
+
             let path = PATH.resolve(namespace.baseDir || "", filepath);
             return namespace.inf.runInstructionsFile(path);
         }
