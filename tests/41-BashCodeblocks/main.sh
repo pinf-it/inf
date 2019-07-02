@@ -13,7 +13,7 @@ inf {
 
     "# echo +2a": "-- 1 --",
 
-    "# run +1b": (bash.progress (VARS) >>>
+    "# run +1b": (bash.progress () >>>
 
         echo "progress ..."
 
@@ -41,7 +41,18 @@ inf {
         echo "opts.size: %%%opts.size%%%"
 
     <<<),
-    "# echo +5": "runner2 # run()"
+    "# echo +5": "runner2 # run()",
+
+    "# echo +6": "-- 4 --",
+
+    "# run +7": (bash.progress () >>>
+
+        echo "error message" 1>&2
+
+        exit 1
+    <<<),
+
+    "# echo +8": "THIS SHOULD NEVER SHOW"
 }
 
 echo "OK"

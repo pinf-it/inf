@@ -657,18 +657,32 @@ async function runCodeblock (namespace, value, vars) {
 
         log("Running bash code from codeblock");
 
-        const result = await RUNBASH(codeblock.getCode(), {
-            progress: (codeblock.getFormat() === 'bash.progress') || namespace.options.progress || !!process.env.VERBOSE,
-            wait: true
-        });
+        let result = null;
 
-        if (result.code !== 0) {
-            console.error("code", code);
-            console.error("result", result);
-            throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+        try {
+            result = await RUNBASH(codeblock.getCode(), {
+                progress: (codeblock.getFormat() === 'bash.progress') || namespace.options.progress || !!process.env.VERBOSE,
+                wait: true
+            });
+        } catch (err) {
+            result = err;
         }
+
         if (result.stderr) {
             log('Discarding stderr:', result.stderr);
+        }
+
+        if (codeblock.getFormat() !== 'bash.progress') {
+            if (result.code !== 0) {
+                console.error("code", code);
+                console.error("result", result);
+                throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+            }
+        } else {
+            if (result.code !== 0) {
+                console.error(LIB.COLORS.red('[inf][bash] Ended with exit code: ' + result.code));
+                process.exit(1);
+            }
         }
 
         return result.stdout;
