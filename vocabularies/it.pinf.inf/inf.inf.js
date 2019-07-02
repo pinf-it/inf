@@ -36,6 +36,14 @@ exports.inf = async function (inf) {
                 });
 
             } else
+            if (pointer === "run") {
+
+                if (typeof value.value === "function") {
+                    value = await value.value();
+                }
+
+                return true;
+            } else
             if (pointer === "echo") {
 
                 if (typeof value.value === "function") {

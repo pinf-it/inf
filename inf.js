@@ -639,6 +639,7 @@ async function runCodeblock (namespace, value, vars) {
 
     if (
         codeblock.getFormat() === 'bash' ||
+        codeblock.getFormat() === 'bash.progress' ||
         codeblock.getFormat() === 'bash.method'
     ) {
 
@@ -657,7 +658,7 @@ async function runCodeblock (namespace, value, vars) {
         log("Running bash code from codeblock");
 
         const result = await RUNBASH(codeblock.getCode(), {
-            progress: namespace.options.progress || !!process.env.VERBOSE,
+            progress: (codeblock.getFormat() === 'bash.progress') || namespace.options.progress || !!process.env.VERBOSE,
             wait: true
         });
 
@@ -1842,6 +1843,9 @@ class Processor {
         // Run various codeblocks if applicable.
         if (value instanceof CodeblockNode) {
             if (value.getFormat() === 'bash') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'bash.progress') {
                 value.value = await runCodeblock(self.namespace, value.value);
             }
             // NOTE: To cause a bash codeblock to run on invocation vs when parsing instructions
