@@ -1658,7 +1658,6 @@ class Processor {
                 referenceMatch &&
                 !/_#_/.test(referenceMatch[0])
             ) {
-
                 let referenceValue = value;
                 if (!topLevel) {
                     referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
@@ -1697,6 +1696,10 @@ class Processor {
 
         if (value instanceof InfNode) {
             // An InfNode is not a reference.
+            return value;
+        } else
+        if (value instanceof CodeblockNode) {
+            // A CodeblockNode never contains sub-references.
             return value;
         } else
         if (typeof value.value === "string") {

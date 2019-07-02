@@ -1,0 +1,16 @@
+#!/usr/bin/env inf
+{
+    "# echo +1": "-- 1 --",
+
+    "runner1 #": "./runner1.",
+    "runner1 # setImplementation()": (bash.method () >>>
+
+        # Comment that should be ignored
+
+        echo "#channel-name" "Message"
+
+    <<<),
+    "# echo +2": "runner1 # run()",
+
+    "# echo +3": "-- 2 --"
+}

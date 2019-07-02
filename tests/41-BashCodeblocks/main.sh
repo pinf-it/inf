@@ -15,6 +15,8 @@ inf {
 
     "# run +1b": (bash.progress () >>>
 
+        # Comment that should be ignored
+
         echo "progress ..."
 
     <<<),
@@ -54,5 +56,7 @@ inf {
 
     "# echo +8": "THIS SHOULD NEVER SHOW"
 }
+
+inf ./inf.json || true
 
 echo "OK"

@@ -15,6 +15,8 @@ inf {
 
     "# run +1b": (bash.progress () >>>
 
+        # Comment that should be ignored
+
         echo "progress ..."
 
     <<<),
@@ -55,19 +57,25 @@ inf {
     "# echo +8": "THIS SHOULD NEVER SHOW"
 }
 
+inf ./inf.json || true
+
 echo "OK"
 
 -- 1 --
 progress ...
 -- 2 --
 main.sh
-opts.size: 1013
+opts.size: 1079
 
 -- 3 --
 main.sh
-opts.size: 1013
+opts.size: 1079
 
 -- 4 --
 error message
 [31m[inf][bash] Ended with exit code: 1[39m
+-- 1 --
+#channel-name Message
+
+-- 2 --
 OK
