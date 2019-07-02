@@ -751,6 +751,11 @@ require.memoize("/main.js", function (require, exports, module) {
         }
 
         self.load = async function (filepath) {
+
+            if (/\{/.test(filepath)) {
+                return namespace.inf.runInstructions(filepath);
+            }
+
             let path = PATH.resolve(namespace.baseDir || "", filepath);
             return namespace.inf.runInstructionsFile(path);
         }
@@ -1644,6 +1649,7 @@ class Processor {
                 if (!topLevel) {
                     referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
                 }
+                referenceValue.propertyPathMount = _value.propertyPathMount || [];
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias);
 
@@ -1695,8 +1701,10 @@ class Processor {
                     /^([^#]*?)\s*#\s*(.+?)$/.test(obj)
                 ) {
                     wrappedValuesIndex++;
+
                     wrappedValues[wrappedValuesIndex] = wrapValue({
-                        value: obj
+                        value: obj,
+                        propertyPathMount: this.path
                     });
                     this.update(`___WRAPPED_VALUE_${wrappedValuesIndex}___`, true);
                 }
@@ -1929,14 +1937,14 @@ class Processor {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
                     _value.contract = value.interface[1].contract || null;
                     const _interface = value.interface;
-                    _value = await _interface[1].$instance(_value);
+                    _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     if (typeof _value === "undefined") {
                         throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                     }
                     if (_value.contract) {
                         // Verify output of interface via contract
                         log(`Verify local interface output from '${_interface[0]}' using contract '${_value.contract[1].alias}'`);
-                        _value = await _value.contract[1].$instance(_value);
+                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     }
                 }               
 
@@ -1944,14 +1952,14 @@ class Processor {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
                     _value.contract = anchor.interface[1].contract || null;
                     const _interface = anchor.interface;
-                    _value = await _interface[1].$instance(_value);
+                    _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     if (typeof _value === "undefined") {
                         throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                     }
                     if (_value.contract) {
                         // Verify output of interface via contract
                         log(`Verify local interface output from '${_interface[0]}' using contract '${_value.contract[1].alias}'`);
-                        _value = await _value.contract[1].$instance(_value);
+                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     }
                 }
 
@@ -1964,14 +1972,14 @@ class Processor {
                     value.contract = value.interface[1].contract || null;
                     const _interface = value.interface;
                     delete value.interface;
-                    value = await _interface[1].$instance(value);
+                    value = await _interface[1].$instance(value, anchor.pointer);
                     if (typeof value === "undefined") {
                         throw new Error(`Value is undefined after processing by remove interface '${_interface[0]}'!`);
                     }
                     if (value.contract) {
                         // Verify output of interface via contract
                         log(`Verify remote interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value);
+                        value = await value.contract[1].$instance(value, anchor.pointer);
                     }
                 }
 
@@ -1980,21 +1988,21 @@ class Processor {
                     value.contract = anchor.interface[1].contract || null;
                     const _interface = anchor.interface;
                     delete anchor.interface;
-                    value = await _interface[1].$instance(value);
+                    value = await _interface[1].$instance(value, anchor.pointer);
                     if (typeof value === "undefined") {
                         throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                     }
                     if (value.contract) {
                         // Verify output of interface via contract
                         log(`Verify local interface output from '${_interface[0]}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value);
+                        value = await value.contract[1].$instance(value, anchor.pointer);
                     }
                 } else
                 if (anchor.contract) {
                     // Verify value via contract
                     log(`Verify value using contract '${anchor.contract[1].alias}'`);
 
-                    value = await anchor.contract[1].$instance(value);
+                    value = await anchor.contract[1].$instance(value, anchor.pointer);
                 }
 
                 if (anchor.contract) {
