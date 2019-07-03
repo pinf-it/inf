@@ -9,7 +9,15 @@ exports.inf = async function (INF) {
 
         setImplementation: function (codeblock) {
             impl = async function (vars) {
-                return INF.runCodeblock(codeblock, vars);
+                if (
+                    codeblock['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock' &&
+                    codeblock.impl &&
+                    codeblock.impl['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+                ) {
+                    return INF.runCodeblock(codeblock.impl, vars);
+                } else {
+                    return INF.runCodeblock(codeblock, vars);
+                }
             };
         },
 

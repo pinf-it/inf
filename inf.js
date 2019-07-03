@@ -1714,11 +1714,18 @@ class Processor {
 
             TRAVERSE(value.value).forEach(function (obj) {
                 if (
+                    this.parent &&
+                    this.parent.node &&
+                    this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+                ) {
+                    // A CodeblockNode never contains sub-references.
+                    return;
+                }
+                if (
                     typeof obj === "string" &&
                     /^([^#]*?)\s*#\s*(.+?)$/.test(obj)
                 ) {
                     wrappedValuesIndex++;
-
                     wrappedValues[wrappedValuesIndex] = wrapValue({
                         value: obj,
                         propertyPathMount: this.path

@@ -2,7 +2,7 @@
 {
     "# echo +1": "-- 1 --",
 
-    "runner1 #": "./runner1.",
+    "runner1 #": "./runner2.",
     "runner1 # setImplementation()": (bash.method () >>>
 
         # Comment that should be ignored
@@ -12,5 +12,19 @@
     <<<),
     "# echo +2": "runner1 # run()",
 
-    "# echo +3": "-- 2 --"
+    "# echo +3": "-- 2 --",
+
+    "runner2 #": "./runner2.",
+    "runner2 # setImplementation()": {
+        "impl": (bash.method () >>>
+
+            # Comment that should be ignored
+
+            echo "#channel-name" "Message"
+
+        <<<)
+    },
+    "# echo +2": "runner2 # run()",
+
+    "# echo +3": "-- 3 --"
 }
