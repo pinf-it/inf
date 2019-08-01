@@ -647,6 +647,7 @@ async function runCodeblock (namespace, value, vars) {
 
     if (
         codeblock.getFormat() === 'bash' ||
+        codeblock.getFormat() === 'bash.progress' ||
         codeblock.getFormat() === 'bash.method'
     ) {
 
@@ -664,18 +665,32 @@ async function runCodeblock (namespace, value, vars) {
 
         log("Running bash code from codeblock");
 
-        const result = await RUNBASH(codeblock.getCode(), {
-            progress: namespace.options.progress || !!process.env.VERBOSE,
-            wait: true
-        });
+        let result = null;
 
-        if (result.code !== 0) {
-            console.error("code", code);
-            console.error("result", result);
-            throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+        try {
+            result = await RUNBASH(codeblock.getCode(), {
+                progress: (codeblock.getFormat() === 'bash.progress') || namespace.options.progress || !!process.env.VERBOSE,
+                wait: true
+            });
+        } catch (err) {
+            result = err;
         }
+
         if (result.stderr) {
             log('Discarding stderr:', result.stderr);
+        }
+
+        if (codeblock.getFormat() !== 'bash.progress') {
+            if (result.code !== 0) {
+                console.error("code", code);
+                console.error("result", result);
+                throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
+            }
+        } else {
+            if (result.code !== 0) {
+                console.error(LIB.COLORS.red('[inf][bash] Ended with exit code: ' + result.code));
+                process.exit(1);
+            }
         }
 
         return result.stdout;
@@ -758,6 +773,11 @@ require.memoize("/main.js", function (require, exports, module) {
         }
 
         self.load = async function (filepath) {
+
+            if (/\{/.test(filepath)) {
+                return namespace.inf.runInstructions(filepath);
+            }
+
             let path = PATH.resolve(namespace.baseDir || "", filepath);
             return namespace.inf.runInstructionsFile(path);
         }
@@ -1673,11 +1693,11 @@ class Processor {
                 referenceMatch &&
                 !/_#_/.test(referenceMatch[0])
             ) {
-
                 let referenceValue = value;
                 if (!topLevel) {
                     referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
                 }
+                referenceValue.propertyPathMount = _value.propertyPathMount || [];
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias);
 
@@ -1713,6 +1733,10 @@ class Processor {
             // An InfNode is not a reference.
             return value;
         } else
+        if (value instanceof CodeblockNode) {
+            // A CodeblockNode never contains sub-references.
+            return value;
+        } else
         if (typeof value.value === "string") {
 
             value = await wrapValue(value, true);
@@ -1725,12 +1749,21 @@ class Processor {
 
             TRAVERSE(value.value).forEach(function (obj) {
                 if (
+                    this.parent &&
+                    this.parent.node &&
+                    this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+                ) {
+                    // A CodeblockNode never contains sub-references.
+                    return;
+                }
+                if (
                     typeof obj === "string" &&
                     /^([^#]*?)\s*#\s*(.+?)$/.test(obj)
                 ) {
                     wrappedValuesIndex++;
                     wrappedValues[wrappedValuesIndex] = wrapValue({
-                        value: obj
+                        value: obj,
+                        propertyPathMount: this.path
                     });
                     this.update(`___WRAPPED_VALUE_${wrappedValuesIndex}___`, true);
                 }
@@ -1878,6 +1911,9 @@ class Processor {
         if (value instanceof CodeblockNode) {
             if (value.getFormat() === 'bash') {
                 value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'bash.progress') {
+                value.value = await runCodeblock(self.namespace, value.value);
             }
             // NOTE: To cause a bash codeblock to run on invocation vs when parsing instructions
             //       use 'bash.method' for the codeblock format. The invoked method can then
@@ -1964,9 +2000,6 @@ class Processor {
 
                 if (value.interface) {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-
-
-
                     await Promise.mapSeries(value.interface, async function (_interface) {
                         if (_value.contract) {
                             if (_interface[1].contract !== _value.contract) {
@@ -1975,42 +2008,23 @@ class Processor {
                         } else {
                             _value.contract = _interface[1].contract || null;
                         }
-
-
-
-                        _value = await _interface[1].$instance(_value);
-
-
-
+                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                         if (typeof _value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
-
-
                     });
-
-
-
                     if (_value.contract) {
                         // Verify output of interface via contract
                         log(`Verify local interface output from '${value.interface.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${_value.contract[1].alias}'`);
-
-
-
-                        _value = await _value.contract[1].$instance(_value);
+                        
+                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     }
-
-
                 }               
 
                 if (anchor.interface) {
-
-
-                    
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-
                     await Promise.mapSeries(anchor.interface, async function (_interface) {
                         if (_value.contract) {
                             if (_interface[1].contract !== _value.contract) {
@@ -2019,8 +2033,7 @@ class Processor {
                         } else {
                             _value.contract = _interface[1].contract || null;
                         }
-
-                        _value = await _interface[1].$instance(_value);
+                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                         if (typeof _value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2030,11 +2043,9 @@ class Processor {
                         log(`Verify local interface output from '${anchor.interface.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${_value.contract[1].alias}'`);
-                        _value = await _value.contract[1].$instance(_value);
+                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     }
                 }
-
-
 
                 return _value;
             });
@@ -2042,14 +2053,10 @@ class Processor {
             if (!value.wrapped) {
 
                 if (value.interface) {
-
-
-
                     const interfaces = value.interface;
                     delete value.interface;
 
                     await Promise.mapSeries(interfaces, async function (_interface) {
-
                         if (value.contract) {
                             if (_interface[1].contract !== value.contract) {
                                 throw new Error('Contract mis-match!');
@@ -2057,8 +2064,7 @@ class Processor {
                         } else {
                             value.contract = _interface[1].contract || null;
                         }
-
-                        value = await _interface[1].$instance(value);
+                        value = await _interface[1].$instance(value, anchor.pointer);
                         if (typeof value === "undefined") {
                             throw new Error(`Value is undefined after processing by remote interface '${_interface[0]}'!`);
                         }
@@ -2068,21 +2074,16 @@ class Processor {
                         log(`Verify remote interface output from '${interfaces.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value);
+                        value = await value.contract[1].$instance(value, anchor.pointer);
                     }
                 }
 
                 if (anchor.interface) {
-
-
-
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-
                     const interfaces = anchor.interface;
                     delete anchor.interface;
 
                     await Promise.mapSeries(interfaces, async function (_interface) {
-
                         if (value.contract) {
                             if (_interface[1].contract !== value.contract) {
                                 if (_interface[1].contract[1].impl.id != value.contract[1].impl.id) {
@@ -2093,7 +2094,7 @@ class Processor {
                             value.contract = _interface[1].contract || null;
                         }
 
-                        value = await _interface[1].$instance(value);
+                        value = await _interface[1].$instance(value, anchor.pointer);
                         if (typeof value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2103,14 +2104,14 @@ class Processor {
                         log(`Verify local interface output from '${interfaces.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value);
+                        value = await value.contract[1].$instance(value, anchor.pointer);
                     }
                 } else
                 if (anchor.contract) {
                     // Verify value via contract
                     log(`Verify value using contract '${anchor.contract[1].alias}'`);
 
-                    value = await anchor.contract[1].$instance(value);
+                    value = await anchor.contract[1].$instance(value, anchor.pointer);
                 }
 
                 if (anchor.contract) {
@@ -2118,9 +2119,6 @@ class Processor {
                 }
             } else {
                 if (anchor.interface) {
-
-
-
                     anchor.interface.forEach(function (_interface) {
                         if (value.contract) {
                             if (_interface[1].contract !== value.contract) {
@@ -2150,33 +2148,20 @@ class Processor {
                     response = await component.$wrappedInvoke(anchor.pointer, value);
                 } else
                 if (anchor.interface) {
-
-
-
                     await Promise.mapSeries(anchor.interface, async function (_interface, i) {
-
-
-
                         component.$wrappedInvoke = component.$wrappedInvoke || [];
                         if (
                             _interface[1].contract &&
                             _interface[1].contract[1].impl.invokeWrapper
                         ) {
-
                             if (!component.$wrappedInvoke[i]) {
                                 component.$wrappedInvoke[i] = await (
                                     _interface[1].contract[1].impl.invokeWrapper(component)
                                 ).call(null, _interface[1].contract[0]);
                             }
-
-
                             response = await component.$wrappedInvoke[i](anchor.pointer, response || value);
-
-
-
                         }
                     });
-
                 }
 
                 if (typeof response === "undefined") {
