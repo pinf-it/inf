@@ -17,7 +17,7 @@
     "jsonrep": "^0.1.0-pre.1",
     "puppeteer": "^1.9.0",
     "uglify-js": "^3.4.9",
-    "bash.origin.test": "^0.2.0-pre.1"
+    "bash.origin.test": "^0.2.0-pre.2"
   },
   "dependencies": {
     "bluebird": "^3.5.2",
@@ -33,7 +33,7 @@
     "pinf-loader-js": "^1.0.3",
     "runbash": "^0.0.9",
     "traverse": "^0.6.6",
-    "lib.json": "^0.0.3",
+    "lib.json": "^0.0.4",
     "memorystream": "^0.3.1",
     "resolve": "^1.10.0"
   }
