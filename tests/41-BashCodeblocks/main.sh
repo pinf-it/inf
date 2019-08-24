@@ -55,7 +55,7 @@ inf {
     <<<),
 
     "# echo +8": "THIS SHOULD NEVER SHOW"
-}
+} || true
 
 inf ./inf.json || true
 

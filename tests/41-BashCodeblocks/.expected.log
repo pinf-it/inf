@@ -55,7 +55,7 @@ inf {
     <<<),
 
     "# echo +8": "THIS SHOULD NEVER SHOW"
-}
+} || true
 
 inf ./inf.json || true
 
@@ -65,11 +65,11 @@ echo "OK"
 progress ...
 -- 2 --
 main.sh
-opts.size: 1079
+opts.size: 1087
 
 -- 3 --
 main.sh
-opts.size: 1079
+opts.size: 1087
 
 -- 4 --
 error message
