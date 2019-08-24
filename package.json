@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "pm": "npm",
   "bin": {
     "inf": "inf.js"
@@ -14,10 +14,10 @@
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-latest": "^6.24.1",
     "browserify": "^16.2.3",
-    "jsonrep": "^0.1.0-pre.0",
+    "jsonrep": "^0.1.0-pre.1",
     "puppeteer": "^1.9.0",
     "uglify-js": "^3.4.9",
-    "bash.origin.test": "^0.2.0-pre.0"
+    "bash.origin.test": "^0.2.0-pre.1"
   },
   "dependencies": {
     "bluebird": "^3.5.2",
