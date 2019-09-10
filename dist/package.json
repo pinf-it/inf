@@ -1,0 +1,9 @@
+{
+  "name": "@pinf-it/inf-dist",
+  "version": "0.1.26",
+  "pm": "npm",
+  "bin": {
+    "inf": "node inf"
+  },
+  "main": "inf"
+}
