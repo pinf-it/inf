@@ -8,6 +8,15 @@ exports.inf = async function (INF) {
     return {
 
         set: function (name, value) {
+            if (
+                typeof value === 'object' &&
+                value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+            ) {
+                const origValue = value;
+                value = async function () {
+                    return INF.runCodeblock(origValue, {});
+                };
+            }
             vars[name] = value;
         },
 

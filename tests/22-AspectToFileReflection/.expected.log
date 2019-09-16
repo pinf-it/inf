@@ -316,13 +316,13 @@ exports.inf = async function (inf) {
 
 ```
 
-## /.~inf.json~infi.log (size: 122 bytes)
+## /.~inf.json~infi.log (size: 248 bytes)
 
 ```javascript
-bundle ##	"it.pinf.inf/plugins/node-aspect-utils."
-bundle ##	"./reflector."
-bundle #	"./bundle."
-bundle # reflect	"expand"
+bundle ##	"it.pinf.inf/plugins/node-aspect-utils."	{"line":2,"column":7,"pos":18}
+bundle ##	"./reflector."	{"line":3,"column":7,"pos":77}
+bundle #	"./bundle."	{"line":5,"column":7,"pos":110}
+bundle # reflect	"expand"	{"line":7,"column":7,"pos":148}
 ```
 
 ## /ui.js (size: 26 bytes)

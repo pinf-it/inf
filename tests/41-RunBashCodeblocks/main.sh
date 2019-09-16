@@ -1,11 +1,13 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
+    "# echo +1": "-- 0 --",
+
     "vars #": "./vars.",
-    "vars # set() filename": "main.sh",
+    "vars # set() filename": "text.txt",
     "VARS $": "vars # vars()",
 
-    "# echo +1a": (bash (VARS) >>>
+    "# echo +1a": (run.bash (VARS) >>>
 
         cat %%%VARS.filename%%%
 
@@ -13,7 +15,7 @@ inf {
 
     "# echo +2a": "-- 1 --",
 
-    "# run +1b": (bash.progress () >>>
+    "# run +1b": (run.bash.progress () >>>
 
         # Comment that should be ignored
 
@@ -24,7 +26,7 @@ inf {
     "# echo +2b": "-- 2 --",
 
     "runner1 #": "./runner1.",
-    "runner1 # setImplementation()": (bash.method (VARS, opts) >>>
+    "runner1 # setImplementation()": (run.bash.method (VARS, opts) >>>
 
         ls %%%VARS.filename%%%
 
@@ -36,7 +38,7 @@ inf {
     "# echo +4": "-- 3 --",
 
     "runner2 #": "./runner2.",
-    "runner2 # setImplementation()": (bash.method (VARS, opts) >>>
+    "runner2 # setImplementation()": (run.bash.method (VARS, opts) >>>
 
         ls %%%VARS.filename%%%
 
@@ -47,7 +49,7 @@ inf {
 
     "# echo +6": "-- 4 --",
 
-    "# run +7": (bash.progress () >>>
+    "# run +7": (run.bash.progress () >>>
 
         echo "error message" 1>&2
 
@@ -57,6 +59,6 @@ inf {
     "# echo +8": "THIS SHOULD NEVER SHOW"
 } || true
 
-inf ./inf.json || true
+inf ./inf.json
 
 echo "OK"

@@ -40,6 +40,30 @@ inf {
     "ns @ stdout # :pattern.stream2: out +5": "messenger # queue"
 }
 
+echo "---"
+
+inf {
+    "stdout #": "./stdout.",
+    "<Message>": "./message.",
+    "<Message1>": "./message.",
+    "<Message2>": "./message.",
+    "<Message3>": "./message.",
+    ":transform.uppercase: <Message>": "./uppercase.",
+
+    "message #": "./message.",
+
+    "# echo + 1": ":transform.uppercase: message # getTestMessage()",
+    "# echo + 2": ":transform.uppercase: <Message> message # getTestMessage()",
+    "# echo + 3": "<Message> Hello World",
+
+    "stdout # dump": {
+        "<Message>": "Hello World",
+        "<Message1>": ":transform.uppercase: hello world",
+        "<Message2>": "message # getTestMessage()",
+        "<Message3>": ":transform.uppercase: message # getTestMessage()"
+    }
+}
+
 exit 0
 # Will throw "Undeclared Protocol Error"
 inf {

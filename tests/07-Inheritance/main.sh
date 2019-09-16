@@ -27,8 +27,8 @@ inf {
 echo "---"
 
 # Inherit from multiple
+# Glob paths
 # Skip identical
-
 inf {
     "#": [
         "../06-MapAliasToComponent/",
@@ -37,6 +37,39 @@ inf {
         "./link.",
         "./li*.",
         "./"
+    ],
+
+    "stdout # echo": "ok",
+    "ourecho # echo": "ok",
+
+    "# echo": "OK"
+}
+
+echo "---"
+
+# Inherit if file exists
+inf {
+    "#": [
+        "../06-MapAliasToComponent/",
+        "!./_does_not_exist.",
+        "./"
+    ],
+
+    "stdout # echo": "ok",
+    "ourecho # echo": "ok",
+
+    "# echo": "OK"
+}
+
+echo "---"
+
+# Inherit from empty
+inf {
+    "#": [
+        "../06-MapAliasToComponent/",
+        "./empty1.",
+        "./",
+        "./empty2."
     ],
 
     "stdout # echo": "ok",

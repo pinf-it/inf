@@ -1,0 +1,8 @@
+#!/usr/bin/env inf
+{
+    "inf #": "../inf.",
+
+    "npm #": "./npm.",
+
+    "inf # on.turn": "npm # test"    
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 echo ">>>TEST_IGNORE_LINE:^\s+at\s+<<<"
+echo ">>>TEST_IGNORE_LINE:Error: Pointer<<<"
 
 set -e
 

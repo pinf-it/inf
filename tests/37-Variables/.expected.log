@@ -3,3 +3,65 @@ Hello World
 Hello World
 ---
 Hello World
+---
+Pattern: <FILE>
+TeStLoCaLiZeD/0b3851e
+Pattern: <FILEPATH>
+TeStLoCaLiZeD/0b3851e
+Pattern: <DIRNAME>/<FILENAME>
+TeStLoCaLiZeD/0b3851e
+Pattern: <DIRPATH>/<BASENAME>
+TeStLoCaLiZeD/0b3851e
+Pattern: <DIRNAME>/<FILENAME_STEM>.<FILENAME_EXTENSION>
+TeStLoCaLiZeD/0b3851e.
+Pattern: <DIRNAME>/<FILENAME_STEM><FILENAME_SUFFIX>
+TeStLoCaLiZeD/0b3851e
+Pattern: <DIR_PARENT_PATH>/<DIR_BASENAME>/<FILENAME>
+TeStLoCaLiZeD/0b3851e
+Pattern: <BASEDIR>/<RELPATH>
+TeStLoCaLiZeD/0b3851e
+---
+in sub
+---
+Hello World
+---
+Hello World
+---
+Pattern: <FILE>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <FILEPATH>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <DIRNAME>/<FILENAME>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <DIRPATH>/<BASENAME>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <DIRNAME>/<FILENAME_STEM>.<FILENAME_EXTENSION>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <DIRNAME>/<FILENAME_STEM><FILENAME_SUFFIX>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <DIR_PARENT_PATH>/<DIR_BASENAME>/<FILENAME>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+Pattern: <BASEDIR>/<RELPATH>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+---
+:<FILE> TeStLoCaLiZeD/sub1/sub2/inf.json
+:<FILEPATH> TeStLoCaLiZeD/sub1/sub2/inf.json
+:<FILENAME> inf.json
+:<BASENAME> inf.json
+:<DIRNAME> TeStLoCaLiZeD/sub1/sub2
+:<DIRPATH> TeStLoCaLiZeD/sub1/sub2
+:<FILENAME_STEM> inf
+:<FILENAME_EXTENSION> json
+:<FILENAME_SUFFIX> .json
+:<DIR_PARENT_PATH> TeStLoCaLiZeD/sub1
+:<DIR_BASENAME> sub2
+:<BASEDIR> TeStLoCaLiZeD
+:<RELPATH> sub1/sub2/inf.json
+---
+Ignored variable: ${__FILE__}
+Ignored variable: ${__BASENAME__}
+---
+Hello from sub1
+---
+After sub '__FILE__': TeStLoCaLiZeD/0b3851e
+Ignored variable: ${__FILE__}

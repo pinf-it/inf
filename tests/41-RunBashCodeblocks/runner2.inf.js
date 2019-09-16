@@ -8,6 +8,7 @@ exports.inf = async function (INF) {
     return {
 
         setImplementation: function (codeblock) {
+
             impl = async function (vars) {
                 if (
                     codeblock['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock' &&
@@ -22,6 +23,7 @@ exports.inf = async function (INF) {
         },
 
         run: async function () {
+
             return await impl({
                 opts: {
                     size: INF.LIB.FS.statSync('main.sh').size

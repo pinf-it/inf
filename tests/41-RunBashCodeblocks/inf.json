@@ -1,22 +1,22 @@
 #!/usr/bin/env inf
 {
-    "# echo +1": "-- 1 --",
+    "# echo": "-- s1 --",
 
     "runner1 #": "./runner2.",
-    "runner1 # setImplementation()": (bash.method () >>>
+    "runner1 # setImplementation()": (run.bash.method () >>>
 
         # Comment that should be ignored
 
         echo "#channel-name" "Message"
 
     <<<),
-    "# echo +2": "runner1 # run()",
+    "# echo": "runner1 # run()",
 
-    "# echo +3": "-- 2 --",
+    "# echo": "-- s2 --",
 
     "runner2 #": "./runner2.",
     "runner2 # setImplementation()": {
-        "impl": (bash.method () >>>
+        "impl": (run.bash.method () >>>
 
             # Comment that should be ignored
 
@@ -24,7 +24,7 @@
 
         <<<)
     },
-    "# echo +2": "runner2 # run()",
+    "# echo": "runner2 # run()",
 
-    "# echo +3": "-- 3 --"
+    "# echo": "-- s3 --"
 }

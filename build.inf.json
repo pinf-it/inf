@@ -1,0 +1,57 @@
+#!/usr/bin/env inf
+{
+    "#": "it.pinf.inf/bo/",
+
+    "bundle # set() targetBasePath": "dist",
+    
+    "# echo": "\nBundling inf.js ...\n",
+
+    "bundle # nodejs-script": "inf.js",
+
+    "# run": (run.javascript.progress () >>>
+        const FS = require('fs-extra');
+
+        // Copy dependencies
+        FS.copySync('vocabularies', 'dist/vocabularies');
+
+        // Sync version
+        const sourceDescriptor = FS.readJSONSync('package.json');
+        const targetDescriptor = FS.readJSONSync('dist/package.json');
+        targetDescriptor.version = sourceDescriptor.version;
+        FS.writeFileSync('dist/package.json', JSON.stringify(targetDescriptor, null, 2), 'utf8');
+
+        // Set permissions
+        FS.chmodSync('dist/inf.bundle.es5.js', '0775');
+        FS.chmodSync('dist/inf.bundle.es5.min.js', '0775');
+        FS.chmodSync('dist/inf.bundle.js', '0775');
+    <<<),
+
+    "# echo": "Testing bundled inf.js ...",
+
+    "# run": (run.bash.progress () >>>
+
+        echo -e "\n=> dist/inf.bundle.js\n"
+        dist/inf.bundle.js dist/test.inf.json
+
+        echo -e "\n=> dist/inf.bundle.es5.js\n"
+        dist/inf.bundle.es5.js dist/test.inf.json
+
+        echo -e "\n=> dist/inf.bundle.es5.min.js\n"
+        dist/inf.bundle.es5.min.js dist/test.inf.json
+
+        echo -e "\nFile sizes:\n"
+
+        # Compress to see what the distribution size will be
+        gzip -c dist/inf.bundle.es5.js > dist/inf.bundle.es5.js.gz
+
+        #if ! has nexe; then
+        #    npm install nexe
+        #fi
+        # nexe dist/inf.bundle.es5.min.js
+
+        ls -l dist/*.js dist/*.gz
+    <<<),
+
+    "# echo": "\nBuild ready in 'dist/'",
+    "# echo": "OK"
+}

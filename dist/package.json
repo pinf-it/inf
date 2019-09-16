@@ -1,9 +1,10 @@
 {
   "name": "@pinf-it/inf-dist",
-  "version": "0.1.26",
+  "version": "0.1.28",
+  "access": "public",
   "pm": "npm",
   "bin": {
-    "inf": "node inf"
+    "inf": "inf.bundle.es5.min.js"
   },
-  "main": "inf"
+  "main": "inf.bundle.es5.min.js"
 }

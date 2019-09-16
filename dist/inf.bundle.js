@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 module.exports = function(Promise) {
@@ -5770,16 +5771,16 @@ function makeLIBFor (doc, baseDir, parentLib) {
     return LIB;
 }
 
-exports.forBaseDir = function (baseDir) {
+exports.forBaseDir = function (baseDir, options) {
     const baseDirs = [];
     const parts = baseDir.split('/')
     for (let i=parts.length; i > 1; i--) {
         baseDirs.push(parts.slice(0, i).join('/'));
     }
-    return exports.forBaseDirs(baseDirs);
+    return exports.forBaseDirs(baseDirs, options);
 }
 
-exports.forBaseDirs = function (baseDirs) {
+exports.forBaseDirs = function (baseDirs, options) {
     const basePaths = [];
     baseDirs.forEach(function (baseDir) {
         const parts = baseDir.split('/')
@@ -5787,10 +5788,11 @@ exports.forBaseDirs = function (baseDirs) {
             basePaths.push(parts.slice(0, i).join('/'));
         }
     });
-    return exports.forBasePaths(basePaths);
+    return exports.forBasePaths(basePaths, options);
 }
 
-exports.forBasePaths = function (basePaths) {
+exports.forBasePaths = function (basePaths, options) {
+    options = options || {};
     const paths = [];
     basePaths.forEach(function (path) {
         paths.push(PATH.join(path, '.~lib.json'));
@@ -5807,7 +5809,10 @@ exports.forBasePaths = function (basePaths) {
         }
     }
     if (!parentLib) {
-        throw new Error(`Cannot locate '[.~]lib.json' for basePaths '${basePaths.join(', ')}'!`);
+        if (options.throwOnNoConfigFileFound !== false) {
+            throw new Error(`Cannot locate '[.~]lib.json' for basePaths '${basePaths.join(', ')}'!`);
+        }
+        return {};
     }
     return parentLib;
 }
@@ -15989,6 +15994,11 @@ TODO:
 
 'use strict'
 
+const timers = {};
+if (process.env.INF_ENABLE_TIMERS) {
+    timers.load = Date.now();
+}
+
 const CONSOLE = {};
 Object.keys(console).forEach(function (name) {
     CONSOLE[name] = console[name];
@@ -16056,6 +16066,21 @@ function exitWithError (err) {
     process.exit(1);
 }
 
+
+process.on('exit', function (code) {
+    if (process.env.INF_ENABLE_TIMERS) {
+        timers.end = Date.now();
+
+        console.log('');
+        console.log('[inf] Code load time:', timers.loaded - timers.load, 'ms');
+        console.log('[inf] Init time:', timers.start - timers.loaded, 'ms');
+        console.log('[inf] Run time:', timers.end - timers.start, 'ms');
+        console.log('[inf] Total time:', timers.end - timers.load, 'ms', '(', (timers.end - timers.load) / 1000, 's)');
+        log('Exit (code: ' + code + ')');
+    }
+});
+
+
 setImmediate(function () {
     if (
         // If running after being browserified
@@ -16091,6 +16116,10 @@ setImmediate(function () {
                 // TODO: Implement '--help'
 
                 let inf = new INF(cwd, null, args);
+
+                if (process.env.INF_ENABLE_TIMERS) {
+                    timers.start = Date.now();
+                }
 
                 if (/^\{/.test(filepath)) {
                     await inf.runInstructions(filepath);
@@ -16166,7 +16195,7 @@ class INF {
         if (filepath) {
             self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
             if (self.referringNamespace) {
-                self.referringNamespace.pathStack.push(PATH.resolve(baseDir, filepath));
+                self.referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
             }
         }
 
@@ -16206,7 +16235,15 @@ class INF {
             });
 
             instructionObject = instructionObject.split("\t");
-            return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]));
+
+            if (
+                instructionObject.length === 1 &&
+                instructionObject[0] === ''
+            ) {
+                return;
+            }
+
+            return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
         });
 
         if (self.referringNamespace) {
@@ -16270,7 +16307,9 @@ class Parser {
         // Parse JSON using SAX parser which allows for repeated keys.
         await new Promise(function (resolve, reject) {
             function onInstructionObject (obj) {
-                instructionObjects.push(obj);
+                if (Object.keys(obj).length > 0) {
+                    instructionObjects.push(obj);
+                }
             }
             let parser = CLARINET.parser();
             parser.onerror = function (err) {
@@ -16288,7 +16327,13 @@ class Parser {
             parser.onopenobject = function (key) {
                 if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
                 if (this.depth === 0) {
-                    currentObject = rootObj = {};
+                    currentObject = rootObj = {
+                        ___meta: {
+                            line: this.line,
+                            column: this.column,
+                            pos: this.position
+                        }
+                    };
                 } else {
                     previousObjectStack.push(currentObject);
 
@@ -16316,7 +16361,13 @@ class Parser {
                 if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
                 if (this.depth === 1) {
                     onInstructionObject(rootObj);
-                    currentObject = rootObj = {};
+                    currentObject = rootObj = {
+                        ___meta: {
+                            line: this.line,
+                            column: this.column,
+                            pos: this.position
+                        }
+                    };
                 }
                 currentKey = key;
             };
@@ -16346,11 +16397,22 @@ class Parser {
         });
 
         instructionObjects = instructionObjects.map(function (instructionObject) {
+            if (
+                Object.keys(instructionObject).length === 1 &&
+                typeof instructionObject.___meta !== "undefined"
+            ) {
+                return null;
+            }
+            let meta = instructionObject.___meta || null;
+            delete instructionObject.___meta;
             let key = Object.keys(instructionObject)[0];
             return [
                 key,
-                JSON.stringify(instructionObject[key])
+                JSON.stringify(instructionObject[key]),
+                JSON.stringify(meta)
             ].join("\t");
+        }).filter(function (line) {
+            return (line !== null);
         });
 
         if (self.infiFilepath) {
@@ -16586,6 +16648,7 @@ LIB.Promise.defer = function () {
     });
     return deferred;
 }
+
 Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.VERBOSE; } });
 Object.defineProperty(LIB, 'UTIL', { get: function() { return require("util"); } });
 Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
@@ -16619,7 +16682,7 @@ exports.LIB = LIB;
 
 async function runCodeblock (namespace, value, vars) {
     vars = vars || {};
-
+    
     if (value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock') {
         throw new Error("'value' is not a codeblock!");
     }
@@ -16627,9 +16690,9 @@ async function runCodeblock (namespace, value, vars) {
     let codeblock = CODEBLOCK.thawFromJSON(value);
 
     if (
-        codeblock.getFormat() === 'bash' ||
-        codeblock.getFormat() === 'bash.progress' ||
-        codeblock.getFormat() === 'bash.method'
+        codeblock.getFormat() === 'run.bash' ||
+        codeblock.getFormat() === 'run.bash.progress' ||
+        codeblock.getFormat() === 'run.bash.method'
     ) {
 
         await Promise.map(codeblock._args, async function (name) {
@@ -16650,7 +16713,11 @@ async function runCodeblock (namespace, value, vars) {
 
         try {
             result = await RUNBASH(codeblock.getCode(), {
-                progress: (codeblock.getFormat() === 'bash.progress') || namespace.options.progress || !!process.env.VERBOSE,
+                progress: (
+                    codeblock.getFormat() === 'run.bash.progress' ||
+                    namespace.options.progress ||
+                    !!process.env.VERBOSE
+                ),
                 wait: true
             });
         } catch (err) {
@@ -16658,24 +16725,101 @@ async function runCodeblock (namespace, value, vars) {
         }
 
         if (result.stderr) {
-            log('Discarding stderr:', result.stderr);
+            process.stderr.write(LIB.COLORS.red(result.stderr.toString()));
+            //log('Discarding stderr:', result.stderr);
         }
 
-        if (codeblock.getFormat() !== 'bash.progress') {
+        if (codeblock.getFormat() !== 'run.bash.progress') {
             if (result.code !== 0) {
-                console.error("code", code);
-                console.error("result", result);
+                console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
                 throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
             }
         } else {
             if (result.code !== 0) {
-                console.error(LIB.COLORS.red('[inf][bash] Ended with exit code: ' + result.code));
+                console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
+                console.error(LIB.COLORS.red('[inf][run.bash] Ended with exit code: ' + result.code));
                 process.exit(1);
             }
         }
 
         return result.stdout;
+    } else
+    if (
+        codeblock.getFormat() === 'run.javascript' ||
+        codeblock.getFormat() === 'run.javascript.progress' ||
+        codeblock.getFormat() === 'run.javascript.method'
+    ) {
 
+        await Promise.map(codeblock._args, async function (name) {
+            if (typeof vars[name] === 'undefined') {
+                vars[name] = await namespace.getValueForVariablePath([name]);
+            }
+        });
+
+        codeblock = codeblock.compile(vars);
+
+        let code = codeblock.getCode();
+
+        log("Running javascript code from codeblock");
+
+        async function run (process) {
+            try {
+                let data = null;
+                let origWrite = process.stdout.write;
+                if (codeblock.getFormat() !== 'run.javascript.progress') {
+                    function write (chunk) {
+                        if (typeof chunk === 'string') {
+                            chunk = Buffer.from(chunk);
+                        }
+                        try {
+                            if (data) {
+                                data = Buffer.concat([data, chunk]);
+                            } else {
+                                data = chunk;
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    }
+                    process.stdout.write = write;
+                }
+                const console = CONSOLE;
+                const ___VARS = vars;
+                Object.keys(___VARS).map(function (name) {
+                    code = [
+                        `const ${name} = ___VARS['${name}']`,
+                        code
+                    ].join('\n');
+                });
+                code = [
+                    '___run = async function () {',
+                    code,
+                    '}'
+                ].join('\n');
+                let ___run = null;
+                eval(code);
+                const _data = await ___run();
+                if (codeblock.getFormat() !== 'run.javascript.progress') {
+                    process.stdout.write = origWrite;
+                }
+                log("Done running javascript code from codeblock");
+                if (typeof _data !== 'undefined') {
+                    if (data) {
+                        process.stdout.write(data.toString());
+                    }
+                    return _data;
+                } else {
+                    return data;
+                }
+            } catch (err) {
+                console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
+                // TODO: Show proper stack trace for anonymous eval functon.
+                console.error(LIB.COLORS.red('[inf][run.javascript] Ended with error: ' + err.message));
+                process.exit(1);
+            }
+        }
+
+        return run(process);
     } else {
         throw new Error(`Unsupported codeblock format '${codeblock.getFormat()}'!`);
     }
@@ -16859,8 +17003,15 @@ class Namespace {
         self.variables = (self.referringNamespace && self.referringNamespace.variables) || {};
         self.contracts = (self.referringNamespace && self.referringNamespace.contracts) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
-        self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
-        //self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
+
+        // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
+        //       Not sure why it was ever passed by reference. We may need to map more variables
+        //       above my copying instead of using same reference.
+        //self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
+        self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
+
+        // Holds all paths including own and all children and parents to the extent loaded.
+        self.allPaths = (self.referringNamespace && self.referringNamespace.allPaths) || [];
 
         self.componentInitContext = new ComponentInitContext(self);
 
@@ -16881,7 +17032,9 @@ class Namespace {
 
         self.apis = {};
 
-        self.lib = LIB_JSON.forBaseDir(self.baseDir);
+        self.lib = LIB_JSON.forBaseDir(self.baseDir, {
+            throwOnNoConfigFileFound: false
+        });
     }
 /*
     flipDomainInUri (uri) {
@@ -16900,7 +17053,7 @@ class Namespace {
     }
 */
     isInheritingFrom (path) {
-        return (this.pathStack.indexOf(path) !== -1);
+        return (this.allPaths.indexOf(path) !== -1);
     }
 
     stopProcessing () {
@@ -16922,80 +17075,103 @@ class Namespace {
     async resolveInfUri (uri) {
         let self = this;
 
-//        uri = self.flipDomainInUri(uri);
-
         if (!/(\/|\.)$/.test(uri)) {
             CONSOLE.error("uri", uri);
             throw new Error(`Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.`);
         }
 
-        let filepath = uri + "inf.json";
+        const isOptional = !!uri.match(/^!/);
+        if (isOptional) {
+            uri = uri.replace(/^!/, '');
+        }
 
-        // 1. Relative paths
-        if (/^\./.test(uri)) {
-            let cwdPaths = await GLOB.async(filepath, { cwd: self.baseDir });
-            if (cwdPaths.length) {
-                return cwdPaths.map(function (filepath) {
-                    return PATH.join(self.baseDir, filepath);
+        async function resolveUri (uri) {
+
+//        uri = self.flipDomainInUri(uri);
+
+            let filepath = uri + "inf.json";
+
+            // 1. Relative paths
+            if (/^\./.test(uri)) {
+                let cwdPaths = await GLOB.async(filepath, { cwd: self.baseDir });
+                if (cwdPaths.length) {
+                    return cwdPaths.map(function (filepath) {
+                        return PATH.join(self.baseDir, filepath);
+                    });
+                }
+            }
+
+            if (self.lib.js) {
+                try {
+                    const resolvedPath = self.lib.js.resolve(filepath);
+
+                    log("resolveInfUri()", "resolvedPath", resolvedPath);
+
+                    if (await FS.existsAsync(resolvedPath)) {
+                        return [ resolvedPath ];
+                    }
+                } catch (err) {}
+            }
+
+            // 2. Explicityly configured
+            let vocabulariesPath = null;
+            if (self.options.vocabularies) {
+                vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+                if (await FS.existsAsync(vocabulariesPath)) {
+                    return [ vocabulariesPath ];
+                }
+
+                vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
+                if (await FS.existsAsync(vocabulariesPath)) {
+                    return [ vocabulariesPath ];
+                }
+            } else
+            // 3. Environment variable
+            if (process.env.INF_VOCABULARIES) {
+                vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+                if (await FS.existsAsync(vocabulariesPath)) {
+                    return [ vocabulariesPath ];
+                }
+
+                vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+                if (await FS.existsAsync(vocabulariesPath)) {
+                    return [ vocabulariesPath ];
+                }
+            }
+
+            // 4. Walk up parent tree
+            let parentTreePath = await self.findInParentTree(self.baseDir, filepath);
+            if (parentTreePath) {
+                return [ parentTreePath ];
+            }
+
+            // 5. Fallback to bundled defaults
+            let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
+            if (defaultPaths.length) {
+                return defaultPaths.map(function (filepath) {
+                    return PATH.join(__dirname, "vocabularies", filepath);
                 });
             }
+
+            // 6. Not found
+            if (!isOptional) {
+                CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
+                CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
+            }
+            throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
         }
 
-        try {            
-            const resolvedPath = self.lib.js.resolve(filepath);
-
-            log("resolveInfUri()", "resolvedPath", resolvedPath);
-
-            if (await FS.existsAsync(resolvedPath)) {
-                return [ resolvedPath ];
+        try {
+            uri = await resolveUri(uri);
+        } catch (err) {
+            log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
+            if (isOptional) {
+                return null;
             }
-        } catch (err) {}
-
-        // 2. Explicityly configured
-        let vocabulariesPath = null;
-        if (self.options.vocabularies) {
-            vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
-            if (await FS.existsAsync(vocabulariesPath)) {
-                return [ vocabulariesPath ];
-            }
-
-            vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
-            if (await FS.existsAsync(vocabulariesPath)) {
-                return [ vocabulariesPath ];
-            }
-        } else
-        // 3. Environment variable
-        if (process.env.INF_VOCABULARIES) {
-            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
-            if (await FS.existsAsync(vocabulariesPath)) {
-                return [ vocabulariesPath ];
-            }
-
-            vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
-            if (await FS.existsAsync(vocabulariesPath)) {
-                return [ vocabulariesPath ];
-            }
+            throw err;
         }
 
-        // 4. Walk up parent tree
-        let parentTreePath = await self.findInParentTree(self.baseDir, filepath);
-        if (parentTreePath) {
-            return [ parentTreePath ];
-        }
-
-        // 5. Fallback to bundled defaults
-        let defaultPaths = await GLOB.async(filepath, { cwd: PATH.join(__dirname, "vocabularies") });
-        if (defaultPaths.length) {
-            return defaultPaths.map(function (filepath) {
-                return PATH.join(__dirname, "vocabularies", filepath);
-            });
-        }
-
-        // 6. Not found
-        CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
-        CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
-        throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
-
+        return uri;
     }
 
     async resolveComponentUri (uri) {
@@ -17242,6 +17418,57 @@ class Namespace {
         return this.contracts[alias];
     }
 
+    // TODO: Mount these variables via the inf variable feature under the namespace '__'
+    getSelfVariable (name) {
+
+        name = name.replace(/(^__|__$)/g, '');
+
+        if (!this.getSelfVariable._vars) {
+            this.getSelfVariable._vars = {};
+        }
+
+        const path = this.pathStack[this.pathStack.length - 1];
+
+        if (!this.getSelfVariable._vars[path]) {
+
+            // @see https://stackoverflow.com/questions/2235173/file-name-path-name-base-name-naming-standard-for-pieces-of-a-path
+            // "# echo: "{__FILE__}",
+            // "# echo: "{__FILEPATH__}",
+            // "# echo: "{__DIRNAME__}/{__FILENAME__}",
+            // "# echo: "{__DIRPATH__}/{__BASENAME__}",
+            // "# echo: "{__DIRNAME__}/{__FILENAME_STEM__}.{__FILENAME_EXTENSION__}",
+            // "# echo: "{__DIRNAME__}/{__FILENAME_STEM__}{__FILENAME_SUFFIX__}",
+            // "# echo: "{__DIR_PARENT_PATH__}/{__DIR_BASENAME__}/{__FILENAME__}",
+            // "# echo: "{__BASEDIR__}/{__RELPATH__}"
+
+            const dirname = PATH.dirname(path);
+            const filename = PATH.basename(path);
+            const filenameParts = filename.match(/^(.+?)(\.([^\.]+))?$/);
+
+            this.getSelfVariable._vars[path] = {
+                FILE: path,
+                FILEPATH: path,
+                DIRNAME: dirname,
+                DIRPATH: dirname,
+                FILENAME: filename,
+                BASENAME: filename,
+                FILENAME_STEM: filenameParts[1] || '',
+                FILENAME_EXTENSION: filenameParts[3] || '',
+                FILENAME_SUFFIX: (filenameParts[3] && `.${filenameParts[3]}`) || '',
+                DIR_PARENT_PATH: PATH.dirname(dirname),
+                DIR_BASENAME: PATH.basename(dirname),
+                BASEDIR: process.cwd(),
+                RELPATH: PATH.relative(process.cwd(), path)
+            };
+        }
+
+        if (typeof this.getSelfVariable._vars[path][name] === "undefined") {
+            throw new Error(`Unknown self variable '__${name}__'!`);
+        }
+
+        return this.getSelfVariable._vars[path][name];
+    }
+
     async getValueForVariablePath (path) {
         const parts = LODASH_TO_PATH(path);
         if (!this.variables[parts[0]]) {
@@ -17264,15 +17491,33 @@ class Namespace {
             typeof value === "string" &&
             /\$\{([^\}]+)\}/.test(value)
         ) {
-            const re = /\$\{([^\}]+)\}/g;
-            let m;
+            let done = Promise.resolve();
             let vars = {};
-            while ( m = re.exec(value) ) {
-                vars[m[0]] = await self.getValueForVariablePath(m[1]);
-                if (typeof vars[m[0]] === "undefined") {
-                    throw new Error(`Value for variable '${m[1]}' came back as undefined!`);
+            function replaceVariable (m) {
+                if (m[1] === '\\') {
+                    // This variable is escaped so we do not replace it.
+                    vars[m[0]] = ('${' + m[2] + '}');
+                } else
+                if (/^__(.+)__$/.test(m[2])) {
+                    vars[m[0]] = self.getSelfVariable(m[2]);
+                } else {
+                    done = done.then(async function () {
+                        vars[m[0]] = await self.getValueForVariablePath(m[2]);
+                        if (typeof vars[m[0]] === "undefined") {
+                            throw new Error(`Value for variable '${m[2]}' came back as undefined!`);
+                        }
+                    });
                 }
             }
+
+            const re = /(\\)?\$\{([^\}]+)\}/g;
+            let m;
+            while ( m = re.exec(value) ) {
+                replaceVariable(m);
+            }
+
+            await done;
+
             let keys = Object.keys(vars);
             if (keys.length) {
                 keys.forEach(function (key) {
@@ -17387,6 +17632,8 @@ class Node {
 
     static WrapInstructionNode (namespace, value) {
 
+//console.log("WRAP NODE", value);
+
         if (value instanceof Node) {
             return value;
         } else
@@ -17439,6 +17686,9 @@ class Node {
         self.baseDir = namespace.baseDir;
 
         self._finalizeProperty = function (name) {
+
+//console.log("FINALIZE", name, self[name]);
+
             if (
                 self[name] &&
                 typeof self[name] === "string"
@@ -17583,9 +17833,6 @@ class ReferenceNode extends Node {
 class InterfaceReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
-
-//console.log("InterfaceReferenceNode:handlesValue", value, value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/));
-
         return (
             typeof value === "string" &&
             value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/)
@@ -17705,6 +17952,20 @@ class Processor {
                 _value.alias = referenceValue.alias;
                 _value.pointer = referenceValue.pointer;
                 _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
+            } else
+            if (
+                !referenceMatch &&
+                !topLevel
+            ) {
+                let wrappedValue = Node.WrapInstructionNode(self.namespace, _value.value);
+
+                wrappedValue.propertyPathMount = _value.propertyPathMount || [];
+
+                if (valueProcessor) {
+                    wrappedValue = await valueProcessor(_value, wrappedValue);
+                }
+
+                _value = wrappedValue;
             }
 
             return _value;
@@ -17739,7 +18000,10 @@ class Processor {
                 }
                 if (
                     typeof obj === "string" &&
-                    /^([^#]*?)\s*#\s*(.+?)$/.test(obj)
+                    (
+                        /^([^#]*?)\s*#\s*(.+?)$/.test(obj) ||
+                        /^:[^:]+:\s*/.test(obj)
+                    )
                 ) {
                     wrappedValuesIndex++;
                     wrappedValues[wrappedValuesIndex] = wrapValue({
@@ -17767,7 +18031,7 @@ class Processor {
         return value;
     }
 
-    async processInstruction (anchor, value) {
+    async processInstruction (anchor, value, meta) {
         let self = this;
 
         log("");
@@ -17872,9 +18136,15 @@ class Processor {
             ].join("/").replace(/\/$/, "")}$1`);
         }
 
+        meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1];
+
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
         anchor = Node.WrapInstructionNode(self.namespace, anchor);
+        anchor.meta = meta;
+
         value = Node.WrapInstructionNode(self.namespace, value);
+        value.meta = meta;
+
         if (anchorNamespacePrefix) {
             anchor.namespacePrefix = anchorNamespacePrefix;
 //            value.anchorNamespacePrefix = anchor.namespacePrefix;
@@ -17890,17 +18160,22 @@ class Processor {
 
         // Run various codeblocks if applicable.
         if (value instanceof CodeblockNode) {
-            if (value.getFormat() === 'bash') {
+            if (value.getFormat() === 'run.bash') {
                 value.value = await runCodeblock(self.namespace, value.value);
             } else
-            if (value.getFormat() === 'bash.progress') {
+            if (value.getFormat() === 'run.bash.progress') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.javascript') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.javascript.progress') {
                 value.value = await runCodeblock(self.namespace, value.value);
             }
             // NOTE: To cause a bash codeblock to run on invocation vs when parsing instructions
             //       use 'bash.method' for the codeblock format. The invoked method can then
             //       run it via 'INF.runCodeblock(value, vars)'
         }
-
 
         // Inherit from another inf.json file
         if (anchor.value === "#") {
@@ -17909,25 +18184,29 @@ class Processor {
 
             await Promise.mapSeries(uris, async function (uri) {
 
+                uri = await self.namespace.replaceVariablesInString(uri);
+
                 log('processInstruction() uri', uri);
 
                 let paths = await self.namespace.resolveInfUri(uri);
 
                 log('processInstruction() paths', paths);
 
-                await Promise.mapSeries(paths, async function (path) {
+                if (paths) {
+                    await Promise.mapSeries(paths, async function (path) {
 
-                    log('processInstruction() path', path);
+                        log('processInstruction() path', path);
 
-                    if (!self.namespace.isInheritingFrom(path)) {
+                        if (!self.namespace.isInheritingFrom(path)) {
 
-                        log("Inherit from inf file:", path);
+                            log("Inherit from inf file:", path);
 
-                        let inf = new INF(PATH.dirname(path), self.namespace, self.namespace.options);
+                            let inf = new INF(PATH.dirname(path), self.namespace, self.namespace.options);
 
-                        await inf.runInstructionsFile(PATH.basename(path));
-                    }
-                });
+                            await inf.runInstructionsFile(PATH.basename(path));
+                        }
+                    });
+                }
             });
 
         } else
@@ -18002,7 +18281,31 @@ class Processor {
                         
                         _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
                     }
-                }               
+                } else
+                if (_value.interface) {
+                    // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
+                    await Promise.mapSeries(_value.interface, async function (_interface) {
+                        if (_value.contract) {
+                            if (_interface[1].contract !== _value.contract) {
+                                throw new Error('Contract mis-match!');
+                            }
+                        } else {
+                            _value.contract = _interface[1].contract || null;
+                        }
+                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        if (typeof _value === "undefined") {
+                            throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
+                        }
+                    });
+                    if (_value.contract) {
+                        // Verify output of interface via contract
+                        log(`Verify local interface output from '${_value.interface.map(function (_interface) {
+                            return _interface[0];
+                        })}' using contract '${_value.contract[1].alias}'`);
+                        
+                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                    }
+                }
 
                 if (anchor.interface) {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
@@ -18057,7 +18360,15 @@ class Processor {
                         })}' using contract '${value.contract[1].alias}'`);
                         value = await value.contract[1].$instance(value, anchor.pointer);
                     }
+                } else
+                if (value.contract) {
+                    log(`Verify inline value using contract '${value.contract[1].alias}'`);
+                    value = await value.contract[1].$instance(value, anchor.pointer);
                 }
+
+//console.log("RUN CONTRACTS", value);
+                // Check if we have an object with a bunch of contracts.
+
 
                 if (anchor.interface) {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
@@ -18180,6 +18491,10 @@ class Processor {
         }
     }
 
+}
+
+if (process.env.INF_ENABLE_TIMERS) {
+    timers.loaded = Date.now();
 }
 
 }).call(this,require("path").join(__dirname,"inf.js"),require("path").join(__dirname,"."))
@@ -49192,20 +49507,28 @@ module.exports = function (commands, options) {
 	    proc.on("error", function(err) {
 	    	return callback(err);
 	    });
-	    var stdout = [];
-	    var stderr = [];
+	    var stdout = null;
+	    var stderr = null;
 
 	    function formatEscapeCodes (data) {
 	    	return data;
 	    }
 
 	    proc.stdout.on('data', function (data) {
-		    	stdout.push(data.toString());
-					if (options.verbose || options.progress) process.stdout.write(formatEscapeCodes(data.toString()));
+			if (stdout) {
+				stdout = Buffer.concat([stdout, data]);
+			} else {
+				stdout = data;
+			}
+			if (options.verbose || options.progress) process.stdout.write(formatEscapeCodes(data.toString()));
 	    });
 	    proc.stderr.on('data', function (data) {
-	    		stderr.push(data.toString());
-					if (options.verbose || options.progress) process.stderr.write(formatEscapeCodes(data.toString()));
+			if (stderr) {
+				stderr = Buffer.concat([stderr, data]);
+			} else {
+				stderr = data;
+			}
+			if (options.verbose || options.progress) process.stderr.write(formatEscapeCodes(data.toString()));
 	    });
 	    proc.stdin.write(commands.join("\n"));
 	    proc.stdin.end();
@@ -49219,21 +49542,20 @@ module.exports = function (commands, options) {
 	    		//console.error("err", err);
 	    		return callback(err);
 	    	}
-	    	stdout = stdout.join("");
 	    	var exports = {};
 	    	if (options.exports) {
                 var re = /^([^:\s]+):\s?(.*?)$/gm;
 				var m;
-				while ( (m = re.exec(stdout)) ) {
+				while ( (m = re.exec(stdout.toString())) ) {
 				    if (options.exports[m[1]]) {
 				        exports[m[1]] = m[2];
 				    }
 				}
-	    	}
+			}
 	        return callback(null, {
 				code: 0,
 	            stdout: stdout,
-	            stderr: stderr.join(""),
+	            stderr: stderr,
 	            exports: exports
 	        });
 	    });

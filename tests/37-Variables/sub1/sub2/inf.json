@@ -1,0 +1,64 @@
+#!/usr/bin/env inf
+{
+    "# echo": "in sub",
+
+    "# echo": "---",
+
+    "# echo": "${PINF.greeting}",
+
+    "# echo": "---",
+
+    "# echo": "${ns @ PINF.greeting}",
+
+    "# echo": "---",
+
+    "# echo": "Pattern: <FILE>",
+    "# echo": "${__FILE__}",
+
+    "# echo": "Pattern: <FILEPATH>",
+    "# echo": "${__FILEPATH__}",
+
+    "# echo": "Pattern: <DIRNAME>/<FILENAME>",
+    "# echo": "${__DIRNAME__}/${__FILENAME__}",
+
+    "# echo": "Pattern: <DIRPATH>/<BASENAME>",
+    "# echo": "${__DIRPATH__}/${__BASENAME__}",
+
+    "# echo": "Pattern: <DIRNAME>/<FILENAME_STEM>.<FILENAME_EXTENSION>",
+    "# echo": "${__DIRNAME__}/${__FILENAME_STEM__}.${__FILENAME_EXTENSION__}",
+
+    "# echo": "Pattern: <DIRNAME>/<FILENAME_STEM><FILENAME_SUFFIX>",
+    "# echo": "${__DIRNAME__}/${__FILENAME_STEM__}${__FILENAME_SUFFIX__}",
+
+    "# echo": "Pattern: <DIR_PARENT_PATH>/<DIR_BASENAME>/<FILENAME>",
+    "# echo": "${__DIR_PARENT_PATH__}/${__DIR_BASENAME__}/${__FILENAME__}",
+
+    "# echo": "Pattern: <BASEDIR>/<RELPATH>",
+    "# echo": "${__BASEDIR__}/${__RELPATH__}",
+
+    "# echo": "---",
+
+    "# echo": ":<FILE> ${__FILE__}",
+    "# echo": ":<FILEPATH> ${__FILEPATH__}",
+    "# echo": ":<FILENAME> ${__FILENAME__}",
+    "# echo": ":<BASENAME> ${__BASENAME__}",
+    "# echo": ":<DIRNAME> ${__DIRNAME__}",
+    "# echo": ":<DIRPATH> ${__DIRPATH__}",
+    "# echo": ":<FILENAME_STEM> ${__FILENAME_STEM__}",
+    "# echo": ":<FILENAME_EXTENSION> ${__FILENAME_EXTENSION__}",
+    "# echo": ":<FILENAME_SUFFIX> ${__FILENAME_SUFFIX__}",
+    "# echo": ":<DIR_PARENT_PATH> ${__DIR_PARENT_PATH__}",
+    "# echo": ":<DIR_BASENAME> ${__DIR_BASENAME__}",
+    "# echo": ":<BASEDIR> ${__BASEDIR__}",
+    "# echo": ":<RELPATH> ${__RELPATH__}",
+
+    "# echo": "---",
+
+    "# echo": "Ignored variable: \\${__FILE__}",
+    "# echo": "Ignored variable: \\${__BASENAME__}",
+
+    "# echo +25": "---",
+
+    "vars # set includeSubPath": "sub1",
+    "#": "../${PINF.includeSubPath}/"
+}

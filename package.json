@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf",
-  "version": "0.1.26",
+  "version": "0.1.28",
   "pm": "npm",
   "bin": {
     "inf": "inf.js"
@@ -8,18 +8,18 @@
   "main": "inf.js",
   "scripts": {
     "test": "([ -e node_modules ] || npm install) && bash.origin.test tests",
-    "build": "browserify --node --ignore-missing inf.js -o dist/inf && chmod u+x dist/inf",
+    "build": "INF_ENABLE_TIMERS=1 inf build.inf.json",
     "test-dist": "([ -e node_modules ] || npm install) && PATH=\"$(pwd)/dist:$PATH\" bash.origin.test tests"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-latest": "^6.24.1",
+    "bash.origin.test": "^0.2.0-pre.2",
     "browserify": "^16.5.0",
     "jsonrep": "^0.1.0-pre.1",
     "puppeteer": "^1.19.0",
-    "uglify-js": "^3.6.0",
-    "bash.origin.test": "^0.2.0-pre.2"
+    "uglify-js": "^3.6.0"
   },
   "dependencies": {
     "bluebird": "^3.5.5",

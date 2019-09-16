@@ -1,8 +1,0 @@
-#!/usr/bin/env inf
-{
-    "#": "inf.pinf.it/bo/",
-
-    "test # dir": "tests",
-
-    "bundle # nodejs-script": "inf.js"
-}

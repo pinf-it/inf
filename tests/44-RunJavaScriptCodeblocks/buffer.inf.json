@@ -1,0 +1,93 @@
+#!/usr/bin/env inf
+{
+    "vars #": "../41-RunBashCodeblocks/vars.",
+    "VARS $": "vars # vars()",
+
+    "# echo": "-- b1 --",
+
+    "runner1 #": "../41-RunBashCodeblocks/runner1.",
+    "runner1 # setImplementation()": (run.bash.method () >>>
+
+        cat done-icon.png
+
+    <<<),
+    "vars # set() image1": "runner1 # run()",
+
+    "# echo": "-- b2 --",
+
+    "# run": (run.javascript.progress (VARS) >>>
+        const ASSERT = require('assert');
+        const FS = require('fs');
+
+        const image1 = await VARS.image1();
+
+        ASSERT.equal(
+            image1.equals(FS.readFileSync('done-icon.png')),
+            true
+        )
+
+        console.log("OK 1 (log)");
+        console.warn("OK 1 (warn)");
+        console.info("OK 1 (info)");
+        console.error("OK 1 (error)");
+    <<<),
+
+    "# echo": "-- b3 --",
+
+    "runner2 #": "../41-RunBashCodeblocks/runner2.",
+    "runner2 # setImplementation()": (run.javascript.method (VARS) >>>
+
+        const image1 = await VARS.image1();
+
+        process.stdout.write(image1);
+    <<<),
+    "vars # set() image2": "runner2 # run()",
+
+    "# echo": "-- b4 --",
+
+    "# run": (run.javascript.progress (VARS) >>>
+        const ASSERT = require('assert');
+        const FS = require('fs');
+
+        const image2 = await VARS.image2();
+
+        ASSERT.equal(
+            image2.equals(FS.readFileSync('done-icon.png')),
+            true
+        )
+
+        console.log("OK 2");
+    <<<),
+
+    "# echo": "-- b5 --",
+
+    "vars # set() image3": (run.javascript.method (VARS) >>>
+
+        const image2 = await VARS.image2();
+
+        console.log("OK 3 (log)");
+        console.warn("OK 3 (warn)");
+        console.info("OK 3 (info)");
+        console.error("OK 3 (error)");
+
+        return image2;
+    <<<),
+
+    "# echo": "-- b6 --",
+
+    "# run": (run.javascript.progress (VARS) >>>
+        const ASSERT = require('assert');
+        const FS = require('fs');
+        
+        const image3 = await VARS.image3();
+
+        ASSERT.equal(
+            image3.equals(FS.readFileSync('done-icon.png')),
+            true
+        )
+
+        console.log("OK 4");
+    <<<),
+
+    "# echo": "-- b7 --"
+}

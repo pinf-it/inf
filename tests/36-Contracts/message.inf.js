@@ -10,7 +10,6 @@ exports.inf = async function (inf) {
         contract: function (alias, node) {
 
             return async function (value) {
-
                 if (
                     typeof value.value === "object" &&
                     Object.keys(value.value).length === 1 &&
@@ -71,6 +70,10 @@ exports.inf = async function (inf) {
                     return component.invokeContractAliasMethod(value.contract[0], [pointer, value.value]);
                 };
             };
+        },
+
+        getTestMessage: function () {
+            return 'Hello World!';
         }
     };
 }

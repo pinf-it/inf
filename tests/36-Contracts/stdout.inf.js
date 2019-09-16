@@ -29,6 +29,31 @@ exports.inf = async function (inf) {
 
                     return true;
                 }
+            } else
+            if (pointer === "dump") {
+
+                let waitfor = Promise.resolve();
+                
+                Object.keys(value.value).map(function (key) {
+
+                    let val = value.value[key]
+
+                    waitfor.then(async function () {
+
+                        if (val instanceof inf.LIB.INF.Node) {
+                            if (typeof val.value === 'function') {
+                                val = (await val.value()).value;
+                            } else {
+                                val = val.value;
+                            }
+                        }
+                        console.log(key, val);
+                    });
+                });
+
+                await waitfor;
+
+                return true;
             }
         }
     };

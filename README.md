@@ -42,23 +42,41 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
 Install
 =======
 
-    npm install inf
+    npm install @pinf-it/inf
+    npm install @pinf-it/inf-dist
 
 
 Usage
 -----
 
-See `tests/` for examples of all features. The tests can be run with `npm test`. Specific tests can be run with `npm test \d{2}` where `\d{2}` denotes the numbered test prefix.
+See `tests/` for examples of all features. The tests can be run with `npm test`. Specific tests can be run with `npm test \d{2}` where `\d{2}` denotes the numbered test prefix. When making changes to tests use the `--dev` flag to disable the test runner validation. When done, delete the `.expected.log` file for the test and run test again without `--dev` to generate comparison file.
 
-The point of `inf` is to execute `inf.json` files which should cause the owning component to **bootstrap & test itself**. Thus tests can also be run by executing `./inf.json`. If the `#!/usr/bin/env inf` shebang is missing from `inf.json` it can be run using `inf inf.json`.
+The point of `inf` is to execute `inf.json` files. If the `#!/usr/bin/env inf` shebang is missing from a `*.inf.json` file it can be run using `inf *.inf.json`.
 
-`inf` can be [browserified](https://github.com/browserify/browserify) to make it lightweight & portable for use in projects. Look for `inf.bundle*` files after running `./inf.json`.
+`inf` can be [browserified](https://github.com/browserify/browserify) to make it lightweight & portable for use in projects. Look for distribution files in `dist/` and run `npm run build` to generate a new build. These builds are published to npm at `@pinf-it/inf-dist`.
 
 
 API
 ===
 
 *TODO: Component API*
+
+Magic Variables
+---------------
+
+  * `__FILE__` - **/.../sub1/sub2/inf.json**
+  * `__FILEPATH__` - **/.../sub1/sub2/inf.json**
+  * `__FILENAME__` - **inf.json**
+  * `__BASENAME__` - **inf.json**
+  * `__DIRNAME__` - **/.../sub1/sub2**
+  * `__DIRPATH__` - **/.../sub1/sub2**
+  * `__FILENAME_STEM__` - **inf**
+  * `__FILENAME_EXTENSION__` - **json**
+  * `__FILENAME_SUFFIX__` - **.json**
+  * `__DIR_PARENT_PATH__` - **/.../sub1**
+  * `__DIR_BASENAME__` - **sub2**
+  * `__BASEDIR__` - **/...**
+  * `__RELPATH__` - **sub1/sub2/inf.json**
 
 
 Details
@@ -104,4 +122,4 @@ Entities
 Provenance
 ==========
 
-Original source logic by Christoph Dorn under MIT License since 2018.
+Original code licensed under the MIT License by Christoph Dorn since 2018.

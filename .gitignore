@@ -1,9 +1,10 @@
+.DS_Store
 /node_modules/
 .actual.*
 *~.compiled.bash
 .~*
 /npm-debug.log
-/inf.bundle.*
 /.installed*
 *~.pure.js
 /package-lock.json
+/dist/*.gz

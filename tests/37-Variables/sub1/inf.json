@@ -1,0 +1,4 @@
+#!/usr/bin/env inf
+{
+    "# echo": "Hello from sub1"
+}

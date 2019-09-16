@@ -1,0 +1,30 @@
+#!/usr/bin/env inf
+{
+    "# echo": "-- s1 --",
+
+    "runner1 #": "../41-RunBashCodeblocks/runner2.",
+    "runner1 # setImplementation()": (run.javascript.method () >>>
+
+        # Comment that should be ignored
+
+        process.stdout.write("#channel-name Message\n");
+
+    <<<),
+    "# echo": "runner1 # run()",
+
+    "# echo": "-- s2 --",
+
+    "runner2 #": "../41-RunBashCodeblocks/runner2.",
+    "runner2 # setImplementation()": {
+        "impl": (run.javascript.method () >>>
+
+            # Comment that should be ignored
+
+            process.stdout.write('#channel-name Message\n');
+
+        <<<)
+    },
+    "# echo": "runner2 # run()",
+
+    "# echo": "-- s3 --"
+}

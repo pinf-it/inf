@@ -1,0 +1,6 @@
+#!/usr/bin/env inf
+{
+    "stdout # echo()": "Hello 2 (${__FILENAME__})",
+
+    "stdout # echo()": "Hello 3 (${__FILENAME__})"
+}

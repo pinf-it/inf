@@ -1,0 +1,57 @@
+-- 0 --
+stderr progress ...
+Hello World from test.txt
+logged progress ...
+stdout progress ...
+
+-- 1 --
+logged progress ...
+stdout progress ...
+stderr progress ...
+-- 2 --
+stderr progress ...
+../41-RunBashCodeblocks/text.txt
+
+opts.size: 1994
+logged progress ...
+stdout progress ...
+
+-- 3 --
+../41-RunBashCodeblocks/text.txt
+
+opts.size: 1994
+
+-- 4 --
+error message
+[31mCode which contains error >>> ___run = async function () {[39m
+
+[31mprocess.stderr.write("error message\n");[39m
+
+[31mthrow new Error("There was a problem");[39m
+[31m} <<<[39m
+[31m[inf][run.javascript] Ended with error: There was a problem[39m
+-- s1 --
+#channel-name Message
+
+-- s2 --
+#channel-name Message
+
+-- s3 --
+-- b1 --
+-- b2 --
+OK 1 (log)
+OK 1 (warn)
+OK 1 (info)
+OK 1 (error)
+-- b3 --
+-- b4 --
+OK 2
+-- b5 --
+-- b6 --
+OK 3 (warn)
+OK 3 (error)
+OK 3 (log)
+OK 3 (info)
+OK 4
+-- b7 --
+OK
