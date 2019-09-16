@@ -9,12 +9,15 @@
   "scripts": {
     "test": "([ -e node_modules ] || npm install) && bash.origin.test tests",
     "build": "INF_ENABLE_TIMERS=1 inf build.inf.json",
-    "test-dist": "([ -e node_modules ] || npm install) && PATH=\"$(pwd)/dist:$PATH\" bash.origin.test tests"
+    "test-dist": "([ -e node_modules ] || npm install) && alias inf=\"$(pwd)/dist/inf.bundle.es5.min.js\" && which inf"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-plugin-transform-runtime": "^6.23.0",
-    "babel-preset-latest": "^6.24.1",
+    "@babel/core": "^7.6.0",
+    "@babel/cli": "^7.6.0",
+    "@babel/preset-env": "^7.6.0",
+    "@babel/runtime": "^7.6.0",
+    "@babel/plugin-transform-runtime": "^7.6.0",
+    "regenerator-runtime": "^0.13.3",
     "bash.origin.test": "^0.2.0-pre.3",
     "browserify": "^16.5.0",
     "jsonrep": "^0.1.0-pre.1",

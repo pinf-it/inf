@@ -45,8 +45,8 @@ exports.inf = async function (inf) {
                         -o ${makeTargetFilepath("bundle")}
 
                     babel \
-                        --presets latest \
-                        --plugins transform-runtime \
+                        --presets=@babel/env \
+                        --plugins @babel/transform-runtime \
                         ${makeTargetFilepath("bundle")} \
                         --compact false \
                         --out-file ${makeTargetFilepath("bundle.es5")}
