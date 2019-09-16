@@ -15,7 +15,7 @@
     "babel-cli": "^6.26.0",
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-latest": "^6.24.1",
-    "bash.origin.test": "^0.2.0-pre.2",
+    "bash.origin.test": "^0.2.0-pre.3",
     "browserify": "^16.5.0",
     "jsonrep": "^0.1.0-pre.1",
     "puppeteer": "^1.19.0",
@@ -33,9 +33,9 @@
     "lodash": "^4.17.15",
     "minimist": "^1.2.0",
     "pinf-loader-js": "^1.0.4",
-    "runbash": "^0.0.9",
+    "runbash": "^0.1.0-pre.0",
     "traverse": "^0.6.6",
-    "lib.json": "^0.0.4",
+    "lib.json": "^0.0.5",
     "memorystream": "^0.3.1",
     "resolve": "^1.12.0"
   }
