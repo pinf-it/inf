@@ -63,5 +63,7 @@ Ignored variable: ${__BASENAME__}
 ---
 Hello from sub1
 ---
+Hello World 2
+---
 After sub '__FILE__': TeStLoCaLiZeD/0b3851e
 Ignored variable: ${__FILE__}

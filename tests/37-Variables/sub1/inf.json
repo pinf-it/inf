@@ -1,4 +1,12 @@
 #!/usr/bin/env inf
 {
-    "# echo": "Hello from sub1"
+    "# echo": "Hello from sub1",
+
+    "# echo": "---",
+
+    "${__DIR_BASENAME__} @": "/${__DIR_BASENAME__}-v0/",
+    "${__DIR_BASENAME__} @ vars #": "../vars.",
+    "${__DIR_BASENAME__} @ vars # set greeting": "Hello World 2",
+    "${__DIR_BASENAME__} @ PINF $": "${__DIR_BASENAME__} @ vars # vars",
+    "# echo": "${sub1 @ PINF.greeting}"
 }

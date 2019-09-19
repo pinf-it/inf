@@ -62,7 +62,7 @@ const RESOLVE = require("resolve");
 // TODO: Declare logger
 
 function log () {
-    if (!process.env.VERBOSE) return;
+    if (!process.env.INF_DEBUG) return;
     var args = Array.from(arguments);
     args.unshift("[inf]");
     CONSOLE.log.apply(CONSOLE, args);
@@ -113,8 +113,8 @@ setImmediate(function () {
                         'progress'
                     ]
                 });
-                if (args.verbose && !process.env.VERBOSE) {
-                    process.env.VERBOSE = "1";
+                if (args.debug && !process.env.INF_DEBUG) {
+                    process.env.INF_DEBUG = "1";
                 }
                 if (args.cwd) {
                     cwd = PATH.resolve(cwd, args.cwd);
@@ -663,7 +663,7 @@ LIB.Promise.defer = function () {
     return deferred;
 }
 
-Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.VERBOSE; } });
+Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.INF_DEBUG; } });
 Object.defineProperty(LIB, 'UTIL', { get: function() { return require("util"); } });
 Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
 Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("lodash/merge"); } });
@@ -730,7 +730,8 @@ async function runCodeblock (namespace, value, vars) {
                 progress: (
                     codeblock.getFormat() === 'run.bash.progress' ||
                     namespace.options.progress ||
-                    !!process.env.VERBOSE
+                    !!process.env.INF_DEBUG ||
+                    !!process.env.DEBUG                    
                 ),
                 wait: true
             });
@@ -1380,7 +1381,9 @@ class Namespace {
 
         log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
 
-        return self.variables[alias] = value;
+        self.variables[alias] = value;
+        
+        return value;
     }
 
     getPluginsForMatch (match) {
@@ -1897,7 +1900,7 @@ class VariablesReferenceNode extends ReferenceNode {
     static handlesValue (value) {
         return (
             typeof value === "string" &&
-            value.match(/^([^\$]+?)\s*\$$/)
+            value.match(/^(.+?)\s*\$$/)
         );
     }
 
@@ -2060,8 +2063,11 @@ class Processor {
         let anchorNamespacePrefix = null;
         if (/^[^@]+?\s*@$/.test(anchor)) {
             // Namespace mapping
-            const alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
+            let alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
 
+            alias = await self.namespace.replaceVariablesInString(alias);
+            value = await self.namespace.replaceVariablesInString(value);
+            
             const m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
             if (m) {
                 const valueAlias = m[1];
@@ -2112,7 +2118,10 @@ class Processor {
 //            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
 
             const m = anchor.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-            const alias = m[1];
+            let alias = m[1];
+
+            alias = await self.namespace.replaceVariablesInString(alias);
+
             const pointer = m[2];
 
             if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
@@ -2134,7 +2143,10 @@ class Processor {
             // Namespace usage for value
 
             const valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-            const valueAlias = valueM[1];
+            let valueAlias = valueM[1];
+
+            valueAlias = await self.namespace.replaceVariablesInString(valueAlias);
+
             const valuePointer = valueM[2];
 
             if (typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined") {
@@ -2255,6 +2267,8 @@ class Processor {
 
             } else
             if (anchor.type === 'variables') {
+
+                anchor.alias = await self.namespace.replaceVariablesInString(anchor.alias);
 
                 await self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value));
 

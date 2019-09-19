@@ -57,7 +57,7 @@
     "# echo": "Ignored variable: \\${__FILE__}",
     "# echo": "Ignored variable: \\${__BASENAME__}",
 
-    "# echo +25": "---",
+    "# echo": "---",
 
     "vars # set includeSubPath": "sub1",
     "#": "../${PINF.includeSubPath}/"
