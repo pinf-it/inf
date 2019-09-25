@@ -11,6 +11,10 @@ exports.inf = async function (inf) {
             formatter = await getter();
         },
 
+        wrapGreeting: function (greeting) {
+            return greeting;
+        },
+
         invoke: async function (pointer, value) {
 
             if (pointer === "echo()") {
@@ -19,6 +23,18 @@ exports.inf = async function (inf) {
 
                 process.stdout.write(message + "\n");
     
+                return true;
+            } else
+            if (pointer === "echo2()") {
+
+                if (typeof value.value === 'function') {
+                    value.value = (await value.value()).value;
+                }
+
+                let message = `${value.value} [line: ${value.meta.line}, column: ${value.meta.column}, pos: ${value.meta.pos}, file: ${value.meta.file}]`;
+
+                process.stdout.write(message + "\n");
+
                 return true;
             }
         }

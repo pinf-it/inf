@@ -1,4 +1,7 @@
-Hello 1 (69b84c4) [line: 1, column: 22, pos: 130, file: TeStLoCaLiZeD/69b84c4]
+Hello 1 (9fc5824) [line: 1, column: 22, pos: 130, file: TeStLoCaLiZeD/9fc5824]
 Hello 2 (inf.json) [line: 2, column: 7, pos: 24, file: TeStLoCaLiZeD/inf.json]
 Hello 3 (inf.json) [line: 4, column: 7, pos: 77, file: TeStLoCaLiZeD/inf.json]
-Hello 4 (69b84c4) [line: 1, column: 34, pos: 189, file: TeStLoCaLiZeD/69b84c4]
+Hello 4 (9fc5824) [line: 1, column: 34, pos: 189, file: TeStLoCaLiZeD/9fc5824]
+---
+Hello 5 [line: 1, column: 46, pos: 259, file: TeStLoCaLiZeD/9fc5824]
+Hello 6 [line: 1, column: 52, pos: 292, file: TeStLoCaLiZeD/9fc5824]

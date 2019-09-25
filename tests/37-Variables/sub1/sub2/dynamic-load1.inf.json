@@ -1,0 +1,6 @@
+#!/usr/bin/env inf
+{
+    "# echo": "Greeting (dynamic 1): ${PINF.greeting}",
+    "# echo": "Greeting (dynamic 1): ${ns @ PINF.greeting}",
+    "# echo": "FILE (dynamic 1): ${__FILE__}"
+}

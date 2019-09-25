@@ -2,24 +2,33 @@ Hello World
 ---
 Hello World
 ---
+Pattern: <FILE>
+TeStLoCaLiZeD/5d53511
+--- dynamic start 1 ---
+Greeting: Hello World
+Greeting: Hello World
+Greeting (dynamic 1): Hello World
+Greeting (dynamic 1): Hello World
+FILE (dynamic 1): TeStLoCaLiZeD/sub1/sub2/dynamic-load1.inf.json
+--- dynamic end 1 ---
 Hello World
 ---
 Pattern: <FILE>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <FILEPATH>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <DIRNAME>/<FILENAME>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <DIRPATH>/<BASENAME>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <DIRNAME>/<FILENAME_STEM>.<FILENAME_EXTENSION>
-TeStLoCaLiZeD/0b3851e.
+TeStLoCaLiZeD/5d53511.
 Pattern: <DIRNAME>/<FILENAME_STEM><FILENAME_SUFFIX>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <DIR_PARENT_PATH>/<DIR_BASENAME>/<FILENAME>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 Pattern: <BASEDIR>/<RELPATH>
-TeStLoCaLiZeD/0b3851e
+TeStLoCaLiZeD/5d53511
 ---
 in sub
 ---
@@ -27,6 +36,15 @@ Hello World
 ---
 Hello World
 ---
+Pattern: <FILE>
+TeStLoCaLiZeD/sub1/sub2/inf.json
+--- dynamic start 2 ---
+Greeting: Hello World
+Greeting: Hello World
+Greeting (dynamic 2): Hello World
+Greeting (dynamic 2): Hello World
+FILE (dynamic 2): TeStLoCaLiZeD/sub1/sub2/dynamic-load2.inf.json
+--- dynamic end 2 ---
 Pattern: <FILE>
 TeStLoCaLiZeD/sub1/sub2/inf.json
 Pattern: <FILEPATH>
@@ -65,5 +83,5 @@ Hello from sub1
 ---
 Hello World 2
 ---
-After sub '__FILE__': TeStLoCaLiZeD/0b3851e
+After sub '__FILE__': TeStLoCaLiZeD/5d53511
 Ignored variable: ${__FILE__}

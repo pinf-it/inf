@@ -12,7 +12,24 @@ inf {
     "ns @ PINF $": "vars # vars",
     "# echo +3": "\${ns @ PINF.greeting}",
 
-    "# echo +4": "---",
+    "# echo +3a": "---",
+
+    "# echo +3b": "Pattern: <FILE>",
+    "# echo +3c": "\${__FILE__}",
+
+    "# echo +4": "--- dynamic start 1 ---",
+
+    "runner1 #": "./sub1/sub2/runner.",
+    "runner1 # run": (inf () >>>
+        {
+            "# echo": "Greeting: \${PINF.greeting}",
+            "# echo": "Greeting: \${ns @ PINF.greeting}",
+
+            "#": "./sub1/sub2/dynamic-load1."
+        }
+    <<<),
+
+    "# echo +4a": "--- dynamic end 1 ---",
 
     "ns @ router #": "./router.",
     "vars # set route": "/",

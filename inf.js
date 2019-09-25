@@ -108,8 +108,8 @@ setImmediate(function () {
                 var cwd = process.cwd();
                 let args = MINIMIST(process.argv.slice(2), {
                     boolean: [
-                        'verbose',
-                        'debug',
+                        //'verbose',
+                        //'debug',
                         'progress'
                     ]
                 });
@@ -186,12 +186,14 @@ class INF {
         return self.runInstructions(instructions, filepath);
     }
 
-    async runInstructions (instructions, filepath) {
+    async runInstructions (instructions, filepath, referringNamespace) {
         let self = this;
 
         if (!filepath) {
             filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
         }
+
+        referringNamespace = referringNamespace || self.referringNamespace;
 
         filepath = PATH.resolve(self.baseDir, filepath);
         const baseDir = PATH.dirname(filepath);
@@ -203,13 +205,13 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(self, baseDir, self.referringNamespace, self.options);
+        self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
         self.processor = new Processor(self.namespace);
 
         if (filepath) {
             self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
-            if (self.referringNamespace) {
-                self.referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
+            if (referringNamespace) {
+                referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
             }
         }
 
@@ -260,16 +262,20 @@ class INF {
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
         });
 
-        if (self.referringNamespace) {
+        if (referringNamespace) {
             Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                if (typeof self.referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-                    self.referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
+                if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+                    referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
                 }
             });
         }
 
         if (!self.namespace.referringNamespace) {
             self.namespace.componentInitContext.emit("processed");
+        }
+
+        if (filepath) {
+            self.namespace.pathStack.pop();
         }
 
         return self.namespace.apis;
@@ -452,6 +458,8 @@ class Component {
         options = options || {};
 
         // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
+        // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
+        //       based on the FIRST namespace and never changes.
         self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
 
         let mod = options.exports || null;
@@ -473,7 +481,11 @@ class Component {
         self.getComponentAliases = function () {
             return Object.keys(instances.component || {});
         }
-        self.forAlias = async function (type, alias) {
+        self.forAlias = async function (type, alias, namespace) {
+
+            if (!namespace) {
+                throw new Error("'namespace' not set!");
+            }
 
             if (!instances[type]) {
                 instances[type] = {};
@@ -497,7 +509,7 @@ class Component {
 
                 let pluginInstance = Object.create(self);
 
-                componentInitContext = componentInitContext.forNode(pluginInstance);
+                componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
 
                 let instance = pluginInstance;
                 await Promise.mapSeries(plugins, async function (plugin) {
@@ -915,11 +927,11 @@ require.memoize("/main.js", function (require, exports, module) {
         self.load = async function (filepath) {
 
             if (/\{/.test(filepath)) {
-                return namespace.inf.runInstructions(filepath);
+                return namespace.inf.runInstructions(filepath, null, namespace);
             }
 
             let path = PATH.resolve(namespace.baseDir || "", filepath);
-            return namespace.inf.runInstructionsFile(path);
+            return namespace.inf.runInstructionsFile(path, namespace);
         }
 
         self.wrapValue = function (value) {
@@ -939,9 +951,10 @@ require.memoize("/main.js", function (require, exports, module) {
             return runCodeblock(namespace, value, vars);
         }
 
-        self.forNode = function (node) {
+        self.forNode = function (node, nodeNamespace) {
 
-            let context = Object.create(self);
+            //let context = Object.create(self);
+            const context = new ComponentInitContext(nodeNamespace);
 
             // TIP: Load additional functionality into the context via a plugin.
 
@@ -1320,7 +1333,7 @@ class Namespace {
 
         log("Map component for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.aliases[alias] = await component.forAlias('component', alias);
+        return self.aliases[alias] = await component.forAlias('component', alias, self);
     }
 
     async mapInterface (alias, uri) {
@@ -1334,7 +1347,7 @@ class Namespace {
 
         log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.interfaces[alias] = await component.forAlias('interface', alias);
+        return self.interfaces[alias] = await component.forAlias('interface', alias, self);
     }
 
     async mapContract (anchor, uri) {
@@ -1349,7 +1362,7 @@ class Namespace {
 
         log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
 
-        self.contracts[alias] = await component.forAlias('contract', alias);
+        self.contracts[alias] = await component.forAlias('contract', alias, self);
 
         self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
 
@@ -1366,7 +1379,7 @@ class Namespace {
         self.plugins.push({
             match: match,
             re: new RegExp(match),
-            component: await component.forAlias('plugin', match)
+            component: await component.forAlias('plugin', match, self)
         });
 
         return component;
@@ -1550,7 +1563,7 @@ class Namespace {
 
         if (alias === '') {
             // Default component
-            return (await self.getComponentForUri("inf.")).forAlias('component', '');
+            return (await self.getComponentForUri("inf.")).forAlias('component', '', self);
         }
 
         if (!self.aliases[alias]) {
@@ -1569,7 +1582,7 @@ class Namespace {
 
             await Promise.map(aliases, async function (alias) {
 
-                let aspectCode = (await self.components[uri].forAlias('component', alias)).impl['to' + aspectName];
+                let aspectCode = (await self.components[uri].forAlias('component', alias, self)).impl['to' + aspectName];
 
                 if (!aspectCode) {
                     return;
@@ -1649,8 +1662,6 @@ class Node {
 
     static WrapInstructionNode (namespace, value) {
 
-//console.log("WRAP NODE", value);
-
         if (value instanceof Node) {
             return value;
         } else
@@ -1703,9 +1714,6 @@ class Node {
         self.baseDir = namespace.baseDir;
 
         self._finalizeProperty = function (name) {
-
-//console.log("FINALIZE", name, self[name]);
-
             if (
                 self[name] &&
                 typeof self[name] === "string"
@@ -1969,6 +1977,9 @@ class Processor {
                 _value.alias = referenceValue.alias;
                 _value.pointer = referenceValue.pointer;
                 _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
+
+                _value.meta = referenceValue.meta;
+
             } else
             if (
                 !referenceMatch &&
@@ -2394,9 +2405,7 @@ class Processor {
                     value = await value.contract[1].$instance(value, anchor.pointer);
                 }
 
-//console.log("RUN CONTRACTS", value);
                 // Check if we have an object with a bunch of contracts.
-
 
                 if (anchor.interface) {
                     // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
