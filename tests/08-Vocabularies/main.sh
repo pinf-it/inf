@@ -1,5 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
+echo ">>>SKIP_TEST<<<"
+
 inf {
     "#": "it.pinf.inf/bo/",
 
