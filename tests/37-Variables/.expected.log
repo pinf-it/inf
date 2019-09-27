@@ -45,6 +45,13 @@ Greeting (dynamic 2): Hello World
 Greeting (dynamic 2): Hello World
 FILE (dynamic 2): TeStLoCaLiZeD/sub1/sub2/dynamic-load2.inf.json
 --- dynamic end 2 ---
+--- dynamic start 3 ---
+Greeting: Hello World
+Greeting: Hello World
+Greeting (dynamic 3): Hello World
+Greeting (dynamic 3): Hello World
+FILE (dynamic 3): TeStLoCaLiZeD/sub1/sub2/dynamic-load3.inf.json
+--- dynamic end 3 ---
 Pattern: <FILE>
 TeStLoCaLiZeD/sub1/sub2/inf.json
 Pattern: <FILEPATH>

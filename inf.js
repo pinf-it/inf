@@ -929,6 +929,15 @@ require.memoize("/main.js", function (require, exports, module) {
         }
 
         self.load = async function (filepath) {
+            if (
+                filepath instanceof InfNode &&
+                filepath.value instanceof CodeblockNode
+            ) {
+                const baseDir = filepath.baseDir;
+                filepath = await filepath.toInstructions();
+                const hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
+                return namespace.inf.runInstructions(filepath, PATH.join(baseDir, `inline-${hash}.inf.json`), namespace);
+            }
 
             if (/\{/.test(filepath)) {
                 return namespace.inf.runInstructions(filepath, null, namespace);

@@ -8,8 +8,8 @@ exports.inf = async function (INF, ALIAS) {
         invoke: async function (pointer, value) {
 
             if (pointer === "run") {
-                
-                return INF.load(await value.toInstructions());
+
+                return INF.load(value);
             }
         }
     };
