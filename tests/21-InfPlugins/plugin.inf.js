@@ -23,8 +23,8 @@ exports.inf = async function (inf) {
                 let self = this;
 
                 let forNode = self.forNode;
-                self.forNode = function (node) {
-                    let context = forNode(node);
+                self.forNode = function () {
+                    let context = forNode.apply(self, arguments);
 
                     context.capitalize = function (message) {
                         return message.toUpperCase();

@@ -858,6 +858,10 @@ class ComponentInitContext extends EventEmitter {
     constructor (namespace) {
         super();
 
+        if (!namespace) {
+            throw new Error("'namespace' not defined!")
+        }
+
         let self = this;
 
         self.setMaxListeners(9999);
@@ -953,8 +957,8 @@ require.memoize("/main.js", function (require, exports, module) {
 
         self.forNode = function (node, nodeNamespace) {
 
-            //let context = Object.create(self);
-            const context = new ComponentInitContext(nodeNamespace);
+            let context = new ComponentInitContext(nodeNamespace);
+            context = Object.create(context);
 
             // TIP: Load additional functionality into the context via a plugin.
 
