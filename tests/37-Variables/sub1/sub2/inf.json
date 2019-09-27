@@ -30,6 +30,19 @@
 
     "# echo": "--- dynamic end 2 ---",
 
+    "# echo": "--- dynamic start 3 ---",
+
+    "runner1 # run": (inf () >>>
+        {
+            "# echo": "Greeting: \${PINF.greeting}",
+            "# echo": "Greeting: \${ns @ PINF.greeting}",
+
+            "#": "./dynamic-load3."
+        }
+    <<<),
+
+    "# echo": "--- dynamic end 3 ---",
+
     "# echo": "Pattern: <FILE>",
     "# echo": "${__FILE__}",
 
