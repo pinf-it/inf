@@ -13,11 +13,11 @@ opts.size: 1129
 -- 4 --
 error message
 [31merror message[39m
-[31m[39m[31mCode which contains error >>> [39m
+[31m[39m[31m[inf][run.bash.progress] Code which contains error >>> [39m
 [31mecho "error message" 1>&2[39m
 
 [31mexit 1 <<<[39m
-[31m[inf][run.bash] Ended with exit code: 1[39m
+[31m[inf][run.bash.progress] Ended with exit code: 1[39m
 -- s1 --
 #channel-name Message
 
