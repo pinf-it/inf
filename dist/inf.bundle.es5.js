@@ -18320,7 +18320,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
 
       function log() {
-        if (!process.env.VERBOSE) return;
+        if (!process.env.INF_DEBUG) return;
         var args = Array.from(arguments);
         args.unshift("[inf]");
         CONSOLE.log.apply(CONSOLE, args);
@@ -18368,11 +18368,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       _context4.prev = 0;
                       cwd = process.cwd();
                       args = MINIMIST(process.argv.slice(2), {
-                        "boolean": ['verbose', 'debug', 'progress']
+                        "boolean": [//'verbose',
+                        //'debug',
+                        'progress']
                       });
 
-                      if (args.verbose && !process.env.VERBOSE) {
-                        process.env.VERBOSE = "1";
+                      if (args.debug && !process.env.INF_DEBUG) {
+                        process.env.INF_DEBUG = "1";
                       }
 
                       if (args.cwd) {
@@ -18507,7 +18509,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           value: function () {
             var _runInstructions = (0, _asyncToGenerator2["default"])(
             /*#__PURE__*/
-            _regenerator["default"].mark(function _callee6(instructions, filepath) {
+            _regenerator["default"].mark(function _callee6(instructions, filepath, referringNamespace) {
               var self, baseDir, instructionObjects;
               return _regenerator["default"].wrap(function _callee6$(_context6) {
                 while (1) {
@@ -18519,6 +18521,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
                       }
 
+                      referringNamespace = referringNamespace || self.referringNamespace;
                       filepath = PATH.resolve(self.baseDir, filepath);
                       baseDir = PATH.dirname(filepath);
                       filepath = PATH.basename(filepath);
@@ -18526,25 +18529,25 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       //       process instruction objects as they come in. This will allow for faster processing of
                       //       large instruction files.
 
-                      _context6.next = 8;
+                      _context6.next = 9;
                       return self.parser.parseInstructions(instructions);
 
-                    case 8:
+                    case 9:
                       instructionObjects = _context6.sent;
-                      self.namespace = new Namespace(self, baseDir, self.referringNamespace, self.options);
+                      self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
                       self.processor = new Processor(self.namespace);
 
                       if (filepath) {
                         self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
 
-                        if (self.referringNamespace) {
-                          self.referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
+                        if (referringNamespace) {
+                          referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
                         }
                       }
 
                       _context6.t0 = Promise;
                       _context6.t1 = instructionObjects;
-                      _context6.next = 16;
+                      _context6.next = 17;
                       return function (instructionObject) {
                         if (self.namespace.stopped) {
                           return null;
@@ -18588,16 +18591,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
                       };
 
-                    case 16:
+                    case 17:
                       _context6.t2 = _context6.sent;
-                      _context6.next = 19;
+                      _context6.next = 20;
                       return _context6.t0.mapSeries.call(_context6.t0, _context6.t1, _context6.t2);
 
-                    case 19:
-                      if (self.referringNamespace) {
+                    case 20:
+                      if (referringNamespace) {
                         Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                          if (typeof self.referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-                            self.referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
+                          if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+                            referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
                           }
                         });
                       }
@@ -18606,9 +18609,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         self.namespace.componentInitContext.emit("processed");
                       }
 
+                      if (filepath) {
+                        self.namespace.pathStack.pop();
+                      }
+
                       return _context6.abrupt("return", self.namespace.apis);
 
-                    case 22:
+                    case 24:
                     case "end":
                       return _context6.stop();
                   }
@@ -18616,7 +18623,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee6, this);
             }));
 
-            function runInstructions(_x6, _x7) {
+            function runInstructions(_x6, _x7, _x8) {
               return _runInstructions.apply(this, arguments);
             }
 
@@ -18876,7 +18883,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee7, this);
             }));
 
-            function parseInstructions(_x8) {
+            function parseInstructions(_x9) {
               return _parseInstructions.apply(this, arguments);
             }
 
@@ -18908,6 +18915,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                     case 0:
                       self = this;
                       options = options || {}; // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
+                      // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
+                      //       based on the FIRST namespace and never changes.
 
                       self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
                       mod = options.exports || null;
@@ -18940,18 +18949,26 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       function () {
                         var _ref5 = (0, _asyncToGenerator2["default"])(
                         /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee11(type, alias) {
+                        _regenerator["default"].mark(function _callee11(type, alias, namespace) {
                           var makeMethodWrapper, plugins, componentInitContext, pluginOverrides, pluginInstance, instance;
                           return _regenerator["default"].wrap(function _callee11$(_context11) {
                             while (1) {
                               switch (_context11.prev = _context11.next) {
                                 case 0:
+                                  if (namespace) {
+                                    _context11.next = 2;
+                                    break;
+                                  }
+
+                                  throw new Error("'namespace' not set!");
+
+                                case 2:
                                   if (!instances[type]) {
                                     instances[type] = {};
                                   }
 
                                   if (instances[type][alias]) {
-                                    _context11.next = 20;
+                                    _context11.next = 22;
                                     break;
                                   }
 
@@ -19066,9 +19083,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                     }
                                   });
                                   pluginInstance = Object.create(self);
-                                  componentInitContext = componentInitContext.forNode(pluginInstance);
+                                  componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
                                   instance = pluginInstance;
-                                  _context11.next = 12;
+                                  _context11.next = 14;
                                   return Promise.mapSeries(plugins,
                                   /*#__PURE__*/
                                   function () {
@@ -19132,18 +19149,18 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee9);
                                     }));
 
-                                    return function (_x13) {
+                                    return function (_x15) {
                                       return _ref6.apply(this, arguments);
                                     };
                                   }());
 
-                                case 12:
+                                case 14:
                                   instances[type][alias] = instance;
                                   pluginInstance.alias = alias;
-                                  _context11.next = 16;
+                                  _context11.next = 18;
                                   return mod.inf(componentInitContext, alias);
 
-                                case 16:
+                                case 18:
                                   pluginInstance.impl = _context11.sent;
                                   ["invoke", "interface", "contract"].forEach(function (method) {
                                     if (typeof pluginInstance.impl[method] === "function") {
@@ -19160,10 +19177,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                     return wrapper.apply(this, args);
                                   };
 
-                                case 20:
+                                case 22:
                                   return _context11.abrupt("return", instances[type][alias]);
 
-                                case 21:
+                                case 23:
                                 case "end":
                                   return _context11.stop();
                               }
@@ -19171,7 +19188,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee11);
                         }));
 
-                        return function (_x11, _x12) {
+                        return function (_x12, _x13, _x14) {
                           return _ref5.apply(this, arguments);
                         };
                       }();
@@ -19184,7 +19201,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee12, this);
             }));
 
-            function init(_x9, _x10) {
+            function init(_x10, _x11) {
               return _init.apply(this, arguments);
             }
 
@@ -19219,7 +19236,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       Object.defineProperty(LIB, 'verbose', {
         get: function get() {
-          return !!process.env.VERBOSE;
+          return !!process.env.INF_DEBUG;
         }
       });
       Object.defineProperty(LIB, 'UTIL', {
@@ -19280,7 +19297,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
       exports.LIB = LIB;
 
-      function runCodeblock(_x14, _x15, _x16) {
+      function runCodeblock(_x16, _x17, _x18) {
         return _runCodeblock.apply(this, arguments);
       }
 
@@ -19341,7 +19358,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       }, _callee49);
                     }));
 
-                    return function (_x67) {
+                    return function (_x69) {
                       return _ref31.apply(this, arguments);
                     };
                   }());
@@ -19355,7 +19372,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                   _context52.prev = 12;
                   _context52.next = 15;
                   return RUNBASH(codeblock.getCode(), {
-                    progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.VERBOSE,
+                    progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.INF_DEBUG || !!process.env.DEBUG,
                     wait: true
                   });
 
@@ -19384,7 +19401,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                     break;
                   }
 
-                  console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
+                  console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
                   throw new Error("Bash codeblock exited with non 0 code of '".concat(result.code, "'!"));
 
                 case 26:
@@ -19393,8 +19410,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
                 case 28:
                   if (result.code !== 0) {
-                    console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
-                    console.error(LIB.COLORS.red('[inf][run.bash] Ended with exit code: ' + result.code));
+                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
+                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
                     process.exit(1);
                   }
 
@@ -19497,7 +19514,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       }, _callee51, null, [[0, 23]]);
                     }));
 
-                    return function run(_x69) {
+                    return function run(_x71) {
                       return _ref33.apply(this, arguments);
                     };
                   }();
@@ -19532,7 +19549,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       }, _callee50);
                     }));
 
-                    return function (_x68) {
+                    return function (_x70) {
                       return _ref32.apply(this, arguments);
                     };
                   }());
@@ -19566,6 +19583,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
           (0, _classCallCheck2["default"])(this, ComponentInitContext);
           _this = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ComponentInitContext).call(this));
+
+          if (!namespace) {
+            throw new Error("'namespace' not defined!");
+          }
+
           var self = (0, _assertThisInitialized2["default"])(_this);
           self.setMaxListeners(9999);
           self.LIB = LIB;
@@ -19629,7 +19651,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee13, this);
             }));
 
-            return function (_x17, _x18) {
+            return function (_x19, _x20) {
               return _ref9.apply(this, arguments);
             };
           }();
@@ -19674,7 +19696,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee14);
             }));
 
-            return function (_x19, _x20) {
+            return function (_x21, _x22) {
               return _ref10.apply(this, arguments);
             };
           }();
@@ -19685,23 +19707,38 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             var _ref11 = (0, _asyncToGenerator2["default"])(
             /*#__PURE__*/
             _regenerator["default"].mark(function _callee15(filepath) {
-              var path;
+              var baseDir, hash, path;
               return _regenerator["default"].wrap(function _callee15$(_context15) {
                 while (1) {
                   switch (_context15.prev = _context15.next) {
                     case 0:
-                      if (!/\{/.test(filepath)) {
-                        _context15.next = 2;
+                      if (!(filepath instanceof InfNode && filepath.value instanceof CodeblockNode)) {
+                        _context15.next = 7;
                         break;
                       }
 
-                      return _context15.abrupt("return", namespace.inf.runInstructions(filepath));
-
-                    case 2:
-                      path = PATH.resolve(namespace.baseDir || "", filepath);
-                      return _context15.abrupt("return", namespace.inf.runInstructionsFile(path));
+                      baseDir = filepath.baseDir;
+                      _context15.next = 4;
+                      return filepath.toInstructions();
 
                     case 4:
+                      filepath = _context15.sent;
+                      hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
+                      return _context15.abrupt("return", namespace.inf.runInstructions(filepath, PATH.join(baseDir, "inline-".concat(hash, ".inf.json")), namespace));
+
+                    case 7:
+                      if (!/\{/.test(filepath)) {
+                        _context15.next = 9;
+                        break;
+                      }
+
+                      return _context15.abrupt("return", namespace.inf.runInstructions(filepath, null, namespace));
+
+                    case 9:
+                      path = PATH.resolve(namespace.baseDir || "", filepath);
+                      return _context15.abrupt("return", namespace.inf.runInstructionsFile(path, namespace));
+
+                    case 11:
                     case "end":
                       return _context15.stop();
                   }
@@ -19709,7 +19746,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee15);
             }));
 
-            return function (_x21) {
+            return function (_x23) {
               return _ref11.apply(this, arguments);
             };
           }();
@@ -19744,13 +19781,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee16);
             }));
 
-            return function (_x22, _x23) {
+            return function (_x24, _x25) {
               return _ref12.apply(this, arguments);
             };
           }();
 
-          self.forNode = function (node) {
-            var context = Object.create(self); // TIP: Load additional functionality into the context via a plugin.
+          self.forNode = function (node, nodeNamespace) {
+            var context = new ComponentInitContext(nodeNamespace);
+            context = Object.create(context); // TIP: Load additional functionality into the context via a plugin.
 
             function formatMessage(args) {
               return args.map(function (arg) {
@@ -19932,7 +19970,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee17, this);
             }));
 
-            function findInParentTree(_x24, _x25) {
+            function findInParentTree(_x26, _x27) {
               return _findInParentTree.apply(this, arguments);
             }
 
@@ -20132,7 +20170,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         return _resolveUri.apply(this, arguments);
                       };
 
-                      resolveUri = function _ref13(_x27) {
+                      resolveUri = function _ref13(_x29) {
                         return _resolveUri.apply(this, arguments);
                       };
 
@@ -20188,7 +20226,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee19, this, [[8, 14]]);
             }));
 
-            function resolveInfUri(_x26) {
+            function resolveInfUri(_x28) {
               return _resolveInfUri.apply(this, arguments);
             }
 
@@ -20390,7 +20428,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee20, this, [[20, 28]]);
             }));
 
-            function resolveComponentUri(_x28) {
+            function resolveComponentUri(_x30) {
               return _resolveComponentUri.apply(this, arguments);
             }
 
@@ -20473,7 +20511,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee21, this);
             }));
 
-            function getComponentForUri(_x29) {
+            function getComponentForUri(_x31) {
               return _getComponentForUri.apply(this, arguments);
             }
 
@@ -20507,7 +20545,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                     case 6:
                       log("Map component for uri '" + uri + "' to alias '" + alias + "'");
                       _context22.next = 9;
-                      return component.forAlias('component', alias);
+                      return component.forAlias('component', alias, self);
 
                     case 9:
                       return _context22.abrupt("return", self.aliases[alias] = _context22.sent);
@@ -20520,7 +20558,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee22, this);
             }));
 
-            function mapComponent(_x30, _x31) {
+            function mapComponent(_x32, _x33) {
               return _mapComponent.apply(this, arguments);
             }
 
@@ -20554,7 +20592,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                     case 6:
                       log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
                       _context23.next = 9;
-                      return component.forAlias('interface', alias);
+                      return component.forAlias('interface', alias, self);
 
                     case 9:
                       return _context23.abrupt("return", self.interfaces[alias] = _context23.sent);
@@ -20567,7 +20605,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee23, this);
             }));
 
-            function mapInterface(_x32, _x33) {
+            function mapInterface(_x34, _x35) {
               return _mapInterface.apply(this, arguments);
             }
 
@@ -20602,7 +20640,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                     case 7:
                       log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
                       _context24.next = 10;
-                      return component.forAlias('contract', alias);
+                      return component.forAlias('contract', alias, self);
 
                     case 10:
                       self.contracts[alias] = _context24.sent;
@@ -20617,7 +20655,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee24, this);
             }));
 
-            function mapContract(_x34, _x35) {
+            function mapContract(_x36, _x37) {
               return _mapContract.apply(this, arguments);
             }
 
@@ -20645,7 +20683,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       _context25.t1 = match;
                       _context25.t2 = new RegExp(match);
                       _context25.next = 10;
-                      return component.forAlias('plugin', match);
+                      return component.forAlias('plugin', match, self);
 
                     case 10:
                       _context25.t3 = _context25.sent;
@@ -20667,7 +20705,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee25, this);
             }));
 
-            function mapPlugin(_x36, _x37) {
+            function mapPlugin(_x38, _x39) {
               return _mapPlugin.apply(this, arguments);
             }
 
@@ -20695,9 +20733,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
                     case 3:
                       log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
-                      return _context26.abrupt("return", self.variables[alias] = value);
+                      self.variables[alias] = value;
+                      return _context26.abrupt("return", value);
 
-                    case 5:
+                    case 6:
                     case "end":
                       return _context26.stop();
                   }
@@ -20705,7 +20744,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee26, this);
             }));
 
-            function mapVariables(_x38, _x39) {
+            function mapVariables(_x40, _x41) {
               return _mapVariables.apply(this, arguments);
             }
 
@@ -20801,6 +20840,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                 FILENAME: filename,
                 BASENAME: filename,
                 FILENAME_STEM: filenameParts[1] || '',
+                FILENAME_STEM2: (filenameParts[1] || '').replace(/\.[^\.]+$/, ''),
                 FILENAME_EXTENSION: filenameParts[3] || '',
                 FILENAME_SUFFIX: filenameParts[3] && ".".concat(filenameParts[3]) || '',
                 DIR_PARENT_PATH: PATH.dirname(dirname),
@@ -20868,7 +20908,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee27, this);
             }));
 
-            function getValueForVariablePath(_x40) {
+            function getValueForVariablePath(_x42) {
               return _getValueForVariablePath.apply(this, arguments);
             }
 
@@ -20962,7 +21002,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee29, this);
             }));
 
-            function replaceVariablesInString(_x41) {
+            function replaceVariablesInString(_x43) {
               return _replaceVariablesInString.apply(this, arguments);
             }
 
@@ -20982,7 +21022,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       self = this;
 
                       if (!(alias === '')) {
-                        _context30.next = 5;
+                        _context30.next = 6;
                         break;
                       }
 
@@ -20990,20 +21030,21 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       return self.getComponentForUri("inf.");
 
                     case 4:
-                      return _context30.abrupt("return", _context30.sent.forAlias('component', ''));
+                      _context30.t0 = self;
+                      return _context30.abrupt("return", _context30.sent.forAlias('component', '', _context30.t0));
 
-                    case 5:
+                    case 6:
                       if (self.aliases[alias]) {
-                        _context30.next = 7;
+                        _context30.next = 8;
                         break;
                       }
 
                       throw new Error("No component mapped to alias '" + alias + "'!");
 
-                    case 7:
+                    case 8:
                       return _context30.abrupt("return", self.aliases[alias]);
 
-                    case 8:
+                    case 9:
                     case "end":
                       return _context30.stop();
                   }
@@ -21011,7 +21052,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee30, this);
             }));
 
-            function getComponentForAlias(_x42) {
+            function getComponentForAlias(_x44) {
               return _getComponentForAlias.apply(this, arguments);
             }
 
@@ -21055,7 +21096,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                           switch (_context31.prev = _context31.next) {
                                             case 0:
                                               _context31.next = 2;
-                                              return self.components[uri].forAlias('component', alias);
+                                              return self.components[uri].forAlias('component', alias, self);
 
                                             case 2:
                                               _context31.t0 = 'to' + aspectName;
@@ -21136,7 +21177,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee31);
                                     }));
 
-                                    return function (_x45) {
+                                    return function (_x47) {
                                       return _ref17.apply(this, arguments);
                                     };
                                   }());
@@ -21156,7 +21197,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee32);
                         }));
 
-                        return function (_x44) {
+                        return function (_x46) {
                           return _ref16.apply(this, arguments);
                         };
                       }()));
@@ -21169,7 +21210,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee33, this);
             }));
 
-            function gatherComponentAspect(_x43) {
+            function gatherComponentAspect(_x45) {
               return _gatherComponentAspect.apply(this, arguments);
             }
 
@@ -21185,7 +21226,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(Node, null, [{
           key: "WrapInstructionNode",
           value: function WrapInstructionNode(namespace, value) {
-            //console.log("WRAP NODE", value);
             if (value instanceof Node) {
               return value;
             } else if (!value) {
@@ -21224,7 +21264,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           self.baseDir = namespace.baseDir;
 
           self._finalizeProperty = function (name) {
-            //console.log("FINALIZE", name, self[name]);
             if (self[name] && typeof self[name] === "string") {
               var m;
 
@@ -21367,7 +21406,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee34, this);
             }));
 
-            function toInstructions(_x46) {
+            function toInstructions(_x48) {
               return _toInstructions.apply(this, arguments);
             }
 
@@ -21492,7 +21531,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(VariablesReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
-            return typeof value === "string" && value.match(/^([^\$]+?)\s*\$$/);
+            return typeof value === "string" && value.match(/^(.+?)\s*\$$/);
           }
         }]);
 
@@ -21552,7 +21591,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                   referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
 
                                   if (!(referenceMatch && !/_#_/.test(referenceMatch[0]))) {
-                                    _context37.next = 17;
+                                    _context37.next = 18;
                                     break;
                                   }
 
@@ -21610,7 +21649,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee36);
                                     }));
 
-                                    return function (_x52) {
+                                    return function (_x54) {
                                       return _ref19.apply(this, arguments);
                                     };
                                   }());
@@ -21620,12 +21659,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                   _value.alias = referenceValue.alias;
                                   _value.pointer = referenceValue.pointer;
                                   _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
-                                  _context37.next = 25;
+                                  _value.meta = referenceValue.meta;
+                                  _context37.next = 26;
                                   break;
 
-                                case 17:
+                                case 18:
                                   if (!(!referenceMatch && !topLevel)) {
-                                    _context37.next = 25;
+                                    _context37.next = 26;
                                     break;
                                   }
 
@@ -21633,23 +21673,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                   wrappedValue.propertyPathMount = _value.propertyPathMount || [];
 
                                   if (!valueProcessor) {
-                                    _context37.next = 24;
+                                    _context37.next = 25;
                                     break;
                                   }
 
-                                  _context37.next = 23;
+                                  _context37.next = 24;
                                   return valueProcessor(_value, wrappedValue);
 
-                                case 23:
+                                case 24:
                                   wrappedValue = _context37.sent;
 
-                                case 24:
+                                case 25:
                                   _value = wrappedValue;
 
-                                case 25:
+                                case 26:
                                   return _context37.abrupt("return", _value);
 
-                                case 26:
+                                case 27:
                                 case "end":
                                   return _context37.stop();
                               }
@@ -21659,7 +21699,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         return _wrapValue.apply(this, arguments);
                       };
 
-                      wrapValue = function _ref20(_x49, _x50) {
+                      wrapValue = function _ref20(_x51, _x52) {
                         return _wrapValue.apply(this, arguments);
                       };
 
@@ -21742,7 +21782,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee35);
                         }));
 
-                        return function (_x51) {
+                        return function (_x53) {
                           return _ref18.apply(this, arguments);
                         };
                       }());
@@ -21765,7 +21805,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee38, this);
             }));
 
-            function closureForValueIfReference(_x47, _x48) {
+            function closureForValueIfReference(_x49, _x50) {
               return _closureForValueIfReference.apply(this, arguments);
             }
 
@@ -21799,16 +21839,26 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       anchorNamespacePrefix = null;
 
                       if (!/^[^@]+?\s*@$/.test(anchor)) {
-                        _context48.next = 20;
+                        _context48.next = 26;
                         break;
                       }
 
                       // Namespace mapping
                       alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
+                      _context48.next = 10;
+                      return self.namespace.replaceVariablesInString(alias);
+
+                    case 10:
+                      alias = _context48.sent;
+                      _context48.next = 13;
+                      return self.namespace.replaceVariablesInString(value);
+
+                    case 13:
+                      value = _context48.sent;
                       m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
 
                       if (!m) {
-                        _context48.next = 17;
+                        _context48.next = 23;
                         break;
                       }
 
@@ -21816,25 +21866,25 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       valuePointer = m[2];
 
                       if (!(typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined")) {
-                        _context48.next = 15;
+                        _context48.next = 21;
                         break;
                       }
 
                       console.error("self.namespace", self.namespace);
                       throw new Error("Namespace alias '".concat(valueAlias, "' is not mapped!"));
 
-                    case 15:
+                    case 21:
                       log("Replace namespace alias '".concat(valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[valueAlias]);
                       value = [self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""), valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, "");
 
-                    case 17:
+                    case 23:
                       log("Map namespace alias '".concat(alias, "' to:"), value);
                       self.namespace.mappedNamespaceAliases[alias] = value;
                       return _context48.abrupt("return");
 
-                    case 20:
+                    case 26:
                       if (!/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
-                        _context48.next = 30;
+                        _context48.next = 36;
                         break;
                       }
 
@@ -21844,21 +21894,21 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       pointer = _m[2];
 
                       if (!(typeof self.namespace.mappedNamespaceAliases[_alias] === "undefined")) {
-                        _context48.next = 27;
+                        _context48.next = 33;
                         break;
                       }
 
                       console.error("self.namespace", self.namespace);
                       throw new Error("Namespace alias '".concat(_alias, "' is not mapped!"));
 
-                    case 27:
+                    case 33:
                       log("Replace namespace alias '".concat(_alias, "' with:"), self.namespace.mappedNamespaceAliases[_alias]);
                       anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, "");
                       anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, "$1".concat([self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, ""), pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$2"));
 
-                    case 30:
+                    case 36:
                       if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
-                        _context48.next = 40;
+                        _context48.next = 49;
                         break;
                       }
 
@@ -21866,45 +21916,55 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       //            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
                       _m2 = anchor.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
                       _alias2 = _m2[1];
+                      _context48.next = 41;
+                      return self.namespace.replaceVariablesInString(_alias2);
+
+                    case 41:
+                      _alias2 = _context48.sent;
                       _pointer = _m2[2];
 
                       if (!(typeof self.namespace.mappedNamespaceAliases[_alias2] === "undefined")) {
-                        _context48.next = 37;
+                        _context48.next = 46;
                         break;
                       }
 
                       console.error("self.namespace", self.namespace);
                       throw new Error("Namespace alias '".concat(_alias2, "' is not mapped!"));
 
-                    case 37:
+                    case 46:
                       log("Replace namespace alias '".concat(_alias2, "' with:"), self.namespace.mappedNamespaceAliases[_alias2]);
                       anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias2].replace(/\/$/, "");
                       anchor = anchor.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_alias2].replace(/\/$/, ""), _pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
 
-                    case 40:
+                    case 49:
                       if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
-                        _context48.next = 49;
+                        _context48.next = 61;
                         break;
                       }
 
                       // Namespace usage for value
                       valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
                       _valueAlias = valueM[1];
+                      _context48.next = 54;
+                      return self.namespace.replaceVariablesInString(_valueAlias);
+
+                    case 54:
+                      _valueAlias = _context48.sent;
                       _valuePointer = valueM[2];
 
                       if (!(typeof self.namespace.mappedNamespaceAliases[_valueAlias] === "undefined")) {
-                        _context48.next = 47;
+                        _context48.next = 59;
                         break;
                       }
 
                       console.error("self.namespace", self.namespace);
                       throw new Error("Namespace alias '".concat(_valueAlias, "' is not mapped!"));
 
-                    case 47:
+                    case 59:
                       log("Replace namespace alias '".concat(_valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[_valueAlias]);
                       value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_valueAlias].replace(/\/$/, ""), _valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
 
-                    case 49:
+                    case 61:
                       meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1]; // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
 
                       anchor = Node.WrapInstructionNode(self.namespace, anchor);
@@ -21917,50 +21977,22 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       }
 
                       if (!(!anchor instanceof ReferenceNode)) {
-                        _context48.next = 58;
+                        _context48.next = 70;
                         break;
                       }
 
                       CONSOLE.error("anchor", anchor);
                       throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
 
-                    case 58:
+                    case 70:
                       log("anchor.type:", anchor.type); // Run various codeblocks if applicable.
 
                       if (!(value instanceof CodeblockNode)) {
-                        _context48.next = 82;
+                        _context48.next = 94;
                         break;
                       }
 
                       if (!(value.getFormat() === 'run.bash')) {
-                        _context48.next = 66;
-                        break;
-                      }
-
-                      _context48.next = 63;
-                      return runCodeblock(self.namespace, value.value);
-
-                    case 63:
-                      value.value = _context48.sent;
-                      _context48.next = 82;
-                      break;
-
-                    case 66:
-                      if (!(value.getFormat() === 'run.bash.progress')) {
-                        _context48.next = 72;
-                        break;
-                      }
-
-                      _context48.next = 69;
-                      return runCodeblock(self.namespace, value.value);
-
-                    case 69:
-                      value.value = _context48.sent;
-                      _context48.next = 82;
-                      break;
-
-                    case 72:
-                      if (!(value.getFormat() === 'run.javascript')) {
                         _context48.next = 78;
                         break;
                       }
@@ -21970,12 +22002,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
                     case 75:
                       value.value = _context48.sent;
-                      _context48.next = 82;
+                      _context48.next = 94;
                       break;
 
                     case 78:
-                      if (!(value.getFormat() === 'run.javascript.progress')) {
-                        _context48.next = 82;
+                      if (!(value.getFormat() === 'run.bash.progress')) {
+                        _context48.next = 84;
                         break;
                       }
 
@@ -21984,15 +22016,43 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
                     case 81:
                       value.value = _context48.sent;
+                      _context48.next = 94;
+                      break;
 
-                    case 82:
+                    case 84:
+                      if (!(value.getFormat() === 'run.javascript')) {
+                        _context48.next = 90;
+                        break;
+                      }
+
+                      _context48.next = 87;
+                      return runCodeblock(self.namespace, value.value);
+
+                    case 87:
+                      value.value = _context48.sent;
+                      _context48.next = 94;
+                      break;
+
+                    case 90:
+                      if (!(value.getFormat() === 'run.javascript.progress')) {
+                        _context48.next = 94;
+                        break;
+                      }
+
+                      _context48.next = 93;
+                      return runCodeblock(self.namespace, value.value);
+
+                    case 93:
+                      value.value = _context48.sent;
+
+                    case 94:
                       if (!(anchor.value === "#")) {
-                        _context48.next = 88;
+                        _context48.next = 100;
                         break;
                       }
 
                       uris = Array.isArray(value.value) ? value.value : [value.value];
-                      _context48.next = 86;
+                      _context48.next = 98;
                       return Promise.mapSeries(uris,
                       /*#__PURE__*/
                       function () {
@@ -22054,7 +22114,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee39);
                                     }));
 
-                                    return function (_x57) {
+                                    return function (_x59) {
                                       return _ref23.apply(this, arguments);
                                     };
                                   }());
@@ -22067,115 +22127,120 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee40);
                         }));
 
-                        return function (_x56) {
+                        return function (_x58) {
                           return _ref22.apply(this, arguments);
                         };
                       }());
 
-                    case 86:
-                      _context48.next = 208;
+                    case 98:
+                      _context48.next = 223;
                       break;
 
-                    case 88:
+                    case 100:
                       if (!(anchor.pointer === '')) {
-                        _context48.next = 119;
+                        _context48.next = 134;
                         break;
                       }
 
                       if (!(anchor.type === 'component')) {
-                        _context48.next = 94;
+                        _context48.next = 106;
                         break;
                       }
 
-                      _context48.next = 92;
+                      _context48.next = 104;
                       return self.namespace.mapComponent(anchor.alias, value.value);
 
-                    case 92:
-                      _context48.next = 117;
+                    case 104:
+                      _context48.next = 132;
                       break;
 
-                    case 94:
+                    case 106:
                       if (!(anchor.type === 'interface')) {
-                        _context48.next = 101;
+                        _context48.next = 113;
                         break;
                       }
 
-                      _context48.next = 97;
+                      _context48.next = 109;
                       return self.namespace.mapInterface(anchor.alias, value.value);
 
-                    case 97:
+                    case 109:
                       interfaceComponent = _context48.sent;
 
                       if (anchor.contract) {
                         interfaceComponent.contract = [anchor.contract, self.namespace.getContractForAlias(anchor.contract)];
                       }
 
-                      _context48.next = 117;
+                      _context48.next = 132;
                       break;
 
-                    case 101:
+                    case 113:
                       if (!(anchor.type === 'contract')) {
-                        _context48.next = 106;
+                        _context48.next = 118;
                         break;
                       }
 
-                      _context48.next = 104;
+                      _context48.next = 116;
                       return self.namespace.mapContract(anchor, value.value);
 
-                    case 104:
-                      _context48.next = 117;
+                    case 116:
+                      _context48.next = 132;
                       break;
 
-                    case 106:
+                    case 118:
                       if (!(anchor.type === 'plugin')) {
-                        _context48.next = 111;
+                        _context48.next = 123;
                         break;
                       }
 
-                      _context48.next = 109;
+                      _context48.next = 121;
                       return self.namespace.mapPlugin(anchor.alias, value.value);
 
-                    case 109:
-                      _context48.next = 117;
+                    case 121:
+                      _context48.next = 132;
                       break;
 
-                    case 111:
+                    case 123:
                       if (!(anchor.type === 'variables')) {
-                        _context48.next = 116;
+                        _context48.next = 131;
                         break;
                       }
 
-                      _context48.next = 114;
+                      _context48.next = 126;
+                      return self.namespace.replaceVariablesInString(anchor.alias);
+
+                    case 126:
+                      anchor.alias = _context48.sent;
+                      _context48.next = 129;
                       return self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value));
 
-                    case 114:
-                      _context48.next = 117;
+                    case 129:
+                      _context48.next = 132;
                       break;
 
-                    case 116:
+                    case 131:
                       throw new Error("Anchor of type '".concat(anchor.type, "' not supported!"));
 
-                    case 117:
-                      _context48.next = 208;
+                    case 132:
+                      _context48.next = 223;
                       break;
 
-                    case 119:
+                    case 134:
                       if (!(anchor.pointer != '')) {
-                        _context48.next = 204;
+                        _context48.next = 219;
                         break;
                       }
 
-                      _context48.next = 122;
+                      _context48.next = 137;
                       return self.namespace.replaceVariablesInString(anchor.pointer);
 
-                    case 122:
+                    case 137:
                       anchor.pointer = _context48.sent;
-                      _context48.next = 125;
+                      _context48.next = 140;
                       return self.namespace.replaceVariablesInString(value.value);
 
-                    case 125:
+                    case 140:
                       value.value = _context48.sent;
-                      _context48.next = 128;
+                      _context48.next = 143;
                       return self.closureForValueIfReference(value,
                       /*#__PURE__*/
                       function () {
@@ -22243,7 +22308,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee41);
                                     }));
 
-                                    return function (_x60) {
+                                    return function (_x62) {
                                       return _ref25.apply(this, arguments);
                                     };
                                   }());
@@ -22326,7 +22391,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee42);
                                     }));
 
-                                    return function (_x61) {
+                                    return function (_x63) {
                                       return _ref26.apply(this, arguments);
                                     };
                                   }());
@@ -22405,7 +22470,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                                       }, _callee43);
                                     }));
 
-                                    return function (_x62) {
+                                    return function (_x64) {
                                       return _ref27.apply(this, arguments);
                                     };
                                   }());
@@ -22437,27 +22502,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee44);
                         }));
 
-                        return function (_x58, _x59) {
+                        return function (_x60, _x61) {
                           return _ref24.apply(this, arguments);
                         };
                       }());
 
-                    case 128:
+                    case 143:
                       value = _context48.sent;
 
                       if (value.wrapped) {
-                        _context48.next = 167;
+                        _context48.next = 182;
                         break;
                       }
 
                       if (!value["interface"]) {
-                        _context48.next = 142;
+                        _context48.next = 157;
                         break;
                       }
 
                       interfaces = value["interface"];
                       delete value["interface"];
-                      _context48.next = 135;
+                      _context48.next = 150;
                       return Promise.mapSeries(interfaces,
                       /*#__PURE__*/
                       function () {
@@ -22509,14 +22574,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee45);
                         }));
 
-                        return function (_x63) {
+                        return function (_x65) {
                           return _ref28.apply(this, arguments);
                         };
                       }());
 
-                    case 135:
+                    case 150:
                       if (!value.contract) {
-                        _context48.next = 140;
+                        _context48.next = 155;
                         break;
                       }
 
@@ -22524,39 +22589,39 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       log("Verify remote interface output from '".concat(interfaces.map(function (_interface) {
                         return _interface[0];
                       }), "' using contract '").concat(value.contract[1].alias, "'"));
-                      _context48.next = 139;
+                      _context48.next = 154;
                       return value.contract[1].$instance(value, anchor.pointer);
 
-                    case 139:
+                    case 154:
                       value = _context48.sent;
 
-                    case 140:
-                      _context48.next = 147;
+                    case 155:
+                      _context48.next = 162;
                       break;
 
-                    case 142:
+                    case 157:
                       if (!value.contract) {
-                        _context48.next = 147;
+                        _context48.next = 162;
                         break;
                       }
 
                       log("Verify inline value using contract '".concat(value.contract[1].alias, "'"));
-                      _context48.next = 146;
+                      _context48.next = 161;
                       return value.contract[1].$instance(value, anchor.pointer);
 
-                    case 146:
+                    case 161:
                       value = _context48.sent;
 
-                    case 147:
+                    case 162:
                       if (!anchor["interface"]) {
-                        _context48.next = 159;
+                        _context48.next = 174;
                         break;
                       }
 
                       // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
                       _interfaces = anchor["interface"];
                       delete anchor["interface"];
-                      _context48.next = 152;
+                      _context48.next = 167;
                       return Promise.mapSeries(_interfaces,
                       /*#__PURE__*/
                       function () {
@@ -22613,14 +22678,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee46);
                         }));
 
-                        return function (_x64) {
+                        return function (_x66) {
                           return _ref29.apply(this, arguments);
                         };
                       }());
 
-                    case 152:
+                    case 167:
                       if (!value.contract) {
-                        _context48.next = 157;
+                        _context48.next = 172;
                         break;
                       }
 
@@ -22628,39 +22693,39 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       log("Verify local interface output from '".concat(_interfaces.map(function (_interface) {
                         return _interface[0];
                       }), "' using contract '").concat(value.contract[1].alias, "'"));
-                      _context48.next = 156;
+                      _context48.next = 171;
                       return value.contract[1].$instance(value, anchor.pointer);
 
-                    case 156:
+                    case 171:
                       value = _context48.sent;
 
-                    case 157:
-                      _context48.next = 164;
+                    case 172:
+                      _context48.next = 179;
                       break;
 
-                    case 159:
+                    case 174:
                       if (!anchor.contract) {
-                        _context48.next = 164;
+                        _context48.next = 179;
                         break;
                       }
 
                       // Verify value via contract
                       log("Verify value using contract '".concat(anchor.contract[1].alias, "'"));
-                      _context48.next = 163;
+                      _context48.next = 178;
                       return anchor.contract[1].$instance(value, anchor.pointer);
 
-                    case 163:
+                    case 178:
                       value = _context48.sent;
 
-                    case 164:
+                    case 179:
                       if (anchor.contract) {
                         value.contract = anchor.contract || null;
                       }
 
-                      _context48.next = 168;
+                      _context48.next = 183;
                       break;
 
-                    case 167:
+                    case 182:
                       if (anchor["interface"]) {
                         anchor["interface"].forEach(function (_interface) {
                           if (value.contract) {
@@ -22673,51 +22738,51 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                         });
                       }
 
-                    case 168:
+                    case 183:
                       if (!(anchor.type === 'component')) {
-                        _context48.next = 198;
+                        _context48.next = 213;
                         break;
                       }
 
-                      _context48.next = 171;
+                      _context48.next = 186;
                       return self.namespace.getComponentForAlias(anchor.alias);
 
-                    case 171:
+                    case 186:
                       _component3 = _context48.sent;
                       log("Invoke component '".concat(_component3.path, "' for alias '").concat(anchor.alias, "'"));
 
                       if (!(anchor.contract && anchor.contract[1].impl.invokeWrapper)) {
-                        _context48.next = 183;
+                        _context48.next = 198;
                         break;
                       }
 
                       if (_component3.$wrappedInvoke) {
-                        _context48.next = 178;
+                        _context48.next = 193;
                         break;
                       }
 
-                      _context48.next = 177;
+                      _context48.next = 192;
                       return anchor.contract[1].impl.invokeWrapper(_component3).call(null, anchor.contract[0]);
 
-                    case 177:
+                    case 192:
                       _component3.$wrappedInvoke = _context48.sent;
 
-                    case 178:
-                      _context48.next = 180;
+                    case 193:
+                      _context48.next = 195;
                       return _component3.$wrappedInvoke(anchor.pointer, value);
 
-                    case 180:
+                    case 195:
                       response = _context48.sent;
-                      _context48.next = 186;
+                      _context48.next = 201;
                       break;
 
-                    case 183:
+                    case 198:
                       if (!anchor["interface"]) {
-                        _context48.next = 186;
+                        _context48.next = 201;
                         break;
                       }
 
-                      _context48.next = 186;
+                      _context48.next = 201;
                       return Promise.mapSeries(anchor["interface"],
                       /*#__PURE__*/
                       function () {
@@ -22761,19 +22826,19 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                           }, _callee47);
                         }));
 
-                        return function (_x65, _x66) {
+                        return function (_x67, _x68) {
                           return _ref30.apply(this, arguments);
                         };
                       }());
 
-                    case 186:
+                    case 201:
                       if (!(typeof response === "undefined")) {
-                        _context48.next = 194;
+                        _context48.next = 209;
                         break;
                       }
 
                       if (_component3.invoke) {
-                        _context48.next = 191;
+                        _context48.next = 206;
                         break;
                       }
 
@@ -22781,14 +22846,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                       console.error("component", _component3);
                       throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
 
-                    case 191:
-                      _context48.next = 193;
+                    case 206:
+                      _context48.next = 208;
                       return _component3.invoke(anchor.pointer, value);
 
-                    case 193:
+                    case 208:
                       response = _context48.sent;
 
-                    case 194:
+                    case 209:
                       if ((0, _typeof2["default"])(response) === "object") {
                         self.namespace.apis[anchor.alias] = LODASH_MERGE(self.namespace.apis[anchor.alias] || {}, response);
                       } else {
@@ -22797,29 +22862,29 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
                       return _context48.abrupt("return", response);
 
-                    case 198:
+                    case 213:
                       if (!(anchor.type === 'plugin')) {
-                        _context48.next = 202;
+                        _context48.next = 217;
                         break;
                       }
 
                       plugins = self.namespace.getPluginsForMatch(anchor.alias);
-                      _context48.next = 202;
+                      _context48.next = 217;
                       return Promise.mapSeries(plugins, function (plugin) {
                         return plugin.invoke(anchor.pointer, value);
                       });
 
-                    case 202:
-                      _context48.next = 208;
+                    case 217:
+                      _context48.next = 223;
                       break;
 
-                    case 204:
+                    case 219:
                       CONSOLE.error("instruction:", anchor, ":", value);
                       CONSOLE.error("anchor.alias:", anchor.alias);
                       CONSOLE.error("anchor.pointer:", anchor.pointer);
                       throw new Error("Unknown instruction!");
 
-                    case 208:
+                    case 223:
                     case "end":
                       return _context48.stop();
                   }
@@ -22827,7 +22892,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               }, _callee48, this);
             }));
 
-            function processInstruction(_x53, _x54, _x55) {
+            function processInstruction(_x55, _x56, _x57) {
               return _processInstruction.apply(this, arguments);
             }
 

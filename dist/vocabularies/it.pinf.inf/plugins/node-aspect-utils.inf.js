@@ -12,7 +12,7 @@ exports.inf = async function (inf) {
 
                 let forNode = self.forNode;
                 self.forNode = function (node) {
-                    let context = forNode(node);
+                    let context = forNode.apply(self, arguments);
                     
                     context.getNodeAspect = function (aspect, args) {
                         if (typeof node.impl[aspect] !== "function") {
