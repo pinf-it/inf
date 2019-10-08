@@ -758,13 +758,13 @@ async function runCodeblock (namespace, value, vars) {
 
         if (codeblock.getFormat() !== 'run.bash.progress') {
             if (result.code !== 0) {
-                console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
+                console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
                 throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
             }
         } else {
             if (result.code !== 0) {
-                console.error(LIB.COLORS.red("Code which contains error >>> " + code + " <<<"));
-                console.error(LIB.COLORS.red('[inf][run.bash] Ended with exit code: ' + result.code));
+                console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
+                console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
                 process.exit(1);
             }
         }
@@ -1496,6 +1496,7 @@ class Namespace {
                 FILENAME: filename,
                 BASENAME: filename,
                 FILENAME_STEM: filenameParts[1] || '',
+                FILENAME_STEM2: (filenameParts[1] || '').replace(/\.[^\.]+$/, ''),
                 FILENAME_EXTENSION: filenameParts[3] || '',
                 FILENAME_SUFFIX: (filenameParts[3] && `.${filenameParts[3]}`) || '',
                 DIR_PARENT_PATH: PATH.dirname(dirname),

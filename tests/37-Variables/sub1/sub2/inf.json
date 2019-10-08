@@ -76,6 +76,7 @@
     "# echo": ":<DIRNAME> ${__DIRNAME__}",
     "# echo": ":<DIRPATH> ${__DIRPATH__}",
     "# echo": ":<FILENAME_STEM> ${__FILENAME_STEM__}",
+    "# echo": ":<FILENAME_STEM2> ${__FILENAME_STEM2__}",
     "# echo": ":<FILENAME_EXTENSION> ${__FILENAME_EXTENSION__}",
     "# echo": ":<FILENAME_SUFFIX> ${__FILENAME_SUFFIX__}",
     "# echo": ":<DIR_PARENT_PATH> ${__DIR_PARENT_PATH__}",

@@ -64,19 +64,20 @@ API
 Magic Variables
 ---------------
 
-  * `__FILE__` - **/.../sub1/sub2/inf.json**
-  * `__FILEPATH__` - **/.../sub1/sub2/inf.json**
-  * `__FILENAME__` - **inf.json**
-  * `__BASENAME__` - **inf.json**
+  * `__FILE__` - **/.../sub1/sub2/foo.inf.json**
+  * `__FILEPATH__` - **/.../sub1/sub2/foo.inf.json**
+  * `__FILENAME__` - **foo.inf.json**
+  * `__BASENAME__` - **foo.inf.json**
   * `__DIRNAME__` - **/.../sub1/sub2**
   * `__DIRPATH__` - **/.../sub1/sub2**
-  * `__FILENAME_STEM__` - **inf**
+  * `__FILENAME_STEM__` - **foo.inf**
+  * `__FILENAME_STEM2__` - **foo**
   * `__FILENAME_EXTENSION__` - **json**
   * `__FILENAME_SUFFIX__` - **.json**
   * `__DIR_PARENT_PATH__` - **/.../sub1**
   * `__DIR_BASENAME__` - **sub2**
   * `__BASEDIR__` - **/...**
-  * `__RELPATH__` - **sub1/sub2/inf.json**
+  * `__RELPATH__` - **sub1/sub2/foo.inf.json**
 
 
 Details

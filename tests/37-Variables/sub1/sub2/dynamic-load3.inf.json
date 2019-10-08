@@ -2,5 +2,7 @@
 {
     "# echo": "Greeting (dynamic 3): ${PINF.greeting}",
     "# echo": "Greeting (dynamic 3): ${ns @ PINF.greeting}",
-    "# echo": "FILE (dynamic 3): ${__FILE__}"
+    "# echo": "FILE (dynamic 3): ${__FILE__}",
+    "# echo": "FILENAME_STEM (dynamic 3): ${__FILENAME_STEM__}",
+    "# echo": "FILENAME_STEM2 (dynamic 3): ${__FILENAME_STEM2__}"
 }

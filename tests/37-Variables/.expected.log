@@ -51,6 +51,8 @@ Greeting: Hello World
 Greeting (dynamic 3): Hello World
 Greeting (dynamic 3): Hello World
 FILE (dynamic 3): TeStLoCaLiZeD/sub1/sub2/dynamic-load3.inf.json
+FILENAME_STEM (dynamic 3): dynamic-load3.inf
+FILENAME_STEM2 (dynamic 3): dynamic-load3
 --- dynamic end 3 ---
 Pattern: <FILE>
 TeStLoCaLiZeD/sub1/sub2/inf.json
@@ -76,6 +78,7 @@ TeStLoCaLiZeD/sub1/sub2/inf.json
 :<DIRNAME> TeStLoCaLiZeD/sub1/sub2
 :<DIRPATH> TeStLoCaLiZeD/sub1/sub2
 :<FILENAME_STEM> inf
+:<FILENAME_STEM2> inf
 :<FILENAME_EXTENSION> json
 :<FILENAME_SUFFIX> .json
 :<DIR_PARENT_PATH> TeStLoCaLiZeD/sub1
