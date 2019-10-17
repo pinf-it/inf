@@ -1,4 +1,5 @@
 OK : [opt1: val1, arg1: arg1, argMissing: ]
+OK : [inf.json, --opt1, val1, arg1]
 OK : [opt1: val1, arg1: arg1, argMissing: ]
 OK : [opt1: set, opt2: not set]
 ---

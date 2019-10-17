@@ -1,4 +1,5 @@
 #!/usr/bin/env inf
 {
-    "#echo": "OK : [opt1: %%args.opt1%%, arg1: %%args._[0]%%, argMissing: %%args._missing_%%]"
+    "# echo": "OK : [opt1: %%args.opt1%%, arg1: %%args._[0]%%, argMissing: %%args._missing_%%]",
+    "# echo": "OK : [%%args._original[0]%%, %%args._original[1]%%, %%args._original[2]%%, %%args._original[3]%%]"
 }

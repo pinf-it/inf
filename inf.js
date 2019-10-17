@@ -113,6 +113,7 @@ setImmediate(function () {
                         'progress'
                     ]
                 });
+                args._original = process.argv.slice(2);
                 if (args.debug && !process.env.INF_DEBUG) {
                     process.env.INF_DEBUG = "1";
                 }
@@ -443,6 +444,17 @@ class Parser {
     }
 }
 
+// @source https://stackoverflow.com/a/40577337/330439
+function getAllMethodNames (obj) {
+    let methods = new Set();
+    while (obj) {
+      let keys = Reflect.ownKeys(obj)
+      keys.forEach((k) => methods.add(k));
+      obj = Reflect.getPrototypeOf(obj);
+    }
+    return methods;
+}
+
 
 class Component {
 
@@ -541,15 +553,17 @@ class Component {
 
                 function makeMethodWrapper (type, method) {
 
-                    return function (arg1, arg2) {
+                    return async function (arg1, arg2) {
 
                         const self = this;
+
+                        const methods = getAllMethodNames(pluginInstance.impl);
 
                         // See if there is a component method instead of using generic 'invoke'.
                         if (
                             method === "invoke" &&
                             /^[a-zA-z0-9_]+\(\)/.test(arg1) &&
-                            typeof pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")] === "function"
+                            methods.has(arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1"))
                         ) {
                             const args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
 
@@ -586,7 +600,7 @@ class Component {
 
                         log(`Calling method '${method}' in component '${pluginInstance.path}' with args:`, arg1, typeof arg2);
 
-                        if (!pluginInstance.impl[method]) {
+                        if (!methods.has(method)) {
                             if (method === "invoke") {
                                 console.error("pointer", arg1);
                                 throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
@@ -594,8 +608,16 @@ class Component {
                             throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
                         }
 
-                        let result = pluginInstance.impl[method].call(self, arg1, arg2);
+                        let result = await pluginInstance.impl[method].call(self, arg1, arg2);
 
+                        if (typeof result === "undefined") {
+                            if (type === "invoke") {
+                                badInvocation(arg1, arg2, self);
+                            } else {
+                                noFactory(method, arg1, arg2, self);
+                            }
+                        }
+                        /*
                         function checkResult (result) {
                             if (typeof result === "undefined") {
                                 if (type === "invoke") {
@@ -617,6 +639,7 @@ class Component {
                                 result.then(checkResult).catch(exitWithError);
                             }
                         }
+                        */
 
                         return result;
                     }                    
@@ -664,7 +687,8 @@ const LIB = {
     CRYPTO: CRYPTO,
     INF: exports,
     MEMORYSTREAM: MEMORYSTREAM,
-    RESOLVE: RESOLVE
+    RESOLVE: RESOLVE,
+    MINIMIST: MINIMIST
 };
 LIB.Promise.defer = function () {
     var deferred = {};
@@ -1797,13 +1821,13 @@ exports.Node = Node;
 
 
 function badInvocation (pointer, value, component) {
-    console.error("value", value);
+    log("value", value);
     throw new Error(`Invocation for pointer '${pointer}' is not supported${component ? ` in component '${component.path}'` : ''}`);
 }
 
 function noFactory (method, alias, node, component) {
-    console.error("ERROR alias", alias);
-    console.error("ERROR node", node);
+    log("ERROR alias", alias);
+    log("ERROR node", node);
     throw new Error(`Call to factory '${method}' did not retrurn a function${component ? ` for component '${component.path}'` : ''}`);
 }
 

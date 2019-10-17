@@ -5,6 +5,10 @@ exports.inf = async function (inf) {
 
     return {
 
+        getPrefix () {
+            return "EP:";
+        },
+
         invoke: function (pointer, value) {
 
             if (pointer === "echo") {

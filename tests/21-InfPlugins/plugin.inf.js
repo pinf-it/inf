@@ -7,6 +7,10 @@ exports.inf = async function (inf) {
 
     return {
 
+        getPrefix () {
+            return "PP:";
+        },
+
         invoke: function (pointer, value) {
 
             if (pointer === "prefix") {
@@ -43,7 +47,26 @@ exports.inf = async function (inf) {
                     invoke: async function (pointer, value) {
                         let orig = this;
 
-                        value.value = prefix + value.value;
+                        async function getPrefix () {
+                            let prefix = null;
+                            try {
+                                prefix = await orig.invoke("getPrefix", {
+                                    value: undefined
+                                });
+                                prefix = "noooo";
+                            } catch (err) {
+                                if (/Invocation for pointer 'getPrefix' is not supported in component/.test(err.message)) {
+                                    prefix = await orig.invoke("getPrefix()", {
+                                        value: undefined
+                                    });
+                                } else {
+                                    throw err;
+                                }
+                            }
+                            return prefix;
+                        }
+
+                        value.value = (await getPrefix()) + prefix + value.value;
 
                         return orig.invoke(pointer, value);
                     }            
