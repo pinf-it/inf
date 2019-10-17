@@ -39,7 +39,7 @@
     "pinf-loader-js": "^1.0.4",
     "runbash": "^0.1.0-pre.0",
     "traverse": "^0.6.6",
-    "lib.json": "^0.0.5",
+    "lib.json": "^0.0.6-pre.0",
     "memorystream": "^0.3.1",
     "resolve": "^1.12.0"
   }
