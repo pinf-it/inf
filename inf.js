@@ -2345,7 +2345,7 @@ class Processor {
                         } else {
                             _value.contract = _interface[1].contract || null;
                         }
-                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _interface[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                         if (typeof _value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2356,7 +2356,7 @@ class Processor {
                             return _interface[0];
                         })}' using contract '${_value.contract[1].alias}'`);
                         
-                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _value.contract[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                     }
                 } else
                 if (_value.interface) {
@@ -2369,7 +2369,7 @@ class Processor {
                         } else {
                             _value.contract = _interface[1].contract || null;
                         }
-                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _interface[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                         if (typeof _value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2380,7 +2380,7 @@ class Processor {
                             return _interface[0];
                         })}' using contract '${_value.contract[1].alias}'`);
                         
-                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _value.contract[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                     }
                 }
 
@@ -2394,7 +2394,7 @@ class Processor {
                         } else {
                             _value.contract = _interface[1].contract || null;
                         }
-                        _value = await _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _interface[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                         if (typeof _value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2404,7 +2404,7 @@ class Processor {
                         log(`Verify local interface output from '${anchor.interface.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${_value.contract[1].alias}'`);
-                        _value = await _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
+                        _value = await (await _value.contract[1].$instance)(_value, anchor.pointer, value.propertyPathMount);
                     }
                 }
 
@@ -2425,7 +2425,7 @@ class Processor {
                         } else {
                             value.contract = _interface[1].contract || null;
                         }
-                        value = await _interface[1].$instance(value, anchor.pointer);
+                        value = await (await _interface[1].$instance)(value, anchor.pointer);
                         if (typeof value === "undefined") {
                             throw new Error(`Value is undefined after processing by remote interface '${_interface[0]}'!`);
                         }
@@ -2435,12 +2435,12 @@ class Processor {
                         log(`Verify remote interface output from '${interfaces.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value, anchor.pointer);
+                        value = await (await value.contract[1].$instance)(value, anchor.pointer);
                     }
                 } else
                 if (value.contract) {
                     log(`Verify inline value using contract '${value.contract[1].alias}'`);
-                    value = await value.contract[1].$instance(value, anchor.pointer);
+                    value = await (await value.contract[1].$instance)(value, anchor.pointer);
                 }
 
                 // Check if we have an object with a bunch of contracts.
@@ -2461,7 +2461,7 @@ class Processor {
                             value.contract = _interface[1].contract || null;
                         }
 
-                        value = await _interface[1].$instance(value, anchor.pointer);
+                        value = await (await _interface[1].$instance)(value, anchor.pointer);
                         if (typeof value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }
@@ -2471,14 +2471,14 @@ class Processor {
                         log(`Verify local interface output from '${interfaces.map(function (_interface) {
                             return _interface[0];
                         })}' using contract '${value.contract[1].alias}'`);
-                        value = await value.contract[1].$instance(value, anchor.pointer);
+                        value = await (await value.contract[1].$instance)(value, anchor.pointer);
                     }
                 } else
                 if (anchor.contract) {
                     // Verify value via contract
                     log(`Verify value using contract '${anchor.contract[1].alias}'`);
 
-                    value = await anchor.contract[1].$instance(value, anchor.pointer);
+                    value = await (await anchor.contract[1].$instance)(value, anchor.pointer);
                 }
 
                 if (anchor.contract) {

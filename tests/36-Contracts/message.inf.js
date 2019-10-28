@@ -10,6 +10,9 @@ exports.inf = async function (inf) {
         contract: function (alias, node) {
 
             return async function (value) {
+
+                value.value = await value.value;
+
                 if (
                     typeof value.value === "object" &&
                     Object.keys(value.value).length === 1 &&
