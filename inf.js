@@ -589,9 +589,11 @@ class Component {
                                 args.unshift(args1_parts[2]);
                             }
 
+                            pluginInstance.impl._infComponent = self;
+
                             // NOTE: We only pass in the value (not the wrapper).
                             // TODO: Optionally pass in the wrapper?
-                            let result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(self, args);
+                            let result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(pluginInstance.impl, args);
                             // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
                             //       'invoke()' in contrast must always return something to ensure the invocation was handled.
 
@@ -608,7 +610,9 @@ class Component {
                             throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
                         }
 
-                        let result = await pluginInstance.impl[method].call(self, arg1, arg2);
+                        pluginInstance.impl._infComponent = self;
+
+                        let result = await pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2);
 
                         if (typeof result === "undefined") {
                             if (type === "invoke") {
