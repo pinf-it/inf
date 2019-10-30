@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf",
-  "version": "0.2.0-pre.4",
+  "version": "0.2.0-pre.5",
   "pm": "npm",
   "bin": {
     "inf": "inf.js"
