@@ -12,7 +12,14 @@ class Formatter {
     async invoke (pointer, value) {
 
         ASSERT.deepEqual(Object.keys(this), ['_mode', '_infComponent']);
-        ASSERT.deepEqual(Object.keys(this._infComponent), ['alias', 'impl', 'invoke', 'invokeContractAliasMethod']);
+        ASSERT.deepEqual(Object.keys(this._infComponent), [
+            'resolvedNamespace',
+            'alias',
+            'impl',
+            'invoke',
+            'invokeContractAliasMethod',
+            'getAPI'
+        ]);
 
         if (/^set\(\)\s/.test(pointer)) {
             if (pointer.replace(/^set\(\)\s/, '') === 'mode') {
@@ -25,7 +32,14 @@ class Formatter {
     getFormatter () {
 
         ASSERT.deepEqual(Object.keys(this), ['_mode', '_infComponent']);
-        ASSERT.deepEqual(Object.keys(this._infComponent), ['alias', 'impl', 'invoke', 'invokeContractAliasMethod']);
+        ASSERT.deepEqual(Object.keys(this._infComponent), [
+            'resolvedNamespace',
+            'alias',
+            'impl',
+            'invoke',
+            'invokeContractAliasMethod',
+            'getAPI'
+        ]);
 
         const mode = this._mode;
 

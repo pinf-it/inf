@@ -1,0 +1,7 @@
+#!/usr/bin/env inf
+{
+    "v0 @": "inf.pinf.it @ api/runnable/v0",
+    "v0 @ #": "./logger.",
+    "v1/pre @": "inf.pinf.it @ api/runnable/v0.1",
+    "v1/pre @ #": "./logger."
+}

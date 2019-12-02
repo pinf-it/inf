@@ -9,5 +9,11 @@
 
     "ns4 @": "ns3 @ greeting",
     "ns4 @ #": "./greeting.inf.js",
-    "ns3 @ stdout # log()": "ns4 @ # get()"
+    "ns3 @ stdout # log()": "ns4 @ # get()",
+
+    "# echo": "---",
+
+    "ns5/module @": "./greeting.inf.js",
+    "ns5 #": "${@ ns5/module}",
+    "ns3 @ stdout # log()": "ns5 # get()"
 }

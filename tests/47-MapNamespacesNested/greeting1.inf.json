@@ -1,0 +1,9 @@
+#!/usr/bin/env inf
+{
+    "api @": "inf.pinf.it/announcer/impl @ v0",
+
+    "api @ # configure()": {
+        "prefix": "Greeting PREFIX 1",
+        "message": "Hello World 1"
+    }
+}

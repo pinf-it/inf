@@ -7,3 +7,5 @@ stdout alias: namspace/1/3/stdout
 [namspace/1/3/stdout] log(): OK: 3b
 ---
 [namspace/1/3/stdout] log(): [namspace/1/3/greeting] Hello World
+---
+[namspace/1/3/stdout] log(): [ns5] Hello World

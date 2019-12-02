@@ -5,6 +5,6 @@ const INF = require("../..");
 let inf = new INF.INF(__dirname, null, {});
 inf.runInstructionsFile("inf.json").then(function (api) {
 
-    ASSERT.equal(api.stdout, true);
+    ASSERT.deepEqual(api.stdout, [ { anchor: [], implements: [], api: true } ]);
 
 });

@@ -212,7 +212,8 @@ class INF {
         if (filepath) {
             self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
             if (referringNamespace) {
-                referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
+                self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];                
+                self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
             }
         }
 
@@ -263,10 +264,19 @@ class INF {
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
         });
 
-        if (referringNamespace) {
+        if (
+            referringNamespace &&
+            self.namespace.options.mapNamespaceAliasesIntoParent !== false
+        ) {
+            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+
             Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
                 if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-                    referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
+
+                    self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+
+                        return [key, self.namespace.mappedNamespaceAliases[key]];
+                    });
                 }
             });
         }
@@ -493,7 +503,7 @@ class Component {
         self.getComponentAliases = function () {
             return Object.keys(instances.component || {});
         }
-        self.forAlias = async function (type, alias, namespace) {
+        self.forAlias = async function (type, alias, namespace, resolvedNamespace) {
 
             if (!namespace) {
                 throw new Error("'namespace' not set!");
@@ -548,15 +558,26 @@ class Component {
                 });
                 instances[type][alias] = instance;
 
+//console.error("init", type, alias, namespace.baseDir);
+
+                pluginInstance.resolvedNamespace = resolvedNamespace;
                 pluginInstance.alias = alias;
                 pluginInstance.impl = await mod.inf(componentInitContext, alias);
-
+                
                 function makeMethodWrapper (type, method) {
 
-                    return async function (arg1, arg2) {
+                    return async function (arg1, arg2, options) {
 
                         const self = this;
 
+                        options = options || {};
+
+                        if (self) {
+                            self.getAPI = function (prefix) {
+                                return namespace.apis;;
+                            }
+                        }
+        
                         const methods = getAllMethodNames(pluginInstance.impl);
 
                         // See if there is a component method instead of using generic 'invoke'.
@@ -612,7 +633,7 @@ class Component {
 
                         pluginInstance.impl._infComponent = self;
 
-                        let result = await pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2);
+                        let result = await pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2, options);
 
                         if (typeof result === "undefined") {
                             if (type === "invoke") {
@@ -673,6 +694,18 @@ class Component {
                     const wrapper = makeMethodWrapper("invoke", method);
                     return wrapper.apply(this, args);
                 }
+
+                /*
+                pluginInstance.getNamespaceMount = function () {
+                    if (!this._callerNamespace) {
+                        return null;
+                    }
+                    return this._callerNamespace.anchorPrefix || null;
+                }
+                pluginInstance.getAPI = function (prefix) {
+                    return self._apis;
+                }
+                */
             }
 
             return instances[type][alias];
@@ -1054,6 +1087,107 @@ require.memoize("/main.js", function (require, exports, module) {
     }
 }
 
+
+class NamespacePointer extends String {
+
+    constructor (namespace, parentPointer, value) {
+
+//console.log("   value:", value);        
+
+//console.log("INITIAL parentPointer", parentPointer);
+        let segments = [];
+        if (parentPointer) {
+            if (parentPointer.getSuffix()) {
+                throw new Error('Cannot prepend pointer with suffix!');
+            }
+            segments = parentPointer.getSegments().slice();
+        }
+
+        let suffix = '';
+
+        if (value) {
+
+            if (typeof value.hasMultipleSegments === "function") {
+
+                segments = segments.concat(value.getSegments());
+                suffix = value.getSuffix();
+
+            } else {
+                let m;
+                let valueParts = value.split('#');
+                while (true) {
+                    m = valueParts[0].match(/^([^@]+?)\s*@\s*(.+?)$/);
+                    if (m) {
+
+                        if (typeof namespace.mappedNamespaceAliases[m[1]] === "undefined") {
+                            console.error("namespace", namespace);
+                            throw new Error(`Namespace alias '${m[1]}' is not mapped!`);
+                        }
+                        segments.push({
+                            alias: m[1],
+                            resolved: namespace.mappedNamespaceAliases[m[1]]
+                        });
+                        valueParts[0] = m[2];
+                    } else {
+                        if (!/^\s*$/.test(valueParts[0])) {
+                            segments.push({
+                                literal: valueParts[0]
+                            });
+                        }
+                        valueParts[0] = '';
+                        break;
+                    }
+                }
+                suffix = valueParts.join('#');
+            }
+        }
+
+        let resolvedStr = segments.map(function (segment) {
+            if (typeof segment.literal !== "undefined") {
+                return segment.literal;
+            } else {
+                return segment.resolved;
+            }
+        }).join('/').replace(/\/\.?\//g, '/') + suffix;
+
+        let segmentedStr = segments.map(function (segment) {
+            if (typeof segment.literal !== "undefined") {
+                return segment.literal;
+            } else {
+                return `${segment.alias}|${segment.resolved}`;
+            }
+        }).join('|') + suffix;
+
+        super(resolvedStr);
+
+        this.hasMultipleSegments = function () {
+            return (segments.length > 1);
+        }
+
+        this.toSegmentedString = function () {
+            return segmentedStr;
+        }
+
+        this.getFirstSegment = function () {
+            return segments[0];
+        }
+
+        this.getSegments = function () {
+            return segments;
+        }
+
+        this.getSuffix = function () {
+            return suffix;
+        }
+
+        this.prepend = function (pointer) {
+            const after = new NamespacePointer(namespace, pointer || null, this);
+            return after;
+        }
+    }
+}
+
+
 class Namespace {
 
     constructor (inf, baseDir, referringNamespace, options) {
@@ -1066,18 +1200,32 @@ class Namespace {
 
         self.referringNamespace = referringNamespace;
 
+        self.forParent = {};
+        self.childInfByPath = (self.referringNamespace && self.referringNamespace.childInfByPath) || {};
+
         self.components = (self.referringNamespace && self.referringNamespace.components) || {};
         self.aliases = (self.referringNamespace && self.referringNamespace.aliases) || {};
         self.interfaces = (self.referringNamespace && self.referringNamespace.interfaces) || {};
         self.variables = (self.referringNamespace && self.referringNamespace.variables) || {};
         self.contracts = (self.referringNamespace && self.referringNamespace.contracts) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
+        self.apis = (self.referringNamespace && self.referringNamespace.apis) || {};
 
         // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
         //       Not sure why it was ever passed by reference. We may need to map more variables
         //       above my copying instead of using same reference.
         //self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
         self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
+
+        self.anchorPrefixStack = [].concat((self.referringNamespace && self.referringNamespace.anchorPrefixStack) || []);
+        self.anchorPrefix = options.anchorPrefix || null;
+        if (self.anchorPrefix) {
+
+//console.log("NEW FOR ANCHOR PREFIX", options.anchorPrefix);
+
+            self.anchorPrefixStack.push(self.anchorPrefix);
+        }
+
 
         // Holds all paths including own and all children and parents to the extent loaded.
         self.allPaths = (self.referringNamespace && self.referringNamespace.allPaths) || [];
@@ -1098,8 +1246,6 @@ class Namespace {
         } else {
             self.mappedNamespaceAliases = {};    
         }
-
-        self.apis = {};
 
         self.lib = LIB_JSON.forBaseDir(self.baseDir, {
             throwOnNoConfigFileFound: false
@@ -1144,7 +1290,7 @@ class Namespace {
     async resolveInfUri (uri) {
         let self = this;
 
-        if (!/(\/|\.)$/.test(uri)) {
+        if (!/(\/|\.|!)$/.test(uri)) {
             CONSOLE.error("uri", uri);
             throw new Error(`Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.`);
         }
@@ -1261,7 +1407,7 @@ class Namespace {
             }
         }
 
-        if (!/(\/|\.)$/.test(uri)) {
+        if (!/(\/|\.|!)$/.test(uri)) {
             CONSOLE.error("uri", uri);
             throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
         }
@@ -1363,18 +1509,43 @@ class Namespace {
         return self.components[path];
     }
 
-    async mapComponent (alias, uri) {
+    async mapComponent (anchor, uri) {
         let self = this;
+
+        const alias = anchor.alias;
 
         let component = await self.getComponentForUri(uri);
 
         if (self.aliases[alias]) {
+
+            // If we have the same component we are ok.
+            if (component.path === self.aliases[alias].path) {
+                return self.aliases[alias];
+            }
+
             throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
         }
 
         log("Map component for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.aliases[alias] = await component.forAlias('component', alias, self);
+        self.aliases[alias] = await component.forAlias('component', alias, self, anchor.namespacePointer);
+
+        if (self.anchorPrefix) {
+
+//console.error("anchor", anchor);
+
+            if (anchor.anchorNamespaceAlias) {
+                const prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
+                const prefixedNamespace = self.anchorPrefix.replace(/\/$/, '') + '/' + alias.replace(/^\//, '');
+
+                log("Map component for uri '" + uri + "' for parent namespace to alias '" + prefixedAlias + "'");
+
+                self.forParent.aliases = self.forParent.aliases || {};
+                self.forParent.aliases[prefixedAlias] = self.aliases[alias];//await component.forAlias('component', prefixedNamespace, self);
+            }
+        }
+
+        return self.aliases[alias];
     }
 
     async mapInterface (alias, uri) {
@@ -1559,12 +1730,13 @@ class Namespace {
 
     async replaceVariablesInString (value) {
         const self = this;
+        let re, m, vars;
         if (
             typeof value === "string" &&
             /\$\{([^\}]+)\}/.test(value)
         ) {
             let done = Promise.resolve();
-            let vars = {};
+            vars = {};
             function replaceVariable (m) {
                 if (m[1] === '\\') {
                     // This variable is escaped so we do not replace it.
@@ -1572,6 +1744,13 @@ class Namespace {
                 } else
                 if (/^__(.+)__$/.test(m[2])) {
                     vars[m[0]] = self.getSelfVariable(m[2]);
+                } else
+                if (/^@\s*.+$/.test(m[2])) {
+                    const key = m[2].replace(/^@\s*/, '');
+                    if (typeof self.mappedNamespaceAliases[key] === "undefined") {
+                        throw new Error(`Value for namespace prefix '${key}' came back as undefined!`);
+                    }
+                    vars[m[0]] = self.mappedNamespaceAliases[key];
                 } else {
                     done = done.then(async function () {
                         vars[m[0]] = await self.getValueForVariablePath(m[2]);
@@ -1582,33 +1761,34 @@ class Namespace {
                 }
             }
 
-            const re = /(\\)?\$\{([^\}]+)\}/g;
-            let m;
+            re = /(\\)?\$\{([^\}]+)\}/g;
             while ( m = re.exec(value) ) {
                 replaceVariable(m);
             }
 
             await done;
 
-            let keys = Object.keys(vars);
-            if (keys.length) {
-                keys.forEach(function (key) {
-                    value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
-                });
-            }
+            Object.keys(vars).forEach(function (key) {
+                value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
+            });
         }
         return value;
     }
 
-    async getComponentForAlias (alias) {
+    makeNamespacePointerForString (parentPointer, value) {
+        return new NamespacePointer(this, parentPointer, value);
+    }
+
+    async getComponentForAlias (alias, resolvedNamespace) {
         let self = this;
 
         if (alias === '') {
             // Default component
-            return (await self.getComponentForUri("inf.")).forAlias('component', '', self);
+            return (await self.getComponentForUri("inf.")).forAlias('component', '', self, resolvedNamespace);
         }
 
         if (!self.aliases[alias]) {
+            console.error("self.aliases", self.aliases);
             throw new Error("No component mapped to alias '" + alias + "'!");
         }
 
@@ -1876,13 +2056,17 @@ class ReferenceNode extends Node {
 
     static handlesValue (value) {
         return (
-            typeof value === "string" &&
-            value.match(/^([^#]*?)\s*(##?)\s*(.*?)(\s+\+([^\+]+))?$/)
+            //typeof value === "string" &&
+            value.toString &&
+            value.toString().match(/^([^#]*?)\s*(##?)\s*(.*?)(\s+\+([^\+]+))?$/)
         );
     }
 
     constructor (namespace, value) {
         super(namespace, value);
+        if (value instanceof NamespacePointer) {
+            this.namespacePointer = value;                
+        }
         let keyMatch = ReferenceNode.handlesValue(value);
         if (keyMatch) {
             this.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
@@ -1901,14 +2085,18 @@ class InterfaceReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
         return (
-            typeof value === "string" &&
-            value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/)
+            //typeof value === "string" &&
+            value.toString &&
+            value.toString().match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/)
 //            value.match(/^:\s*([^:]+)\s*:$/)
         );
     }
 
     constructor (namespace, value) {
         super(namespace, '');
+        if (value instanceof NamespacePointer) {
+            this.namespacePointer = value;                
+        }
         let keyMatch = InterfaceReferenceNode.handlesValue(value);
         this.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
         this.type = 'interface';
@@ -1927,13 +2115,17 @@ class ContractReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
         return (
-            typeof value === "string" &&
-            value.match(/^<\s*([^<>]+)\s*>$/)
+            //typeof value === "string" &&
+            value.toString &&
+            value.toString().match(/^<\s*([^<>]+)\s*>$/)
         );
     }
 
     constructor (namespace, value) {
         super(namespace, '');
+        if (value instanceof NamespacePointer) {
+            this.namespacePointer = value;                
+        }
         let keyMatch = ContractReferenceNode.handlesValue(value);
         this.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
         this.type = 'contract';
@@ -1949,13 +2141,17 @@ class VariablesReferenceNode extends ReferenceNode {
 
     static handlesValue (value) {
         return (
-            typeof value === "string" &&
-            value.match(/^(.+?)\s*\$$/)
+            //typeof value === "string" &&
+            value.toString &&
+            value.toString().match(/^(.+?)\s*\$$/)
         );
     }
 
     constructor (namespace, value) {
         super(namespace, '');
+        if (value instanceof NamespacePointer) {
+            this.namespacePointer = value;                
+        }
         let keyMatch = VariablesReferenceNode.handlesValue(value);
         this.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
         this.type = 'variables';
@@ -1994,7 +2190,7 @@ class Processor {
                 }
                 referenceValue.propertyPathMount = _value.propertyPathMount || [];
 
-                let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias);
+                let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace);
 
                 // We create an invocation wrapper to avoid leaking references.
                 _value = Node.WrapInstructionNode(self.namespace, async function (instruction) {
@@ -2112,7 +2308,10 @@ class Processor {
             return;
         }
 
+        let nsPointerAnchor = null;
+
         // Handle namespaces
+        let anchorNamespaceAlias = null;
         let anchorNamespacePrefix = null;
         if (/^[^@]+?\s*@$/.test(anchor)) {
             // Namespace mapping
@@ -2142,6 +2341,31 @@ class Processor {
             log(`Map namespace alias '${alias}' to:`, value);
 
             self.namespace.mappedNamespaceAliases[alias] = value;
+
+            if (
+                self.namespace.anchorPrefix &&
+                self.namespace.referringNamespace
+            ) {
+                // const parentAnchorPrefix = PATH.join(
+                //     self.namespace.anchorPrefix.toString(),
+                //     alias
+                // );
+                //self.namespace.referringNamespace.mappedNamespaceAliases[parentAnchorPrefix] = value;
+
+                self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+
+                    const parentAnchorPrefix = PATH.join(
+                        anchorPrefix.toString(),
+                        alias
+                    );
+
+                    return [parentAnchorPrefix, value];
+                });
+
+//console.error("ANCHOR PREFIX", parentAnchorPrefix,  value);                
+            }
+
             return;
         }
         if (/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
@@ -2158,38 +2382,29 @@ class Processor {
 
             log(`Replace namespace alias '${alias}' with:`, self.namespace.mappedNamespaceAliases[alias]);
 
+            anchorNamespaceAlias = alias;
             anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, "");
 
             anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, `$1${[
-                self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, ""),
+                anchorNamespacePrefix,
                 pointer.replace(/^\//, "")
             ].join("/").replace(/\/$/, "")}$2`);
 
         }
+
         if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
             // Namespace usage for anchors
-//            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
 
-            const m = anchor.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-            let alias = m[1];
+            anchor = await self.namespace.replaceVariablesInString(anchor);
+            anchor = self.namespace.makeNamespacePointerForString(null, anchor);
 
-            alias = await self.namespace.replaceVariablesInString(alias);
+            // TODO: just keep and use 'anchor' NamespacePointer' object instead of these extra vars.
+            anchorNamespaceAlias = anchor.getFirstSegment().alias;
+            anchorNamespacePrefix = anchor.getFirstSegment().resolved;//.replace(/\/$/, "");
 
-            const pointer = m[2];
+            log(`Replace namespace alias '${anchorNamespaceAlias}' with:`, anchorNamespacePrefix);
 
-            if (typeof self.namespace.mappedNamespaceAliases[alias] === "undefined") {
-                console.error("self.namespace", self.namespace);
-                throw new Error(`Namespace alias '${alias}' is not mapped!`);
-            }
-
-            log(`Replace namespace alias '${alias}' with:`, self.namespace.mappedNamespaceAliases[alias]);
-
-            anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, "");
-
-            anchor = anchor.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, `${[
-                self.namespace.mappedNamespaceAliases[alias].replace(/\/$/, ""),
-                pointer.replace(/^\//, "")
-            ].join("/").replace(/\/$/, "")}$1`);
+            nsPointerAnchor = anchor;
         }
 
         if (/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
@@ -2225,6 +2440,7 @@ class Processor {
         value.meta = meta;
 
         if (anchorNamespacePrefix) {
+            anchor.anchorNamespaceAlias = anchorNamespaceAlias;
             anchor.namespacePrefix = anchorNamespacePrefix;
 //            value.anchorNamespacePrefix = anchor.namespacePrefix;
         }
@@ -2235,7 +2451,6 @@ class Processor {
         }
 
         log("anchor.type:", anchor.type);
-
 
         // Run various codeblocks if applicable.
         if (value instanceof CodeblockNode) {
@@ -2259,15 +2474,49 @@ class Processor {
         // Inherit from another inf.json file
         if (anchor.value === "#") {
 
-            let uris = Array.isArray(value.value) ? value.value : [ value.value ];
+            let uris = [];
+            if (typeof value.value === "string") {
+                uris = [
+                    {
+                        reference: value.value
+                    }
+                ];
+            } else
+            if (Array.isArray(value.value)) {
+                uris = value.value.map(function (reference) {
+                    return {
+                        reference: reference
+                    };
+                });
+            } else
+            if (typeof value.value === "object") {
+                uris = Object.keys(value.value).map(function (alias) {
+                    return {
+                        alias: alias,
+                        reference: value.value[alias]
+                    };
+                });
+            }
 
             await Promise.mapSeries(uris, async function (uri) {
 
-                uri = await self.namespace.replaceVariablesInString(uri);
+                let {
+                    alias,
+                    reference
+                } = uri;
 
-                log('processInstruction() uri', uri);
+                reference = await self.namespace.replaceVariablesInString(reference);
 
-                let paths = await self.namespace.resolveInfUri(uri);
+                log('processInstruction() alias, reference', alias, reference);
+
+                let paths = await self.namespace.resolveInfUri(reference);
+
+                log(`Load inf.json file into '${alias}' from paths:`, paths);
+
+                if (alias) {
+                    alias = await self.namespace.replaceVariablesInString(alias);
+                    alias = self.namespace.makeNamespacePointerForString(null, alias);
+                }
 
                 log('processInstruction() paths', paths);
 
@@ -2276,13 +2525,71 @@ class Processor {
 
                         log('processInstruction() path', path);
 
+                        // TODO: Take alias into account and re-initialize for different aliases?
                         if (!self.namespace.isInheritingFrom(path)) {
 
                             log("Inherit from inf file:", path);
 
-                            let inf = new INF(PATH.dirname(path), self.namespace, self.namespace.options);
+                            if (alias) {
+                                self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
+
+                                // NOTE: Each namespace layer needs to export its own data so that
+                                //       aliased data can be applied to multiple namespaces.
+                            }
+
+                            let inf = new INF(PATH.dirname(path), self.namespace, LODASH_MERGE(
+                                {},
+                                self.namespace.options,
+                                {
+                                    anchorPrefix: alias || null,
+                                    mapNamespaceAliasesIntoParent: alias ? false : true
+                                }
+                            ));
 
                             await inf.runInstructionsFile(PATH.basename(path));
+
+                            self.namespace.childInfByPath[path] = inf;
+
+                            if (inf.namespace.forParent.allPaths) {
+                                self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
+                            }
+                            if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                    const val = getter(alias);
+                                    self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                });
+                            }
+                            if (inf.namespace.forParent.aliases) {                            
+                                Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                    self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
+                                });
+                            }
+
+                        } else {
+                            // 'inf.json' file is already loaded so we need to map it to the new alias if applicable.
+
+                            if (alias) {
+
+                                self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
+
+                                let inf = self.namespace.childInfByPath[path];
+
+                                if (inf.namespace.forParent.allPaths) {
+                                    self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
+                                }
+                                if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                    inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                        const val = getter(alias);
+                                        self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                    });
+                                }
+                                if (inf.namespace.forParent.aliases) {
+                                    Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                        self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
+                                    });
+                                }
+    
+                            }
                         }
                     });
                 }
@@ -2293,11 +2600,27 @@ class Processor {
         if (anchor.pointer === '') {
 
             if (anchor.type === 'component') {
+                
+                value.value = await self.namespace.replaceVariablesInString(value.value);
 
-                await self.namespace.mapComponent(anchor.alias, value.value);
+                await self.namespace.mapComponent(anchor, value.value);
 
             } else
             if (anchor.type === 'interface') {
+
+                value.value = self.namespace.makeNamespacePointerForString(null, value.value);
+
+                if (value.value.getSegments().length > 1) {
+
+                    const key = value.value.toString();
+                    if (typeof self.namespace.mappedNamespaceAliases[key] === "undefined") {
+                        throw new Error(`Alias '${key}' is not mapped in 'self.namespace.mappedNamespaceAliases'!`);
+                    }
+                    value.value = self.namespace.mappedNamespaceAliases[key];
+
+                } else {
+                    value.value = value.value.toString();
+                }
 
                 const interfaceComponent = await self.namespace.mapInterface(anchor.alias, value.value);
 
@@ -2541,13 +2864,42 @@ class Processor {
                         console.error("component", component);
                         throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
                     }
-                    response = await component.invoke(anchor.pointer, value);
+
+                    response = await component.invoke(anchor.pointer, value, {
+                        callerNamespace: self.namespace
+                    });
                 }
 
-                if (typeof response === "object") {
-                    self.namespace.apis[anchor.alias] = LODASH_MERGE(self.namespace.apis[anchor.alias] || {}, response);
-                } else {
-                    self.namespace.apis[anchor.alias] = response;
+                function getResolvedAlias (alias) {
+                    if (!self.namespace.anchorPrefixStack.length) {
+                        return alias;
+                    }
+                    let resolved = null;
+//console.log("MAKE FROM STACK", self.namespace.anchorPrefixStack);
+
+                    for (let i=self.namespace.anchorPrefixStack.length-1;i>=0;i--) {
+                        if (!resolved) {
+                            resolved = self.namespace.anchorPrefixStack[i];
+                        } else {
+                            resolved = resolved.prepend(self.namespace.anchorPrefixStack[i]);
+                        }
+                    }
+                    return resolved.toSegmentedString() + '|' + alias;
+                }
+
+                if (typeof response !== "undefined") {
+                    const apiKey = getResolvedAlias(anchor.alias);
+
+                    self.namespace.apis[apiKey] = self.namespace.apis[apiKey] || [];
+                    self.namespace.apis[apiKey].push({
+                        anchor: self.namespace.anchorPrefixStack.slice().concat(nsPointerAnchor).filter(function (layer) {
+                            return (!!layer);
+                        }).map(function (layer) {
+                            return layer.getSegments();
+                        }),
+                        implements: (component.resolvedNamespace && component.resolvedNamespace.getSegments()) || [],
+                        api: response
+                    });
                 }
 
                 return response;

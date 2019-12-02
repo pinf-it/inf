@@ -1,0 +1,10 @@
+#!/usr/bin/env inf
+{
+    "self @": "inf.pinf.it @ wrappers/test/v0",
+
+    "self @ # config()": {
+        "hostname": "foobar"
+    },
+
+    "self @ # echo": "Hello World"
+}
