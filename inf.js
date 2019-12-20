@@ -2593,8 +2593,10 @@ class Processor {
 
                         log('processInstruction() path', path);
 
-                        // TODO: Take alias into account and re-initialize for different aliases?
-                        if (!self.namespace.isInheritingFrom(path)) {
+                        if (
+                            !self.namespace.isInheritingFrom(path) &&
+                            self.namespace.pathStack.indexOf(path) === -1                            
+                        ) {
 
                             log("Inherit from inf file:", path);
 
@@ -2640,7 +2642,9 @@ class Processor {
                             }
 
                             if (inf.namespace.forParent.allPaths) {
-                                self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
+                                inf.namespace.forParent.allPaths.forEach(function (path) {
+                                    self.namespace.allPaths.push(path);
+                                });
                             }
                             if (inf.namespace.forParent.mappedNamespaceAliases) {
                                 inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
@@ -2666,7 +2670,9 @@ class Processor {
                                 let inf = self.namespace.childInfByPath[path];
 
                                 if (inf.namespace.forParent.allPaths) {
-                                    self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
+                                    inf.namespace.forParent.allPaths.forEach(function (path) {
+                                        self.namespace.allPaths.push(path);
+                                    });
                                 }
                                 if (inf.namespace.forParent.mappedNamespaceAliases) {
                                     inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
