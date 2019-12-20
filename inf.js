@@ -275,6 +275,13 @@ class INF {
 
                     self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
 
+                        if (anchorPrefix) {
+                            return [PATH.join(
+                                anchorPrefix.toString(),
+                                key
+                            ), self.namespace.mappedNamespaceAliases[key]];
+                        }
+
                         return [key, self.namespace.mappedNamespaceAliases[key]];
                     });
                 }
@@ -2413,12 +2420,15 @@ class Processor {
                 self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
                 self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
 
-                    const parentAnchorPrefix = PATH.join(
-                        anchorPrefix.toString(),
-                        alias
-                    );
+                    if (anchorPrefix) {
+                        const parentAnchorPrefix = PATH.join(
+                            anchorPrefix.toString(),
+                            alias
+                        );
 
-                    return [parentAnchorPrefix, value];
+                        return [parentAnchorPrefix, value];
+                    }
+                    return [alias, value];
                 });
 
 //console.error("ANCHOR PREFIX", parentAnchorPrefix,  value);                
@@ -2650,7 +2660,6 @@ class Processor {
                                         self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
                                     });
                                 }
-    
                             }
                         }
                     });
