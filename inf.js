@@ -2619,6 +2619,25 @@ class Processor {
 
                             await inf.runInstructionsFile(PATH.basename(path));
 
+                            if (!alias) {
+
+                                if (inf.namespace.forParent.allPaths) {
+                                    self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
+                                    inf.namespace.forParent.allPaths.forEach(function (path) {
+                                        self.namespace.forParent.allPaths.push(path);
+                                    });
+                                }
+                                if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                    self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                                    self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases.concat(inf.namespace.forParent.mappedNamespaceAliases);
+                                }
+                                if (inf.namespace.forParent.aliases) {
+                                    self.namespace.forParent.aliases = self.namespace.forParent.aliases || {};                            
+                                    Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                        self.namespace.forParent.aliases[name] = inf.namespace.forParent.aliases[name];
+                                    });
+                                }
+                            }
 
                             if (inf.namespace.forParent.allPaths) {
                                 self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
