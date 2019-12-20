@@ -495,10 +495,6 @@ class Component {
             }
         }
 
-        if (typeof mod.inf !== "function") {
-            throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
-        }
-
         let instances = {};
         self.getComponentAliases = function () {
             return Object.keys(instances.component || {});
@@ -562,7 +558,34 @@ class Component {
 
                 pluginInstance.resolvedNamespace = resolvedNamespace;
                 pluginInstance.alias = alias;
-                pluginInstance.impl = await mod.inf(componentInitContext, alias);
+
+                if (namespace.options.implementationAdapters) {
+                    let adapterId = null;
+                    Object.keys(mod).forEach(function (_adapterId) {
+                        if (adapterId) return;
+                        if (namespace.options.implementationAdapters[_adapterId]) {
+                            adapterId = _adapterId;
+                        }
+                    });
+                    if (adapterId) {
+                        const adapter = await namespace.getImplementationAdapterForId(adapterId);
+
+                        pluginInstance.impl = await adapter.forInstance(mod[adapterId], {
+                            pluginInstance: pluginInstance,
+                            componentInitContext: componentInitContext,
+                            alias: alias
+                        });
+                    }
+                }
+
+                if (!pluginInstance.impl) {
+
+                    if (typeof mod.inf !== "function") {
+                        throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
+                    }
+            
+                    pluginInstance.impl = await mod.inf(componentInitContext, alias);
+                }
                 
                 function makeMethodWrapper (type, method) {
 
@@ -1219,13 +1242,14 @@ class Namespace {
 
         self.anchorPrefixStack = [].concat((self.referringNamespace && self.referringNamespace.anchorPrefixStack) || []);
         self.anchorPrefix = options.anchorPrefix || null;
-        if (self.anchorPrefix) {
+        if (self.anchorPrefix && options.skipAddToAnchorPrefixStack !== false) {
 
 //console.log("NEW FOR ANCHOR PREFIX", options.anchorPrefix);
 
             self.anchorPrefixStack.push(self.anchorPrefix);
         }
 
+        self.implementationAdapters = (self.referringNamespace && self.referringNamespace.implementationAdapters) || {};
 
         // Holds all paths including own and all children and parents to the extent loaded.
         self.allPaths = (self.referringNamespace && self.referringNamespace.allPaths) || [];
@@ -1267,7 +1291,7 @@ class Namespace {
         return (domain.join(".") + (uriMatch[2] || ""));
     }
 */
-    isInheritingFrom (path) {
+    isInheritingFrom (path) {        
         return (this.allPaths.indexOf(path) !== -1);
     }
 
@@ -1289,6 +1313,10 @@ class Namespace {
 
     async resolveInfUri (uri) {
         let self = this;
+
+        if (self.options.resolveInfUri) {
+            uri = await self.options.resolveInfUri(uri, self);
+        }
 
         if (!/(\/|\.|!)$/.test(uri)) {
             CONSOLE.error("uri", uri);
@@ -1554,12 +1582,17 @@ class Namespace {
         let component = await self.getComponentForUri(uri);
 
         if (self.interfaces[alias]) {
+
+            if (self.interfaces[alias].path === component.path) {
+                return self.interfaces[alias];
+            }
+
             throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
         }
 
         log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
 
-        return self.interfaces[alias] = await component.forAlias('interface', alias, self);
+        return (self.interfaces[alias] = await component.forAlias('interface', alias, self));
     }
 
     async mapContract (anchor, uri) {
@@ -1779,6 +1812,31 @@ class Namespace {
         return new NamespacePointer(this, parentPointer, value);
     }
 
+    async getImplementationAdapterForId (adapterId) {
+        const self = this;
+
+        if (!self.implementationAdapters[adapterId]) {
+
+            if (!self.options.implementationAdapters[adapterId]) {
+                return null;
+            }
+
+            if (typeof self.options.implementationAdapters[adapterId] === 'string') {
+                
+                const adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
+
+                const adapter = require(adapterPath);
+
+                self.implementationAdapters[adapterId] = await adapter.forNamespace(self);
+            } else {
+
+                self.implementationAdapters[adapterId] = await self.options.implementationAdapters[adapterId].forNamespace(self);
+            }
+        }
+
+        return self.implementationAdapters[adapterId];
+    }
+    
     async getComponentForAlias (alias, resolvedNamespace) {
         let self = this;
 
@@ -2541,14 +2599,16 @@ class Processor {
                                 {},
                                 self.namespace.options,
                                 {
-                                    anchorPrefix: alias || null,
-                                    mapNamespaceAliasesIntoParent: alias ? false : true
+                                    anchorPrefix: alias || self.namespace.anchorPrefix || null,
+                                    mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
+                                    skipAddToAnchorPrefixStack: !!alias
                                 }
                             ));
 
+                            self.namespace.childInfByPath[path] = inf;
+
                             await inf.runInstructionsFile(PATH.basename(path));
 
-                            self.namespace.childInfByPath[path] = inf;
 
                             if (inf.namespace.forParent.allPaths) {
                                 self.namespace.allPaths = self.namespace.allPaths.concat(inf.namespace.forParent.allPaths);
@@ -2569,6 +2629,8 @@ class Processor {
                             // 'inf.json' file is already loaded so we need to map it to the new alias if applicable.
 
                             if (alias) {
+
+                                log(`Mounting already inherited file '${path}' for alias '${alias}'.`);
 
                                 self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
 
@@ -2608,12 +2670,15 @@ class Processor {
             } else
             if (anchor.type === 'interface') {
 
+                value.value = await self.namespace.replaceVariablesInString(value.value);
+
                 value.value = self.namespace.makeNamespacePointerForString(null, value.value);
 
                 if (value.value.getSegments().length > 1) {
 
                     const key = value.value.toString();
                     if (typeof self.namespace.mappedNamespaceAliases[key] === "undefined") {
+                        console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
                         throw new Error(`Alias '${key}' is not mapped in 'self.namespace.mappedNamespaceAliases'!`);
                     }
                     value.value = self.namespace.mappedNamespaceAliases[key];
