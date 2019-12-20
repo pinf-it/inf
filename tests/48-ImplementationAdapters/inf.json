@@ -1,0 +1,6 @@
+#!/usr/bin/env inf
+{
+    "stdout #": "./stdout.",
+
+    "stdout # echo": "OK"
+}

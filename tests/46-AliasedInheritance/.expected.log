@@ -1,4 +1,6 @@
 [inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)
+HELLO WORLD
+hello world
 api (main.js) {
     "deploy|inf.pinf.it/cli/runner/v0|default|inf.pinf.it/wrappers/test/v0": [
         {
@@ -29,6 +31,38 @@ api (main.js) {
                 }
             ],
             "api": "[inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)"
+        }
+    ],
+    "deploy|inf.pinf.it/cli/runner/v0|default|stdout": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "deploy",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "default"
+                    }
+                ]
+            ],
+            "implements": [],
+            "api": true
+        },
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "deploy",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "default"
+                    }
+                ]
+            ],
+            "implements": [],
+            "api": true
         }
     ]
 }

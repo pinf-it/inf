@@ -1,0 +1,6 @@
+{
+    "# echo": "Loaded builder.com",
+    "#": {
+        "/._dist/readme1": "../readme.com/#!"
+    }
+}

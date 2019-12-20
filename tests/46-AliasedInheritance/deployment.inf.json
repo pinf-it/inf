@@ -6,5 +6,16 @@
         "hostname": "foobar"
     },
 
-    "self @ # echo": "Hello World"
+    "self @ # echo": "Hello World",
+
+
+    ":pattern.stream:": "../34-Interfaces/stream.",
+    ":transform.uppercase:": "../34-Interfaces/uppercase.",
+    "stdout #": "../34-Interfaces/stdout.",
+    "stdout # :pattern.stream: out + 1": ":transform.uppercase: heLLo woRLd",
+
+
+    "lowercase/v0 @": "../34-Interfaces/lowercase.",
+    ":transform.lowercase:": "${@ lowercase/v0}",
+    "stdout # :pattern.stream: out + 1": ":transform.lowercase: heLLo woRLd"
 }
