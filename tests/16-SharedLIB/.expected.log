@@ -1,4 +1,4 @@
 inf ["console","log"]
 inf (proto) ["LIB","_events","_eventsCount","_maxListeners","badInvocation","baseDir","forNode","isCodeblock","load","options","run","runCodeblock","stopProcessing","toPINFBundle","wrapValue"]
-inf.LIB ["ASSERT","CODEBLOCK","CRYPTO","FS","GLOB","INF","MEMORYSTREAM","MINIMIST","PATH","Promise","RESOLVE","STREAM","foo"]
+inf.LIB ["ASSERT","CODEBLOCK","CRYPTO","FS","GLOB","INF","LIB_JSON","MEMORYSTREAM","MINIMIST","PATH","Promise","RESOLVE","STREAM","foo"]
 OK

@@ -755,7 +755,8 @@ const LIB = {
     INF: exports,
     MEMORYSTREAM: MEMORYSTREAM,
     RESOLVE: RESOLVE,
-    MINIMIST: MINIMIST
+    MINIMIST: MINIMIST,
+    LIB_JSON: LIB_JSON
 };
 LIB.Promise.defer = function () {
     var deferred = {};
@@ -1414,8 +1415,8 @@ class Namespace {
         try {
             uri = await resolveUri(uri);
         } catch (err) {
-            log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
             if (isOptional) {
+                log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
                 return null;
             }
             throw err;
