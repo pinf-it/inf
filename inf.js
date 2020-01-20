@@ -500,6 +500,8 @@ class Component {
             } else {
                 mod = require(self.path);
             }
+
+            mod.INF = exports;
         }
 
         let instances = {};
@@ -1500,7 +1502,7 @@ class Namespace {
         throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
     }
 
-    async getComponentForUri (uri) {
+    async getComponentForUri (uri, alias) {
         let self = this;
 
         if (
@@ -1520,6 +1522,8 @@ class Namespace {
                 // TODO: Get filepath from 'uri._filepath'
                 let component = new Component(null);
 
+                component.firstAlias = alias;
+
                 await component.init(self, {
                     pathHash: key,
                     exports: exports
@@ -1538,6 +1542,8 @@ class Namespace {
 
             let component = new Component(path);
 
+            component.firstAlias = alias;
+
             await component.init(self);
 
             self.components[path] = component;
@@ -1550,7 +1556,7 @@ class Namespace {
 
         const alias = anchor.alias;
 
-        let component = await self.getComponentForUri(uri);
+        let component = await self.getComponentForUri(uri, alias);
 
         if (self.aliases[alias]) {
 
