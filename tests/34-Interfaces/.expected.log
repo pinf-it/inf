@@ -1,7 +1,20 @@
+Loaded interface harness: transform.uppercase 1
+Loaded interface: transform.uppercase 1 (transform.uppercase:1)
 HELLO WORLD
----
+-- 1 --
 hello world
----
+-- 2 --
 Hello World
----
+-- 3 --
+HELLO WORLD
+-- 4 --
+Loaded interface harness: uppercase-comp 2
+Loaded interface: to.upper 1 (uppercase-comp:2)
+HELLO WORLD
+-- 5 --
+Loaded interface: to.upper2 2 (uppercase-comp:2)
+HELLO WORLD
+-- 6 --
+Loaded interface harness: transform.uppercase2 3
+Loaded interface: transform.uppercase2 1 (transform.uppercase2:3)
 HELLO WORLD

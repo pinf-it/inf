@@ -1,0 +1,12 @@
+{
+    "builder/v0 #": "./builder.",
+
+    "#": {
+        "readme.com": "../readme.com/",
+        "readme.com1": "../readme.com/"
+    },
+    ":readme:": "readme.com @ generator/v0",
+    ":readme1:": "readme.com1 @ generator/v0",
+    "readme.com @ generator/v0 # :readme: generate()": "Hello World 1 from builder.com",
+    "readme.com1 @ generator/v0 # :readme1: generate()": "Hello World 2 from builder.com"
+}

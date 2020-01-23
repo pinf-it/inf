@@ -508,6 +508,13 @@ class Component {
         self.getComponentAliases = function () {
             return Object.keys(instances.component || {});
         }
+        self.getInstance = function (type, alias) {
+            if (!instances[type][alias]) {
+                console.error("instances", instances);
+                throw new Error(`Instance for type '${type}' and alias '${alias}' not initialized!`);
+            }
+            return instances[type][alias];
+        }
         self.forAlias = async function (type, alias, namespace, resolvedNamespace) {
 
             if (!namespace) {
@@ -1281,6 +1288,15 @@ class Namespace {
             self.mappedNamespaceAliases = {};    
         }
 
+        if (self.referringNamespace && self.referringNamespace.mappedAliases) {
+            self.mappedAliases = {};
+            Object.keys(self.referringNamespace.mappedAliases).forEach(function (key) {
+                self.mappedAliases[key] = self.referringNamespace.mappedAliases[key];
+            });
+        } else {
+            self.mappedAliases = {};    
+        }
+
         self.lib = LIB_JSON.forBaseDir(self.baseDir, {
             throwOnNoConfigFileFound: false
         });
@@ -1522,8 +1538,6 @@ class Namespace {
                 // TODO: Get filepath from 'uri._filepath'
                 let component = new Component(null);
 
-                component.firstAlias = alias;
-
                 await component.init(self, {
                     pathHash: key,
                     exports: exports
@@ -1541,8 +1555,6 @@ class Namespace {
             log("Load component for uri '" + uri + "' from file:", path);
 
             let component = new Component(path);
-
-            component.firstAlias = alias;
 
             await component.init(self);
 
@@ -1576,6 +1588,7 @@ class Namespace {
 
 //console.error("anchor", anchor);
 
+            // TODO: Map directly into 'self.aliases' as it is inherited anyway or use 'self.forParent.mappedAliases'?
             if (anchor.anchorNamespaceAlias) {
                 const prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
                 const prefixedNamespace = self.anchorPrefix.replace(/\/$/, '') + '/' + alias.replace(/^\//, '');
@@ -1585,6 +1598,9 @@ class Namespace {
                 self.forParent.aliases = self.forParent.aliases || {};
                 self.forParent.aliases[prefixedAlias] = self.aliases[alias];//await component.forAlias('component', prefixedNamespace, self);
             }
+
+            self.forParent.mappedAliases = self.forParent.mappedAliases || {};
+            self.forParent.mappedAliases[alias] = self.aliases[alias];
         }
 
         return self.aliases[alias];
@@ -1593,14 +1609,41 @@ class Namespace {
     async mapInterface (alias, uri) {
         let self = this;
 
-        let component = await self.getComponentForUri(uri);
+        let instanceUri = uri;
 
+        let component = null;
+        if (self.mappedAliases[uri]) {
+            component = self.mappedAliases[uri][0];
+            instanceUri = self.mappedAliases[uri][1];
+        } else
+        if (!/(\/|\.)$/.test(uri)) {
+            if (!self.aliases[uri]) {
+                throw new Error("Cannot find component '" + uri + "' to map to interface alias '" + alias + "' as it does not seem to be already declared!");
+            }
+            component = self.aliases[uri];
+        }
+        if (component) {
+            if (self.interfaces[alias]) {
+                if (self.interfaces[alias].path === component.path) {
+                    return self.interfaces[alias];
+                }
+                throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+            }
+
+            log("Map interface for component '" + uri + "' to alias '" + alias + "'");
+
+            let interfaceComp = Object.create(component.getInstance('component', instanceUri));
+            // Cause interface to be re-initialized for the new alias.
+            interfaceComp.$instance = null;
+
+            return (self.interfaces[alias] = interfaceComp);
+        }
+
+        component = await self.getComponentForUri(uri);
         if (self.interfaces[alias]) {
-
             if (self.interfaces[alias].path === component.path) {
                 return self.interfaces[alias];
             }
-
             throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
         }
 
@@ -1859,12 +1902,17 @@ class Namespace {
             return (await self.getComponentForUri("inf.")).forAlias('component', '', self, resolvedNamespace);
         }
 
-        if (!self.aliases[alias]) {
-            console.error("self.aliases", self.aliases);
-            throw new Error("No component mapped to alias '" + alias + "'!");
+        if (self.aliases[alias]) {
+            return self.aliases[alias];
         }
 
-        return self.aliases[alias];
+        if (self.mappedAliases[alias]) {
+            return self.mappedAliases[alias][0];
+        }
+
+        console.error("self.aliases", self.aliases);
+        console.error("self.mappedAliases", self.mappedAliases);
+        throw new Error("No component mapped to alias '" + alias + "'!");
     }
 
     async gatherComponentAspect (aspectName) {
@@ -2646,6 +2694,12 @@ class Processor {
                                         self.namespace.forParent.aliases[name] = inf.namespace.forParent.aliases[name];
                                     });
                                 }
+                                if (inf.namespace.forParent.mappedAliases) {
+                                    self.namespace.forParent.mappedAliases = self.namespace.forParent.mappedAliases || {};                            
+                                    Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                        self.namespace.forParent.mappedAliases[name] = inf.namespace.forParent.mappedAliases[name];
+                                    });
+                                }
                             }
 
                             if (inf.namespace.forParent.allPaths) {
@@ -2662,6 +2716,14 @@ class Processor {
                             if (inf.namespace.forParent.aliases) {                            
                                 Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
                                     self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
+                                });
+                            }
+                            if (inf.namespace.forParent.mappedAliases) {                            
+                                Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                    self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [
+                                        inf.namespace.forParent.mappedAliases[name],
+                                        name
+                                    ];
                                 });
                             }
 
@@ -2692,6 +2754,14 @@ class Processor {
                                         self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
                                     });
                                 }
+                                if (inf.namespace.forParent.mappedAliases) {                            
+                                    Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                        self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [
+                                            inf.namespace.forParent.mappedAliases[name],
+                                            name
+                                        ];
+                                    });
+                                }
                             }
                         }
                     });
@@ -2718,11 +2788,16 @@ class Processor {
                 if (value.value.getSegments().length > 1) {
 
                     const key = value.value.toString();
-                    if (typeof self.namespace.mappedNamespaceAliases[key] === "undefined") {
+
+                    if (self.namespace.mappedAliases[key]) {
+                        value.value = key;
+                    } else
+                    if (typeof self.namespace.mappedNamespaceAliases[key] !== "undefined") {
+                        value.value = self.namespace.mappedNamespaceAliases[key];
+                    } else {
                         console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
-                        throw new Error(`Alias '${key}' is not mapped in 'self.namespace.mappedNamespaceAliases'!`);
+                        throw new Error(`Alias '${key}' is not mapped in 'self.namespace.mappedAliases' nor 'self.namespace.mappedNamespaceAliases'!`);
                     }
-                    value.value = self.namespace.mappedNamespaceAliases[key];
 
                 } else {
                     value.value = value.value.toString();

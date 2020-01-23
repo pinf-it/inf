@@ -1,4 +1,6 @@
 [inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)
+Loaded interface harness: transform.uppercase 1
+Loaded interface: transform.uppercase 1 (transform.uppercase:1)
 HELLO WORLD
 hello world
 api (main.js) {

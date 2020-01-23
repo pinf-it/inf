@@ -31,7 +31,8 @@ ${Object.keys(fs).map(function (filepath) {
                         /^[^\.\/][a-zA-Z0-9_\.-\/]+[^\/\.]$/.test(value.value) &&
                         require.resolve(value.value)
                     ) {
-                        let code = await inf.LIB.FS.readFileAsync(require.resolve(value.value), "utf8");;
+//                        let code = await inf.LIB.FS.readFileAsync(require.resolve(value.value), "utf8");;
+                        let code = inf.LIB.FS.readFileSync(require.resolve(value.value), "utf8");;
                         value = { toString: function () { return code; } };
                     }
 // --------------------------------------------------
@@ -51,7 +52,8 @@ ${value.toString()}
                     throw new Error("Cannot eval() code as it is not a PINF bundle!");
                 }
 
-                await inf.LIB.FS.writeFileAsync(inf.LIB.PATH.join(__dirname, ".~bundle.js"), bundle, "utf8");
+//                await inf.LIB.FS.writeFileAsync(inf.LIB.PATH.join(__dirname, ".~bundle.js"), bundle, "utf8");
+                inf.LIB.FS.writeFileSync(inf.LIB.PATH.join(__dirname, ".~bundle.js"), bundle, "utf8");
 
                 return new Promise(function (resolve, reject) {
                     const PINF = PINF_LOADER.Loader();
