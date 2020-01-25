@@ -1,58 +1,22 @@
 
 'use strict';
 
-exports.forNamespace = async function (namespace) {
+exports.forInstance = async function (namespace, impl, context) {
 
-    return {
-        forInstance: async function (impl, context) {
-
-            const implInst = await impl({
-                // programContext
-            });
-
-            return {
-
-                invoke: function (pointer, value) {
-
-                    value.value = value.value + ' (via adapter)';
-
-                    return implInst({
-                        pointer: pointer,
-                        value: value
-                    });
-                }
-            };
-        }
-    }
-}
-
-/*
-exports.inf = async function (inf) {
+    const implInst = await impl({
+        // programContext
+    });
 
     return {
 
         invoke: function (pointer, value) {
 
-            if (pointer === "echo") {
+            value.value = value.value + ' (via adapter)';
 
-                process.stdout.write(value + "\n");
-
-                return true;
-            }
+            return implInst({
+                pointer: pointer,
+                value: value
+            });
         }
     };
 }
-
-exports['my-adapter'] = function (programContext) {
-
-    return function (instanceContext) {
-
-        if (instanceContext.pointer === "echo") {
-
-            process.stdout.write(instanceContext.value + "\n");
-
-            return true;
-        }
-    };
-}
-*/

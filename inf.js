@@ -586,7 +586,7 @@ class Component {
                     if (adapterId) {
                         const adapter = await namespace.getImplementationAdapterForId(adapterId);
 
-                        pluginInstance.impl = await adapter.forInstance(mod[adapterId], {
+                        pluginInstance.impl = await adapter.forInstance(namespace, mod[adapterId], {
                             pluginInstance: pluginInstance,
                             componentInitContext: componentInitContext,
                             alias: alias
@@ -753,6 +753,7 @@ class Component {
 }
 
 const LIB = {
+    CONSOLE: CONSOLE,
     Promise: Promise,
     ASSERT: ASSERT,
     PATH: PATH,
@@ -1884,10 +1885,9 @@ class Namespace {
 
                 const adapter = require(adapterPath);
 
-                self.implementationAdapters[adapterId] = await adapter.forNamespace(self);
+                self.implementationAdapters[adapterId] = adapter;
             } else {
-
-                self.implementationAdapters[adapterId] = await self.options.implementationAdapters[adapterId].forNamespace(self);
+                self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
             }
         }
 
@@ -2718,13 +2718,15 @@ class Processor {
                                     self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
                                 });
                             }
-                            if (inf.namespace.forParent.mappedAliases) {                            
-                                Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
-                                    self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [
-                                        inf.namespace.forParent.mappedAliases[name],
-                                        name
-                                    ];
-                                });
+                            if (alias) {
+                                if (inf.namespace.forParent.mappedAliases) {                            
+                                    Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                        self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [
+                                            inf.namespace.forParent.mappedAliases[name],
+                                            name
+                                        ];
+                                    });
+                                }
                             }
 
                         } else {
