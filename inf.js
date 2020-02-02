@@ -754,6 +754,7 @@ class Component {
 
 const LIB = {
     CONSOLE: CONSOLE,
+    EventEmitter: EventEmitter,
     Promise: Promise,
     ASSERT: ASSERT,
     PATH: PATH,
