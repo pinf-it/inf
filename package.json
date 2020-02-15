@@ -43,6 +43,7 @@
     "pinf-loader-js": "^1.0.4",
     "resolve": "^1.14.0",
     "runbash": "^0.1.0-pre.0",
-    "traverse": "^0.6.6"
+    "traverse": "^0.6.6",
+    "debug-trace": "^2.2.3"
   }
 }

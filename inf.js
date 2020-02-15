@@ -12,6 +12,11 @@ const timers = {};
 if (process.env.INF_ENABLE_TIMERS) {
     timers.load = Date.now();
 }
+if (process.env.INF_ENABLE_CONSOLE_TRACE) {
+    require("debug-trace")({
+        always: true
+    });
+}
 
 const CONSOLE = {};
 Object.keys(console).forEach(function (name) {
