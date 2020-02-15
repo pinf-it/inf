@@ -2559,6 +2559,8 @@ class Processor {
         // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
         anchor = Node.WrapInstructionNode(self.namespace, anchor);
         anchor.meta = meta;
+        anchor.value = anchor.value.replace(/\s*\+([^\+]+)$/, '');
+        anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
 
         value = Node.WrapInstructionNode(self.namespace, value);
         value.meta = meta;
