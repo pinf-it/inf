@@ -7,9 +7,9 @@
   },
   "main": "inf.js",
   "scripts": {
-    "test": "([ -e node_modules ] || npm install) && bash.origin.test tests",
+    "test": "bash.origin.test tests",
     "build": "INF_ENABLE_TIMERS=1 inf build.inf.json",
-    "test-dist": "([ -e node_modules ] || npm install) && alias inf=\"$(pwd)/dist/inf.bundle.es5.min.js\" && which inf"
+    "test-dist": "alias inf=\"$(pwd)/dist/inf.bundle.es5.min.js\" && which inf"
   },
   "devDependencies": {
     "@babel/core": "^7.7.5",

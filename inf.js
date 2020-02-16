@@ -13,7 +13,8 @@ if (process.env.INF_ENABLE_TIMERS) {
     timers.load = Date.now();
 }
 if (process.env.INF_ENABLE_CONSOLE_TRACE) {
-    require("debug-trace")({
+    const traceModuleName = "debug-trace";
+    require(traceModuleName)({
         always: true
     });
 }
