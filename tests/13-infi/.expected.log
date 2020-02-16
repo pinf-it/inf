@@ -33,3 +33,4 @@ bundle # /main.js	{".@":"github.com~0ink~codeblock/codeblock:Codeblock","_code":
 # echo	"bundle # bundle"	{"line":12,"column":7,"pos":251}
 # echo	"---"	{"line":14,"column":7,"pos":285}
 # echo	"# /.~inf.json~infi.log"	{"line":16,"column":7,"pos":307}
+--- 4 ---
