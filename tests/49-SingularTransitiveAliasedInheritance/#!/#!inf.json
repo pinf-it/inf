@@ -1,0 +1,8 @@
+#!/usr/bin/env inf
+{
+    "#": {
+        "/._dist/builder": "./builder.com/#!",
+        "/._dist/readme": "./readme.com/#!"
+    },
+    "# echo": "OK"
+}

@@ -1,0 +1,12 @@
+#!/usr/bin/env inf
+{
+    "inf.pinf.it @": "inf.pinf.it",
+
+    "#": "./test-wrapper.",
+
+    "deploy @": "inf.pinf.it @ cli/runner/v0",
+
+    "#": {
+        "deploy @ default": "./deployment."
+    }
+}

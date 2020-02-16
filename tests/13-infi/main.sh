@@ -16,3 +16,5 @@ cat lib/.~lib.inf.json~infi.log
 echo -e "\n--- 3 ---"
 
 cat .~inf.json~infi.log
+
+echo -e "\n--- 4 ---"
