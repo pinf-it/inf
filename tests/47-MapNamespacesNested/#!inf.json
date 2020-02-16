@@ -1,0 +1,9 @@
+#!/usr/bin/env inf
+{
+    "say @": "inf.pinf.it @ cli/runner/v0",
+
+    "#": {
+        "say @ first": "./greeting1.",
+        "say @ second": "./greeting2."
+    }
+}

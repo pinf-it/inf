@@ -1,0 +1,435 @@
+api (main.inf.js) {
+    "say|inf.pinf.it/cli/runner/v0|first|inf.pinf.it/announcer/impl/v0": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "first"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v0"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v0",
+                    "resolved": "inf.pinf.it/api/runnable/v0"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0",
+                "message": "[Greeting PREFIX 1] Hello World 1"
+            }
+        }
+    ],
+    "say|inf.pinf.it/cli/runner/v0|second|inf.pinf.it/announcer/impl/v1/pre": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "second"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v1/pre"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v1/pre",
+                    "resolved": "inf.pinf.it/api/runnable/v0.1"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0.1",
+                "message": "[Greeting PREFIX 2] Hello World 2"
+            }
+        }
+    ]
+}
+api (main.js) {
+    "say|inf.pinf.it/cli/runner/v0|first|inf.pinf.it/announcer/impl/v0": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "first"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v0"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v0",
+                    "resolved": "inf.pinf.it/api/runnable/v0"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0",
+                "message": "[Greeting PREFIX 1] Hello World 1"
+            }
+        }
+    ],
+    "say|inf.pinf.it/cli/runner/v0|second|inf.pinf.it/announcer/impl/v1/pre": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "second"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v1/pre"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v1/pre",
+                    "resolved": "inf.pinf.it/api/runnable/v0.1"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0.1",
+                "message": "[Greeting PREFIX 2] Hello World 2"
+            }
+        }
+    ],
+    "main": [
+        {
+            "anchor": [],
+            "implements": [],
+            "api": {
+                "alias": "main",
+                "result": "runner result"
+            }
+        }
+    ]
+}
+---
+api (main.inf.js) {
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|first|inf.pinf.it/announcer/impl/v0": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "first"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v0"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v0",
+                    "resolved": "inf.pinf.it/api/runnable/v0"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0",
+                "message": "[Greeting PREFIX 1] Hello World 1"
+            }
+        }
+    ],
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|second|inf.pinf.it/announcer/impl/v1/pre": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "second"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v1/pre"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v1/pre",
+                    "resolved": "inf.pinf.it/api/runnable/v0.1"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0.1",
+                "message": "[Greeting PREFIX 2] Hello World 2"
+            }
+        }
+    ]
+}
+api (main1.inf.js) {
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|first|inf.pinf.it/announcer/impl/v0": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "first"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v0"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v0",
+                    "resolved": "inf.pinf.it/api/runnable/v0"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0",
+                "message": "[Greeting PREFIX 1] Hello World 1"
+            }
+        }
+    ],
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|second|inf.pinf.it/announcer/impl/v1/pre": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "second"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v1/pre"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v1/pre",
+                    "resolved": "inf.pinf.it/api/runnable/v0.1"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0.1",
+                "message": "[Greeting PREFIX 2] Hello World 2"
+            }
+        }
+    ],
+    "ours|ours.com/api|announcement|main": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ]
+            ],
+            "implements": [],
+            "api": {
+                "alias": "main",
+                "result": "runner result"
+            }
+        }
+    ]
+}
+api (main1.js) {
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|first|inf.pinf.it/announcer/impl/v0": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "first"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v0"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v0",
+                    "resolved": "inf.pinf.it/api/runnable/v0"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0",
+                "message": "[Greeting PREFIX 1] Hello World 1"
+            }
+        }
+    ],
+    "ours|ours.com/api|announcement|say|inf.pinf.it/cli/runner/v0|second|inf.pinf.it/announcer/impl/v1/pre": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ],
+                [
+                    {
+                        "alias": "say",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "second"
+                    }
+                ],
+                [
+                    {
+                        "alias": "api",
+                        "resolved": "inf.pinf.it/announcer/impl/v1/pre"
+                    }
+                ]
+            ],
+            "implements": [
+                {
+                    "alias": "v1/pre",
+                    "resolved": "inf.pinf.it/api/runnable/v0.1"
+                }
+            ],
+            "api": {
+                "apiContract": "inf.pinf.it/api/runnable/v0.1",
+                "message": "[Greeting PREFIX 2] Hello World 2"
+            }
+        }
+    ],
+    "ours|ours.com/api|announcement|main": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "ours",
+                        "resolved": "ours.com/api"
+                    },
+                    {
+                        "literal": "announcement"
+                    }
+                ]
+            ],
+            "implements": [],
+            "api": {
+                "alias": "main",
+                "result": "runner result"
+            }
+        }
+    ],
+    "main1": [
+        {
+            "anchor": [],
+            "implements": [],
+            "api": {
+                "alias": "main1",
+                "result": "runner result"
+            }
+        }
+    ]
+}

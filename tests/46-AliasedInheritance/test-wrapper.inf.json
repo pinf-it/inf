@@ -1,0 +1,4 @@
+#!/usr/bin/env inf
+{
+    "inf.pinf.it @ wrappers/test/v0 #": "./stdout."
+}

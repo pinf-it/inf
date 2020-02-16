@@ -1,0 +1,11 @@
+#!/usr/bin/env inf
+{
+    "ours @": "ours.com/api",
+
+    "#": {
+        "ours @ announcement": "./main."
+    },
+
+    "main1 #": "./main1.",
+    "main1 # run()": ""
+}

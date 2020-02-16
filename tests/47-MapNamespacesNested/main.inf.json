@@ -1,0 +1,14 @@
+#!/usr/bin/env inf
+{
+    "inf.pinf.it @": "inf.pinf.it",
+
+    "//": "Map external tools into internal namespace",
+    "#": {
+        "inf.pinf.it/announcer/impl": "./announcer/#!"
+    },
+
+    "#": "./#!",
+
+    "main #": "./main.",
+    "main # run()": ""
+}

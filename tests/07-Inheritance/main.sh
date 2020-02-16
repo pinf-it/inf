@@ -77,3 +77,14 @@ inf {
 
     "# echo": "OK"
 }
+
+echo "---"
+
+# UniqueKeySuffix
+inf {
+    "# +1": "../06-MapAliasToComponent/",
+
+    "stdout # echo +2": "ok",
+
+    "# echo +3": "OK"
+}
