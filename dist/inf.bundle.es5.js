@@ -5,6 +5,8 @@ var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefau
 
 var _get2 = _interopRequireDefault(require("@babel/runtime/helpers/get"));
 
+var _wrapNativeSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/wrapNativeSuper"));
+
 var _possibleConstructorReturn2 = _interopRequireDefault(require("@babel/runtime/helpers/possibleConstructorReturn"));
 
 var _getPrototypeOf2 = _interopRequireDefault(require("@babel/runtime/helpers/getPrototypeOf"));
@@ -18,8 +20,6 @@ var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/cl
 var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
 
 var _regenerator = _interopRequireDefault(require("@babel/runtime/regenerator"));
-
-var _asyncToGenerator2 = _interopRequireDefault(require("@babel/runtime/helpers/asyncToGenerator"));
 
 var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
@@ -6359,9 +6359,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       throw new Error("The JavaScript runtime does not support Proxy!");
     }
 
-    var FS = require("fs");
+    var FS = require("fs-extra");
 
     var PATH = require("path");
+
+    var Promise = require("bluebird");
 
     var VERBOSE = !!process.env.VERBOSE;
 
@@ -6569,211 +6571,366 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return makeLIBFor(doc, baseDir);
     };
 
-    exports.docFromNodeModules =
-    /*#__PURE__*/
-    function () {
-      var _ref = (0, _asyncToGenerator2["default"])(
-      /*#__PURE__*/
-      _regenerator["default"].mark(function _callee2(baseDir) {
-        var doc, dir, packages;
-        return _regenerator["default"].wrap(function _callee2$(_context2) {
-          while (1) {
-            switch (_context2.prev = _context2.next) {
-              case 0:
-                _context2.prev = 0;
-                doc = {
-                  'bin': {},
-                  'js': {}
-                };
-                dir = PATH.join(baseDir, 'node_modules'); // When being installed as a transitive dependency the 'dir' does not exit local to our package.
-                // We need to index our parent packages as npm installs packages as flat as possible.
+    exports.docFromNodeModules = function _callee(baseDir) {
+      var addPackageForPath, doc, dir, packages;
+      return _regenerator["default"].async(function _callee$(_context2) {
+        while (1) {
+          switch (_context2.prev = _context2.next) {
+            case 0:
+              _context2.prev = 0;
 
-                if (!FS.existsSync(dir)) {
-                  dir = PATH.join(baseDir, '../../node_modules');
-                }
+              addPackageForPath = function addPackageForPath(packagePath) {
+                var descriptorPath, descriptor;
+                return _regenerator["default"].async(function addPackageForPath$(_context) {
+                  while (1) {
+                    switch (_context.prev = _context.next) {
+                      case 0:
+                        descriptorPath = PATH.join(packagePath, 'package.json');
+                        _context.prev = 1;
+                        _context.t0 = JSON;
+                        _context.next = 5;
+                        return _regenerator["default"].awrap(FS.readFileSync(descriptorPath, 'utf8'));
 
-                _context2.next = 6;
-                return FS.promises.readdir(dir);
+                      case 5:
+                        _context.t1 = _context.sent;
+                        descriptor = _context.t0.parse.call(_context.t0, _context.t1);
 
-              case 6:
-                packages = _context2.sent;
-                _context2.next = 9;
-                return Promise.all(packages.map(
-                /*#__PURE__*/
-                function () {
-                  var _ref2 = (0, _asyncToGenerator2["default"])(
-                  /*#__PURE__*/
-                  _regenerator["default"].mark(function _callee(name) {
-                    var descriptorPath, descriptor;
-                    return _regenerator["default"].wrap(function _callee$(_context) {
-                      while (1) {
-                        switch (_context.prev = _context.next) {
-                          case 0:
-                            descriptorPath = PATH.join(dir, name, 'package.json');
-                            _context.prev = 1;
-                            _context.t0 = JSON;
-                            _context.next = 5;
-                            return FS.promises.readFile(descriptorPath, 'utf8');
-
-                          case 5:
-                            _context.t1 = _context.sent;
-                            descriptor = _context.t0.parse.call(_context.t0, _context.t1);
-
-                            if (descriptor.bin) {
-                              Object.keys(descriptor.bin).map(function (binName) {
-                                doc.bin[binName] = PATH.join('node_modules', name, descriptor.bin[binName]);
-                              });
-                            }
-
-                            doc.js[name] = PATH.join('node_modules', name);
-                            _context.next = 16;
-                            break;
-
-                          case 11:
-                            _context.prev = 11;
-                            _context.t2 = _context["catch"](1);
-
-                            if (!(_context.t2.code === 'ENOENT')) {
-                              _context.next = 15;
-                              break;
-                            }
-
-                            return _context.abrupt("return");
-
-                          case 15:
-                            throw _context.t2;
-
-                          case 16:
-                          case "end":
-                            return _context.stop();
+                        if (descriptor.bin) {
+                          Object.keys(descriptor.bin).map(function (binName) {
+                            doc.bin[binName] = PATH.relative(baseDir, PATH.join(packagePath, descriptor.bin[binName]));
+                          });
                         }
-                      }
-                    }, _callee, null, [[1, 11]]);
-                  }));
 
-                  return function (_x3) {
-                    return _ref2.apply(this, arguments);
-                  };
-                }()));
+                        doc.js[descriptor.name] = PATH.relative(baseDir, packagePath) || '.';
+                        _context.next = 16;
+                        break;
 
-              case 9:
-                return _context2.abrupt("return", doc);
+                      case 11:
+                        _context.prev = 11;
+                        _context.t2 = _context["catch"](1);
 
-              case 12:
-                _context2.prev = 12;
-                _context2.t0 = _context2["catch"](0);
-                _context2.t0.message += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
-                _context2.t0.stack += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
-                throw _context2.t0;
+                        if (!(_context.t2.code === 'ENOENT')) {
+                          _context.next = 15;
+                          break;
+                        }
 
-              case 17:
-              case "end":
-                return _context2.stop();
-            }
+                        return _context.abrupt("return");
+
+                      case 15:
+                        throw _context.t2;
+
+                      case 16:
+                      case "end":
+                        return _context.stop();
+                    }
+                  }
+                }, null, null, [[1, 11]]);
+              }; // Add own package.
+
+
+              doc = {
+                'bin': {},
+                'js': {}
+              };
+              _context2.next = 5;
+              return _regenerator["default"].awrap(addPackageForPath(baseDir));
+
+            case 5:
+              // Add dependencies.
+              dir = PATH.join(baseDir, 'node_modules'); // When being installed as a transitive dependency the 'dir' does not exist local to our package.
+              // We need to index our parent packages as npm installs packages as flat as possible.
+
+              if (!FS.existsSync(dir)) {
+                dir = PATH.join(baseDir, '../../node_modules');
+              }
+
+              _context2.next = 9;
+              return _regenerator["default"].awrap(FS.readdir(dir));
+
+            case 9:
+              packages = _context2.sent;
+              _context2.next = 12;
+              return _regenerator["default"].awrap(Promise.all(packages.map(function (name) {
+                return addPackageForPath(PATH.join(dir, name));
+              })));
+
+            case 12:
+              return _context2.abrupt("return", doc);
+
+            case 15:
+              _context2.prev = 15;
+              _context2.t0 = _context2["catch"](0);
+              _context2.t0.message += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
+              _context2.t0.stack += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
+              throw _context2.t0;
+
+            case 20:
+            case "end":
+              return _context2.stop();
           }
-        }, _callee2, null, [[0, 12]]);
-      }));
+        }
+      }, null, null, [[0, 15]]);
+    };
 
-      return function (_x2) {
-        return _ref.apply(this, arguments);
-      };
-    }();
+    exports.docFromFilepathsInOwnAndParent = function _callee4(baseDir, filepaths, options) {
+      var traverse, _doc, dir, level;
+
+      return _regenerator["default"].async(function _callee4$(_context6) {
+        while (1) {
+          switch (_context6.prev = _context6.next) {
+            case 0:
+              options = options || {};
+              options.lookupDirs = options.lookupDirs || ['']; //console.log("options", options);
+
+              _context6.prev = 2;
+
+              traverse = function traverse(dir) {
+                var path;
+                return _regenerator["default"].async(function traverse$(_context5) {
+                  while (1) {
+                    switch (_context5.prev = _context5.next) {
+                      case 0:
+                        level += 1;
+                        _context5.next = 3;
+                        return _regenerator["default"].awrap(Promise.mapSeries(options.lookupDirs, function _callee3(lookupDir) {
+                          var lookupPath, subdirs, queue;
+                          return _regenerator["default"].async(function _callee3$(_context4) {
+                            while (1) {
+                              switch (_context4.prev = _context4.next) {
+                                case 0:
+                                  lookupPath = PATH.join(dir, lookupDir);
+                                  _context4.next = 3;
+                                  return _regenerator["default"].awrap(FS.exists(lookupPath));
+
+                                case 3:
+                                  if (_context4.sent) {
+                                    _context4.next = 5;
+                                    break;
+                                  }
+
+                                  return _context4.abrupt("return");
+
+                                case 5:
+                                  _context4.next = 7;
+                                  return _regenerator["default"].awrap(FS.readdir(lookupPath));
+
+                                case 7:
+                                  subdirs = _context4.sent;
+                                  queue = Promise.resolve();
+                                  subdirs.forEach(function (subdir) {
+                                    var subUriParts = options.subUri && options.subUri.split("/") || [''];
+
+                                    var _loop = function _loop(i) {
+                                      var subUri = subUriParts.slice(0, i).join('/') || '';
+                                      Object.keys(filepaths).forEach(function (filepath) {
+                                        queue = queue.then(function _callee2() {
+                                          var path, name, descriptorPath, descriptor;
+                                          return _regenerator["default"].async(function _callee2$(_context3) {
+                                            while (1) {
+                                              switch (_context3.prev = _context3.next) {
+                                                case 0:
+                                                  path = PATH.join(dir, lookupDir, subdir, subUri, filepath);
+                                                  _context3.next = 3;
+                                                  return _regenerator["default"].awrap(FS.exists(path));
+
+                                                case 3:
+                                                  if (!_context3.sent) {
+                                                    _context3.next = 15;
+                                                    break;
+                                                  }
+
+                                                  name = PATH.join(subdir, subUri);
+                                                  descriptorPath = PATH.join(dir, lookupDir, subdir, 'package.json');
+                                                  _doc[filepaths[filepath]] = _doc[filepaths[filepath]] || {};
+                                                  _context3.next = 9;
+                                                  return _regenerator["default"].awrap(FS.exists(descriptorPath));
+
+                                                case 9:
+                                                  if (!_context3.sent) {
+                                                    _context3.next = 14;
+                                                    break;
+                                                  }
+
+                                                  _context3.next = 12;
+                                                  return _regenerator["default"].awrap(FS.readJSON(descriptorPath));
+
+                                                case 12:
+                                                  descriptor = _context3.sent;
+
+                                                  if (!subUri && name !== descriptor.name) {
+                                                    if (!_doc[filepaths[filepath]][descriptor.name]) {
+                                                      _doc[filepaths[filepath]][descriptor.name] = PATH.relative(baseDir, path);
+                                                    }
+                                                  }
+
+                                                case 14:
+                                                  if (!_doc[filepaths[filepath]][name]) {
+                                                    _doc[filepaths[filepath]][name] = PATH.relative(baseDir, path);
+                                                  }
+
+                                                case 15:
+                                                case "end":
+                                                  return _context3.stop();
+                                              }
+                                            }
+                                          });
+                                        });
+                                      });
+                                    };
+
+                                    for (var i = subUriParts.length; i >= 0; i--) {
+                                      _loop(i);
+                                    }
+                                  });
+                                  _context4.next = 12;
+                                  return _regenerator["default"].awrap(queue);
+
+                                case 12:
+                                case "end":
+                                  return _context4.stop();
+                              }
+                            }
+                          });
+                        }));
+
+                      case 3:
+                        path = PATH.dirname(dir);
+
+                        if (!(path === dir)) {
+                          _context5.next = 6;
+                          break;
+                        }
+
+                        return _context5.abrupt("return");
+
+                      case 6:
+                        if (!(level === options.maxLevels)) {
+                          _context5.next = 8;
+                          break;
+                        }
+
+                        return _context5.abrupt("return");
+
+                      case 8:
+                        return _context5.abrupt("return", traverse(path));
+
+                      case 9:
+                      case "end":
+                        return _context5.stop();
+                    }
+                  }
+                });
+              };
+
+              _doc = {};
+              dir = baseDir;
+              level = 0;
+              _context6.next = 9;
+              return _regenerator["default"].awrap(traverse(baseDir));
+
+            case 9:
+              return _context6.abrupt("return", _doc);
+
+            case 12:
+              _context6.prev = 12;
+              _context6.t0 = _context6["catch"](2);
+              _context6.t0.message += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
+              _context6.t0.stack += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
+              throw _context6.t0;
+
+            case 17:
+            case "end":
+              return _context6.stop();
+          }
+        }
+      }, null, null, [[2, 12]]);
+    };
 
     if (require.main === module) {
-      var main =
-      /*#__PURE__*/
-      function () {
-        var _ref3 = (0, _asyncToGenerator2["default"])(
-        /*#__PURE__*/
-        _regenerator["default"].mark(function _callee3(args) {
-          var cwd, doc, path, _path;
+      var main = function main(args) {
+        var cwd, _doc2, path, _path;
 
-          return _regenerator["default"].wrap(function _callee3$(_context3) {
-            while (1) {
-              switch (_context3.prev = _context3.next) {
-                case 0:
-                  cwd = process.cwd();
+        return _regenerator["default"].async(function main$(_context7) {
+          while (1) {
+            switch (_context7.prev = _context7.next) {
+              case 0:
+                cwd = process.cwd();
 
-                  if ((args.verbose || args.debug) && !process.env.VERBOSE) {
-                    process.env.VERBOSE = "1";
-                  }
+                if ((args.verbose || args.debug) && !process.env.VERBOSE) {
+                  process.env.VERBOSE = "1";
+                }
 
-                  VERBOSE = !!process.env.VERBOSE;
+                VERBOSE = !!process.env.VERBOSE;
 
-                  if (args.cwd) {
-                    cwd = PATH.resolve(cwd, args.cwd);
-                    process.chdir(cwd);
-                  }
+                if (args.cwd) {
+                  cwd = PATH.resolve(cwd, args.cwd);
+                  process.chdir(cwd);
+                }
 
-                  if (!(args._.length === 2 && args._[0] === 'from' && args._[1] === 'node_modules')) {
-                    _context3.next = 11;
-                    break;
-                  }
-
-                  _context3.next = 7;
-                  return exports.docFromNodeModules(cwd);
-
-                case 7:
-                  doc = _context3.sent;
-                  process.stdout.write(JSON.stringify(doc, null, 4));
-                  _context3.next = 26;
+                if (!(args._.length === 2 && args._[0] === 'from' && args._[1] === 'node_modules')) {
+                  _context7.next = 11;
                   break;
+                }
 
-                case 11:
-                  if (!(args._[0] === 'resolve.bin')) {
-                    _context3.next = 18;
-                    break;
-                  }
+                _context7.next = 7;
+                return _regenerator["default"].awrap(exports.docFromNodeModules(cwd));
 
-                  path = exports.forBaseDir(process.cwd()).bin.resolve(args._[1]);
+              case 7:
+                _doc2 = _context7.sent;
+                process.stdout.write(JSON.stringify(_doc2, null, 4));
+                _context7.next = 26;
+                break;
 
-                  if (path) {
-                    _context3.next = 15;
-                    break;
-                  }
-
-                  throw new Error("ERROR: Could not resolve bin path for '".concat(args._[1], "'"));
-
-                case 15:
-                  process.stdout.write(path);
-                  _context3.next = 26;
+              case 11:
+                if (!(args._[0] === 'resolve.bin')) {
+                  _context7.next = 18;
                   break;
+                }
 
-                case 18:
-                  if (!(args._[0] === 'resolve.js')) {
-                    _context3.next = 25;
-                    break;
-                  }
+                path = exports.forBaseDir(process.cwd()).bin.resolve(args._[1]);
 
-                  _path = exports.forBaseDir(process.cwd()).js.resolve(args._[1]);
-
-                  if (_path) {
-                    _context3.next = 22;
-                    break;
-                  }
-
-                  throw new Error("ERROR: Could not resolve js path for '".concat(args._[1], "'"));
-
-                case 22:
-                  process.stdout.write(_path);
-                  _context3.next = 26;
+                if (path) {
+                  _context7.next = 15;
                   break;
+                }
 
-                case 25:
-                  throw new Error("[lib.json] ERROR: Command not supported!");
+                throw new Error("ERROR: Could not resolve bin path for '".concat(args._[1], "'"));
 
-                case 26:
-                case "end":
-                  return _context3.stop();
-              }
+              case 15:
+                process.stdout.write(path);
+                _context7.next = 26;
+                break;
+
+              case 18:
+                if (!(args._[0] === 'resolve.js')) {
+                  _context7.next = 25;
+                  break;
+                }
+
+                _path = exports.forBaseDir(process.cwd()).js.resolve(args._[1]);
+
+                if (_path) {
+                  _context7.next = 22;
+                  break;
+                }
+
+                throw new Error("ERROR: Could not resolve js path for '".concat(args._[1], "'"));
+
+              case 22:
+                process.stdout.write(_path);
+                _context7.next = 26;
+                break;
+
+              case 25:
+                throw new Error("[lib.json] ERROR: Command not supported!");
+
+              case 26:
+              case "end":
+                return _context7.stop();
             }
-          }, _callee3);
-        }));
-
-        return function main(_x4) {
-          return _ref3.apply(this, arguments);
-        };
-      }();
+          }
+        });
+      };
 
       var MINIMIST = require("minimist");
 
@@ -6785,12 +6942,7606 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     }
   }, {
-    "fs": undefined,
-    "minimist": 38,
+    "bluebird": 41,
+    "fs-extra": 86,
+    "minimist": 115,
     "path": undefined,
-    "resolve": 40
+    "resolve": 117
   }],
   38: [function (require, module, exports) {
+    arguments[4][1][0].apply(exports, arguments);
+  }, {
+    "dup": 1
+  }],
+  39: [function (require, module, exports) {
+    "use strict";
+
+    var firstLineError;
+
+    try {
+      throw new Error();
+    } catch (e) {
+      firstLineError = e;
+    }
+
+    var schedule = require("./schedule");
+
+    var Queue = require("./queue");
+
+    function Async() {
+      this._customScheduler = false;
+      this._isTickUsed = false;
+      this._lateQueue = new Queue(16);
+      this._normalQueue = new Queue(16);
+      this._haveDrainedQueues = false;
+      var self = this;
+
+      this.drainQueues = function () {
+        self._drainQueues();
+      };
+
+      this._schedule = schedule;
+    }
+
+    Async.prototype.setScheduler = function (fn) {
+      var prev = this._schedule;
+      this._schedule = fn;
+      this._customScheduler = true;
+      return prev;
+    };
+
+    Async.prototype.hasCustomScheduler = function () {
+      return this._customScheduler;
+    };
+
+    Async.prototype.haveItemsQueued = function () {
+      return this._isTickUsed || this._haveDrainedQueues;
+    };
+
+    Async.prototype.fatalError = function (e, isNode) {
+      if (isNode) {
+        process.stderr.write("Fatal " + (e instanceof Error ? e.stack : e) + "\n");
+        process.exit(2);
+      } else {
+        this.throwLater(e);
+      }
+    };
+
+    Async.prototype.throwLater = function (fn, arg) {
+      if (arguments.length === 1) {
+        arg = fn;
+
+        fn = function fn() {
+          throw arg;
+        };
+      }
+
+      if (typeof setTimeout !== "undefined") {
+        setTimeout(function () {
+          fn(arg);
+        }, 0);
+      } else try {
+        this._schedule(function () {
+          fn(arg);
+        });
+      } catch (e) {
+        throw new Error("No async scheduler available\n\n    See http://goo.gl/MqrFmX\n");
+      }
+    };
+
+    function AsyncInvokeLater(fn, receiver, arg) {
+      this._lateQueue.push(fn, receiver, arg);
+
+      this._queueTick();
+    }
+
+    function AsyncInvoke(fn, receiver, arg) {
+      this._normalQueue.push(fn, receiver, arg);
+
+      this._queueTick();
+    }
+
+    function AsyncSettlePromises(promise) {
+      this._normalQueue._pushOne(promise);
+
+      this._queueTick();
+    }
+
+    Async.prototype.invokeLater = AsyncInvokeLater;
+    Async.prototype.invoke = AsyncInvoke;
+    Async.prototype.settlePromises = AsyncSettlePromises;
+
+    function _drainQueue(queue) {
+      while (queue.length() > 0) {
+        _drainQueueStep(queue);
+      }
+    }
+
+    function _drainQueueStep(queue) {
+      var fn = queue.shift();
+
+      if (typeof fn !== "function") {
+        fn._settlePromises();
+      } else {
+        var receiver = queue.shift();
+        var arg = queue.shift();
+        fn.call(receiver, arg);
+      }
+    }
+
+    Async.prototype._drainQueues = function () {
+      _drainQueue(this._normalQueue);
+
+      this._reset();
+
+      this._haveDrainedQueues = true;
+
+      _drainQueue(this._lateQueue);
+    };
+
+    Async.prototype._queueTick = function () {
+      if (!this._isTickUsed) {
+        this._isTickUsed = true;
+
+        this._schedule(this.drainQueues);
+      }
+    };
+
+    Async.prototype._reset = function () {
+      this._isTickUsed = false;
+    };
+
+    module.exports = Async;
+    module.exports.firstLineError = firstLineError;
+  }, {
+    "./queue": 63,
+    "./schedule": 66
+  }],
+  40: [function (require, module, exports) {
+    arguments[4][3][0].apply(exports, arguments);
+  }, {
+    "dup": 3
+  }],
+  41: [function (require, module, exports) {
+    arguments[4][4][0].apply(exports, arguments);
+  }, {
+    "./promise": 59,
+    "dup": 4
+  }],
+  42: [function (require, module, exports) {
+    arguments[4][5][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 5
+  }],
+  43: [function (require, module, exports) {
+    arguments[4][6][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 6
+  }],
+  44: [function (require, module, exports) {
+    arguments[4][7][0].apply(exports, arguments);
+  }, {
+    "./es5": 50,
+    "./util": 73,
+    "dup": 7
+  }],
+  45: [function (require, module, exports) {
+    arguments[4][8][0].apply(exports, arguments);
+  }, {
+    "dup": 8
+  }],
+  46: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, Context, enableAsyncHooks, disableAsyncHooks) {
+      var async = Promise._async;
+
+      var Warning = require("./errors").Warning;
+
+      var util = require("./util");
+
+      var es5 = require("./es5");
+
+      var canAttachTrace = util.canAttachTrace;
+      var unhandledRejectionHandled;
+      var possiblyUnhandledRejection;
+      var bluebirdFramePattern = /[\\\/]bluebird[\\\/]js[\\\/](release|debug|instrumented)/;
+      var nodeFramePattern = /\((?:timers\.js):\d+:\d+\)/;
+      var parseLinePattern = /[\/<\(](.+?):(\d+):(\d+)\)?\s*$/;
+      var stackFramePattern = null;
+      var formatStack = null;
+      var indentStackFrames = false;
+      var printWarning;
+      var debugging = !!(util.env("BLUEBIRD_DEBUG") != 0 && (false || util.env("BLUEBIRD_DEBUG") || util.env("NODE_ENV") === "development"));
+      var warnings = !!(util.env("BLUEBIRD_WARNINGS") != 0 && (debugging || util.env("BLUEBIRD_WARNINGS")));
+      var longStackTraces = !!(util.env("BLUEBIRD_LONG_STACK_TRACES") != 0 && (debugging || util.env("BLUEBIRD_LONG_STACK_TRACES")));
+      var wForgottenReturn = util.env("BLUEBIRD_W_FORGOTTEN_RETURN") != 0 && (warnings || !!util.env("BLUEBIRD_W_FORGOTTEN_RETURN"));
+      var deferUnhandledRejectionCheck;
+
+      (function () {
+        var promises = [];
+
+        function unhandledRejectionCheck() {
+          for (var i = 0; i < promises.length; ++i) {
+            promises[i]._notifyUnhandledRejection();
+          }
+
+          unhandledRejectionClear();
+        }
+
+        function unhandledRejectionClear() {
+          promises.length = 0;
+        }
+
+        deferUnhandledRejectionCheck = function deferUnhandledRejectionCheck(promise) {
+          promises.push(promise);
+          setTimeout(unhandledRejectionCheck, 1);
+        };
+
+        es5.defineProperty(Promise, "_unhandledRejectionCheck", {
+          value: unhandledRejectionCheck
+        });
+        es5.defineProperty(Promise, "_unhandledRejectionClear", {
+          value: unhandledRejectionClear
+        });
+      })();
+
+      Promise.prototype.suppressUnhandledRejections = function () {
+        var target = this._target();
+
+        target._bitField = target._bitField & ~1048576 | 524288;
+      };
+
+      Promise.prototype._ensurePossibleRejectionHandled = function () {
+        if ((this._bitField & 524288) !== 0) return;
+
+        this._setRejectionIsUnhandled();
+
+        deferUnhandledRejectionCheck(this);
+      };
+
+      Promise.prototype._notifyUnhandledRejectionIsHandled = function () {
+        fireRejectionEvent("rejectionHandled", unhandledRejectionHandled, undefined, this);
+      };
+
+      Promise.prototype._setReturnedNonUndefined = function () {
+        this._bitField = this._bitField | 268435456;
+      };
+
+      Promise.prototype._returnedNonUndefined = function () {
+        return (this._bitField & 268435456) !== 0;
+      };
+
+      Promise.prototype._notifyUnhandledRejection = function () {
+        if (this._isRejectionUnhandled()) {
+          var reason = this._settledValue();
+
+          this._setUnhandledRejectionIsNotified();
+
+          fireRejectionEvent("unhandledRejection", possiblyUnhandledRejection, reason, this);
+        }
+      };
+
+      Promise.prototype._setUnhandledRejectionIsNotified = function () {
+        this._bitField = this._bitField | 262144;
+      };
+
+      Promise.prototype._unsetUnhandledRejectionIsNotified = function () {
+        this._bitField = this._bitField & ~262144;
+      };
+
+      Promise.prototype._isUnhandledRejectionNotified = function () {
+        return (this._bitField & 262144) > 0;
+      };
+
+      Promise.prototype._setRejectionIsUnhandled = function () {
+        this._bitField = this._bitField | 1048576;
+      };
+
+      Promise.prototype._unsetRejectionIsUnhandled = function () {
+        this._bitField = this._bitField & ~1048576;
+
+        if (this._isUnhandledRejectionNotified()) {
+          this._unsetUnhandledRejectionIsNotified();
+
+          this._notifyUnhandledRejectionIsHandled();
+        }
+      };
+
+      Promise.prototype._isRejectionUnhandled = function () {
+        return (this._bitField & 1048576) > 0;
+      };
+
+      Promise.prototype._warn = function (message, shouldUseOwnTrace, promise) {
+        return warn(message, shouldUseOwnTrace, promise || this);
+      };
+
+      Promise.onPossiblyUnhandledRejection = function (fn) {
+        var context = Promise._getContext();
+
+        possiblyUnhandledRejection = util.contextBind(context, fn);
+      };
+
+      Promise.onUnhandledRejectionHandled = function (fn) {
+        var context = Promise._getContext();
+
+        unhandledRejectionHandled = util.contextBind(context, fn);
+      };
+
+      var disableLongStackTraces = function disableLongStackTraces() {};
+
+      Promise.longStackTraces = function () {
+        if (async.haveItemsQueued() && !config.longStackTraces) {
+          throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
+        }
+
+        if (!config.longStackTraces && longStackTracesIsSupported()) {
+          var Promise_captureStackTrace = Promise.prototype._captureStackTrace;
+          var Promise_attachExtraTrace = Promise.prototype._attachExtraTrace;
+          var Promise_dereferenceTrace = Promise.prototype._dereferenceTrace;
+          config.longStackTraces = true;
+
+          disableLongStackTraces = function disableLongStackTraces() {
+            if (async.haveItemsQueued() && !config.longStackTraces) {
+              throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
+            }
+
+            Promise.prototype._captureStackTrace = Promise_captureStackTrace;
+            Promise.prototype._attachExtraTrace = Promise_attachExtraTrace;
+            Promise.prototype._dereferenceTrace = Promise_dereferenceTrace;
+            Context.deactivateLongStackTraces();
+            config.longStackTraces = false;
+          };
+
+          Promise.prototype._captureStackTrace = longStackTracesCaptureStackTrace;
+          Promise.prototype._attachExtraTrace = longStackTracesAttachExtraTrace;
+          Promise.prototype._dereferenceTrace = longStackTracesDereferenceTrace;
+          Context.activateLongStackTraces();
+        }
+      };
+
+      Promise.hasLongStackTraces = function () {
+        return config.longStackTraces && longStackTracesIsSupported();
+      };
+
+      var legacyHandlers = {
+        unhandledrejection: {
+          before: function before() {
+            var ret = util.global.onunhandledrejection;
+            util.global.onunhandledrejection = null;
+            return ret;
+          },
+          after: function after(fn) {
+            util.global.onunhandledrejection = fn;
+          }
+        },
+        rejectionhandled: {
+          before: function before() {
+            var ret = util.global.onrejectionhandled;
+            util.global.onrejectionhandled = null;
+            return ret;
+          },
+          after: function after(fn) {
+            util.global.onrejectionhandled = fn;
+          }
+        }
+      };
+
+      var fireDomEvent = function () {
+        var dispatch = function dispatch(legacy, e) {
+          if (legacy) {
+            var fn;
+
+            try {
+              fn = legacy.before();
+              return !util.global.dispatchEvent(e);
+            } finally {
+              legacy.after(fn);
+            }
+          } else {
+            return !util.global.dispatchEvent(e);
+          }
+        };
+
+        try {
+          if (typeof CustomEvent === "function") {
+            var event = new CustomEvent("CustomEvent");
+            util.global.dispatchEvent(event);
+            return function (name, event) {
+              name = name.toLowerCase();
+              var eventData = {
+                detail: event,
+                cancelable: true
+              };
+              var domEvent = new CustomEvent(name, eventData);
+              es5.defineProperty(domEvent, "promise", {
+                value: event.promise
+              });
+              es5.defineProperty(domEvent, "reason", {
+                value: event.reason
+              });
+              return dispatch(legacyHandlers[name], domEvent);
+            };
+          } else if (typeof Event === "function") {
+            var event = new Event("CustomEvent");
+            util.global.dispatchEvent(event);
+            return function (name, event) {
+              name = name.toLowerCase();
+              var domEvent = new Event(name, {
+                cancelable: true
+              });
+              domEvent.detail = event;
+              es5.defineProperty(domEvent, "promise", {
+                value: event.promise
+              });
+              es5.defineProperty(domEvent, "reason", {
+                value: event.reason
+              });
+              return dispatch(legacyHandlers[name], domEvent);
+            };
+          } else {
+            var event = document.createEvent("CustomEvent");
+            event.initCustomEvent("testingtheevent", false, true, {});
+            util.global.dispatchEvent(event);
+            return function (name, event) {
+              name = name.toLowerCase();
+              var domEvent = document.createEvent("CustomEvent");
+              domEvent.initCustomEvent(name, false, true, event);
+              return dispatch(legacyHandlers[name], domEvent);
+            };
+          }
+        } catch (e) {}
+
+        return function () {
+          return false;
+        };
+      }();
+
+      var fireGlobalEvent = function () {
+        if (util.isNode) {
+          return function () {
+            return process.emit.apply(process, arguments);
+          };
+        } else {
+          if (!util.global) {
+            return function () {
+              return false;
+            };
+          }
+
+          return function (name) {
+            var methodName = "on" + name.toLowerCase();
+            var method = util.global[methodName];
+            if (!method) return false;
+            method.apply(util.global, [].slice.call(arguments, 1));
+            return true;
+          };
+        }
+      }();
+
+      function generatePromiseLifecycleEventObject(name, promise) {
+        return {
+          promise: promise
+        };
+      }
+
+      var eventToObjectGenerator = {
+        promiseCreated: generatePromiseLifecycleEventObject,
+        promiseFulfilled: generatePromiseLifecycleEventObject,
+        promiseRejected: generatePromiseLifecycleEventObject,
+        promiseResolved: generatePromiseLifecycleEventObject,
+        promiseCancelled: generatePromiseLifecycleEventObject,
+        promiseChained: function promiseChained(name, promise, child) {
+          return {
+            promise: promise,
+            child: child
+          };
+        },
+        warning: function warning(name, _warning2) {
+          return {
+            warning: _warning2
+          };
+        },
+        unhandledRejection: function unhandledRejection(name, reason, promise) {
+          return {
+            reason: reason,
+            promise: promise
+          };
+        },
+        rejectionHandled: generatePromiseLifecycleEventObject
+      };
+
+      var activeFireEvent = function activeFireEvent(name) {
+        var globalEventFired = false;
+
+        try {
+          globalEventFired = fireGlobalEvent.apply(null, arguments);
+        } catch (e) {
+          async.throwLater(e);
+          globalEventFired = true;
+        }
+
+        var domEventFired = false;
+
+        try {
+          domEventFired = fireDomEvent(name, eventToObjectGenerator[name].apply(null, arguments));
+        } catch (e) {
+          async.throwLater(e);
+          domEventFired = true;
+        }
+
+        return domEventFired || globalEventFired;
+      };
+
+      Promise.config = function (opts) {
+        opts = Object(opts);
+
+        if ("longStackTraces" in opts) {
+          if (opts.longStackTraces) {
+            Promise.longStackTraces();
+          } else if (!opts.longStackTraces && Promise.hasLongStackTraces()) {
+            disableLongStackTraces();
+          }
+        }
+
+        if ("warnings" in opts) {
+          var warningsOption = opts.warnings;
+          config.warnings = !!warningsOption;
+          wForgottenReturn = config.warnings;
+
+          if (util.isObject(warningsOption)) {
+            if ("wForgottenReturn" in warningsOption) {
+              wForgottenReturn = !!warningsOption.wForgottenReturn;
+            }
+          }
+        }
+
+        if ("cancellation" in opts && opts.cancellation && !config.cancellation) {
+          if (async.haveItemsQueued()) {
+            throw new Error("cannot enable cancellation after promises are in use");
+          }
+
+          Promise.prototype._clearCancellationData = cancellationClearCancellationData;
+          Promise.prototype._propagateFrom = cancellationPropagateFrom;
+          Promise.prototype._onCancel = cancellationOnCancel;
+          Promise.prototype._setOnCancel = cancellationSetOnCancel;
+          Promise.prototype._attachCancellationCallback = cancellationAttachCancellationCallback;
+          Promise.prototype._execute = cancellationExecute;
+          _propagateFromFunction2 = cancellationPropagateFrom;
+          config.cancellation = true;
+        }
+
+        if ("monitoring" in opts) {
+          if (opts.monitoring && !config.monitoring) {
+            config.monitoring = true;
+            Promise.prototype._fireEvent = activeFireEvent;
+          } else if (!opts.monitoring && config.monitoring) {
+            config.monitoring = false;
+            Promise.prototype._fireEvent = defaultFireEvent;
+          }
+        }
+
+        if ("asyncHooks" in opts && util.nodeSupportsAsyncResource) {
+          var prev = config.asyncHooks;
+          var cur = !!opts.asyncHooks;
+
+          if (prev !== cur) {
+            config.asyncHooks = cur;
+
+            if (cur) {
+              enableAsyncHooks();
+            } else {
+              disableAsyncHooks();
+            }
+          }
+        }
+
+        return Promise;
+      };
+
+      function defaultFireEvent() {
+        return false;
+      }
+
+      Promise.prototype._fireEvent = defaultFireEvent;
+
+      Promise.prototype._execute = function (executor, resolve, reject) {
+        try {
+          executor(resolve, reject);
+        } catch (e) {
+          return e;
+        }
+      };
+
+      Promise.prototype._onCancel = function () {};
+
+      Promise.prototype._setOnCancel = function (handler) {
+        ;
+      };
+
+      Promise.prototype._attachCancellationCallback = function (onCancel) {
+        ;
+      };
+
+      Promise.prototype._captureStackTrace = function () {};
+
+      Promise.prototype._attachExtraTrace = function () {};
+
+      Promise.prototype._dereferenceTrace = function () {};
+
+      Promise.prototype._clearCancellationData = function () {};
+
+      Promise.prototype._propagateFrom = function (parent, flags) {
+        ;
+        ;
+      };
+
+      function cancellationExecute(executor, resolve, reject) {
+        var promise = this;
+
+        try {
+          executor(resolve, reject, function (onCancel) {
+            if (typeof onCancel !== "function") {
+              throw new TypeError("onCancel must be a function, got: " + util.toString(onCancel));
+            }
+
+            promise._attachCancellationCallback(onCancel);
+          });
+        } catch (e) {
+          return e;
+        }
+      }
+
+      function cancellationAttachCancellationCallback(onCancel) {
+        if (!this._isCancellable()) return this;
+
+        var previousOnCancel = this._onCancel();
+
+        if (previousOnCancel !== undefined) {
+          if (util.isArray(previousOnCancel)) {
+            previousOnCancel.push(onCancel);
+          } else {
+            this._setOnCancel([previousOnCancel, onCancel]);
+          }
+        } else {
+          this._setOnCancel(onCancel);
+        }
+      }
+
+      function cancellationOnCancel() {
+        return this._onCancelField;
+      }
+
+      function cancellationSetOnCancel(onCancel) {
+        this._onCancelField = onCancel;
+      }
+
+      function cancellationClearCancellationData() {
+        this._cancellationParent = undefined;
+        this._onCancelField = undefined;
+      }
+
+      function cancellationPropagateFrom(parent, flags) {
+        if ((flags & 1) !== 0) {
+          this._cancellationParent = parent;
+          var branchesRemainingToCancel = parent._branchesRemainingToCancel;
+
+          if (branchesRemainingToCancel === undefined) {
+            branchesRemainingToCancel = 0;
+          }
+
+          parent._branchesRemainingToCancel = branchesRemainingToCancel + 1;
+        }
+
+        if ((flags & 2) !== 0 && parent._isBound()) {
+          this._setBoundTo(parent._boundTo);
+        }
+      }
+
+      function bindingPropagateFrom(parent, flags) {
+        if ((flags & 2) !== 0 && parent._isBound()) {
+          this._setBoundTo(parent._boundTo);
+        }
+      }
+
+      var _propagateFromFunction2 = bindingPropagateFrom;
+
+      function _boundValueFunction2() {
+        var ret = this._boundTo;
+
+        if (ret !== undefined) {
+          if (ret instanceof Promise) {
+            if (ret.isFulfilled()) {
+              return ret.value();
+            } else {
+              return undefined;
+            }
+          }
+        }
+
+        return ret;
+      }
+
+      function longStackTracesCaptureStackTrace() {
+        this._trace = new CapturedTrace(this._peekContext());
+      }
+
+      function longStackTracesAttachExtraTrace(error, ignoreSelf) {
+        if (canAttachTrace(error)) {
+          var trace = this._trace;
+
+          if (trace !== undefined) {
+            if (ignoreSelf) trace = trace._parent;
+          }
+
+          if (trace !== undefined) {
+            trace.attachExtraTrace(error);
+          } else if (!error.__stackCleaned__) {
+            var parsed = parseStackAndMessage(error);
+            util.notEnumerableProp(error, "stack", parsed.message + "\n" + parsed.stack.join("\n"));
+            util.notEnumerableProp(error, "__stackCleaned__", true);
+          }
+        }
+      }
+
+      function longStackTracesDereferenceTrace() {
+        this._trace = undefined;
+      }
+
+      function checkForgottenReturns(returnValue, promiseCreated, name, promise, parent) {
+        if (returnValue === undefined && promiseCreated !== null && wForgottenReturn) {
+          if (parent !== undefined && parent._returnedNonUndefined()) return;
+          if ((promise._bitField & 65535) === 0) return;
+          if (name) name = name + " ";
+          var handlerLine = "";
+          var creatorLine = "";
+
+          if (promiseCreated._trace) {
+            var traceLines = promiseCreated._trace.stack.split("\n");
+
+            var stack = cleanStack(traceLines);
+
+            for (var i = stack.length - 1; i >= 0; --i) {
+              var line = stack[i];
+
+              if (!nodeFramePattern.test(line)) {
+                var lineMatches = line.match(parseLinePattern);
+
+                if (lineMatches) {
+                  handlerLine = "at " + lineMatches[1] + ":" + lineMatches[2] + ":" + lineMatches[3] + " ";
+                }
+
+                break;
+              }
+            }
+
+            if (stack.length > 0) {
+              var firstUserLine = stack[0];
+
+              for (var i = 0; i < traceLines.length; ++i) {
+                if (traceLines[i] === firstUserLine) {
+                  if (i > 0) {
+                    creatorLine = "\n" + traceLines[i - 1];
+                  }
+
+                  break;
+                }
+              }
+            }
+          }
+
+          var msg = "a promise was created in a " + name + "handler " + handlerLine + "but was not returned from it, " + "see http://goo.gl/rRqMUw" + creatorLine;
+
+          promise._warn(msg, true, promiseCreated);
+        }
+      }
+
+      function deprecated(name, replacement) {
+        var message = name + " is deprecated and will be removed in a future version.";
+        if (replacement) message += " Use " + replacement + " instead.";
+        return warn(message);
+      }
+
+      function warn(message, shouldUseOwnTrace, promise) {
+        if (!config.warnings) return;
+        var warning = new Warning(message);
+        var ctx;
+
+        if (shouldUseOwnTrace) {
+          promise._attachExtraTrace(warning);
+        } else if (config.longStackTraces && (ctx = Promise._peekContext())) {
+          ctx.attachExtraTrace(warning);
+        } else {
+          var parsed = parseStackAndMessage(warning);
+          warning.stack = parsed.message + "\n" + parsed.stack.join("\n");
+        }
+
+        if (!activeFireEvent("warning", warning)) {
+          formatAndLogError(warning, "", true);
+        }
+      }
+
+      function reconstructStack(message, stacks) {
+        for (var i = 0; i < stacks.length - 1; ++i) {
+          stacks[i].push("From previous event:");
+          stacks[i] = stacks[i].join("\n");
+        }
+
+        if (i < stacks.length) {
+          stacks[i] = stacks[i].join("\n");
+        }
+
+        return message + "\n" + stacks.join("\n");
+      }
+
+      function removeDuplicateOrEmptyJumps(stacks) {
+        for (var i = 0; i < stacks.length; ++i) {
+          if (stacks[i].length === 0 || i + 1 < stacks.length && stacks[i][0] === stacks[i + 1][0]) {
+            stacks.splice(i, 1);
+            i--;
+          }
+        }
+      }
+
+      function removeCommonRoots(stacks) {
+        var current = stacks[0];
+
+        for (var i = 1; i < stacks.length; ++i) {
+          var prev = stacks[i];
+          var currentLastIndex = current.length - 1;
+          var currentLastLine = current[currentLastIndex];
+          var commonRootMeetPoint = -1;
+
+          for (var j = prev.length - 1; j >= 0; --j) {
+            if (prev[j] === currentLastLine) {
+              commonRootMeetPoint = j;
+              break;
+            }
+          }
+
+          for (var j = commonRootMeetPoint; j >= 0; --j) {
+            var line = prev[j];
+
+            if (current[currentLastIndex] === line) {
+              current.pop();
+              currentLastIndex--;
+            } else {
+              break;
+            }
+          }
+
+          current = prev;
+        }
+      }
+
+      function cleanStack(stack) {
+        var ret = [];
+
+        for (var i = 0; i < stack.length; ++i) {
+          var line = stack[i];
+          var isTraceLine = "    (No stack trace)" === line || stackFramePattern.test(line);
+          var isInternalFrame = isTraceLine && shouldIgnore(line);
+
+          if (isTraceLine && !isInternalFrame) {
+            if (indentStackFrames && line.charAt(0) !== " ") {
+              line = "    " + line;
+            }
+
+            ret.push(line);
+          }
+        }
+
+        return ret;
+      }
+
+      function stackFramesAsArray(error) {
+        var stack = error.stack.replace(/\s+$/g, "").split("\n");
+
+        for (var i = 0; i < stack.length; ++i) {
+          var line = stack[i];
+
+          if ("    (No stack trace)" === line || stackFramePattern.test(line)) {
+            break;
+          }
+        }
+
+        if (i > 0 && error.name != "SyntaxError") {
+          stack = stack.slice(i);
+        }
+
+        return stack;
+      }
+
+      function parseStackAndMessage(error) {
+        var stack = error.stack;
+        var message = error.toString();
+        stack = typeof stack === "string" && stack.length > 0 ? stackFramesAsArray(error) : ["    (No stack trace)"];
+        return {
+          message: message,
+          stack: error.name == "SyntaxError" ? stack : cleanStack(stack)
+        };
+      }
+
+      function formatAndLogError(error, title, isSoft) {
+        if (typeof console !== "undefined") {
+          var message;
+
+          if (util.isObject(error)) {
+            var stack = error.stack;
+            message = title + formatStack(stack, error);
+          } else {
+            message = title + String(error);
+          }
+
+          if (typeof printWarning === "function") {
+            printWarning(message, isSoft);
+          } else if (typeof console.log === "function" || (0, _typeof2["default"])(console.log) === "object") {
+            console.log(message);
+          }
+        }
+      }
+
+      function fireRejectionEvent(name, localHandler, reason, promise) {
+        var localEventFired = false;
+
+        try {
+          if (typeof localHandler === "function") {
+            localEventFired = true;
+
+            if (name === "rejectionHandled") {
+              localHandler(promise);
+            } else {
+              localHandler(reason, promise);
+            }
+          }
+        } catch (e) {
+          async.throwLater(e);
+        }
+
+        if (name === "unhandledRejection") {
+          if (!activeFireEvent(name, reason, promise) && !localEventFired) {
+            formatAndLogError(reason, "Unhandled rejection ");
+          }
+        } else {
+          activeFireEvent(name, promise);
+        }
+      }
+
+      function formatNonError(obj) {
+        var str;
+
+        if (typeof obj === "function") {
+          str = "[function " + (obj.name || "anonymous") + "]";
+        } else {
+          str = obj && typeof obj.toString === "function" ? obj.toString() : util.toString(obj);
+          var ruselessToString = /\[object [a-zA-Z0-9$_]+\]/;
+
+          if (ruselessToString.test(str)) {
+            try {
+              var newStr = JSON.stringify(obj);
+              str = newStr;
+            } catch (e) {}
+          }
+
+          if (str.length === 0) {
+            str = "(empty array)";
+          }
+        }
+
+        return "(<" + snip(str) + ">, no stack trace)";
+      }
+
+      function snip(str) {
+        var maxChars = 41;
+
+        if (str.length < maxChars) {
+          return str;
+        }
+
+        return str.substr(0, maxChars - 3) + "...";
+      }
+
+      function longStackTracesIsSupported() {
+        return typeof captureStackTrace === "function";
+      }
+
+      var shouldIgnore = function shouldIgnore() {
+        return false;
+      };
+
+      var parseLineInfoRegex = /[\/<\(]([^:\/]+):(\d+):(?:\d+)\)?\s*$/;
+
+      function parseLineInfo(line) {
+        var matches = line.match(parseLineInfoRegex);
+
+        if (matches) {
+          return {
+            fileName: matches[1],
+            line: parseInt(matches[2], 10)
+          };
+        }
+      }
+
+      function setBounds(firstLineError, lastLineError) {
+        if (!longStackTracesIsSupported()) return;
+        var firstStackLines = (firstLineError.stack || "").split("\n");
+        var lastStackLines = (lastLineError.stack || "").split("\n");
+        var firstIndex = -1;
+        var lastIndex = -1;
+        var firstFileName;
+        var lastFileName;
+
+        for (var i = 0; i < firstStackLines.length; ++i) {
+          var result = parseLineInfo(firstStackLines[i]);
+
+          if (result) {
+            firstFileName = result.fileName;
+            firstIndex = result.line;
+            break;
+          }
+        }
+
+        for (var i = 0; i < lastStackLines.length; ++i) {
+          var result = parseLineInfo(lastStackLines[i]);
+
+          if (result) {
+            lastFileName = result.fileName;
+            lastIndex = result.line;
+            break;
+          }
+        }
+
+        if (firstIndex < 0 || lastIndex < 0 || !firstFileName || !lastFileName || firstFileName !== lastFileName || firstIndex >= lastIndex) {
+          return;
+        }
+
+        shouldIgnore = function shouldIgnore(line) {
+          if (bluebirdFramePattern.test(line)) return true;
+          var info = parseLineInfo(line);
+
+          if (info) {
+            if (info.fileName === firstFileName && firstIndex <= info.line && info.line <= lastIndex) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+      }
+
+      function CapturedTrace(parent) {
+        this._parent = parent;
+        this._promisesCreated = 0;
+        var length = this._length = 1 + (parent === undefined ? 0 : parent._length);
+        captureStackTrace(this, CapturedTrace);
+        if (length > 32) this.uncycle();
+      }
+
+      util.inherits(CapturedTrace, Error);
+      Context.CapturedTrace = CapturedTrace;
+
+      CapturedTrace.prototype.uncycle = function () {
+        var length = this._length;
+        if (length < 2) return;
+        var nodes = [];
+        var stackToIndex = {};
+
+        for (var i = 0, node = this; node !== undefined; ++i) {
+          nodes.push(node);
+          node = node._parent;
+        }
+
+        length = this._length = i;
+
+        for (var i = length - 1; i >= 0; --i) {
+          var stack = nodes[i].stack;
+
+          if (stackToIndex[stack] === undefined) {
+            stackToIndex[stack] = i;
+          }
+        }
+
+        for (var i = 0; i < length; ++i) {
+          var currentStack = nodes[i].stack;
+          var index = stackToIndex[currentStack];
+
+          if (index !== undefined && index !== i) {
+            if (index > 0) {
+              nodes[index - 1]._parent = undefined;
+              nodes[index - 1]._length = 1;
+            }
+
+            nodes[i]._parent = undefined;
+            nodes[i]._length = 1;
+            var cycleEdgeNode = i > 0 ? nodes[i - 1] : this;
+
+            if (index < length - 1) {
+              cycleEdgeNode._parent = nodes[index + 1];
+
+              cycleEdgeNode._parent.uncycle();
+
+              cycleEdgeNode._length = cycleEdgeNode._parent._length + 1;
+            } else {
+              cycleEdgeNode._parent = undefined;
+              cycleEdgeNode._length = 1;
+            }
+
+            var currentChildLength = cycleEdgeNode._length + 1;
+
+            for (var j = i - 2; j >= 0; --j) {
+              nodes[j]._length = currentChildLength;
+              currentChildLength++;
+            }
+
+            return;
+          }
+        }
+      };
+
+      CapturedTrace.prototype.attachExtraTrace = function (error) {
+        if (error.__stackCleaned__) return;
+        this.uncycle();
+        var parsed = parseStackAndMessage(error);
+        var message = parsed.message;
+        var stacks = [parsed.stack];
+        var trace = this;
+
+        while (trace !== undefined) {
+          stacks.push(cleanStack(trace.stack.split("\n")));
+          trace = trace._parent;
+        }
+
+        removeCommonRoots(stacks);
+        removeDuplicateOrEmptyJumps(stacks);
+        util.notEnumerableProp(error, "stack", reconstructStack(message, stacks));
+        util.notEnumerableProp(error, "__stackCleaned__", true);
+      };
+
+      var captureStackTrace = function stackDetection() {
+        var v8stackFramePattern = /^\s*at\s*/;
+
+        var v8stackFormatter = function v8stackFormatter(stack, error) {
+          if (typeof stack === "string") return stack;
+
+          if (error.name !== undefined && error.message !== undefined) {
+            return error.toString();
+          }
+
+          return formatNonError(error);
+        };
+
+        if (typeof Error.stackTraceLimit === "number" && typeof Error.captureStackTrace === "function") {
+          Error.stackTraceLimit += 6;
+          stackFramePattern = v8stackFramePattern;
+          formatStack = v8stackFormatter;
+          var captureStackTrace = Error.captureStackTrace;
+
+          shouldIgnore = function shouldIgnore(line) {
+            return bluebirdFramePattern.test(line);
+          };
+
+          return function (receiver, ignoreUntil) {
+            Error.stackTraceLimit += 6;
+            captureStackTrace(receiver, ignoreUntil);
+            Error.stackTraceLimit -= 6;
+          };
+        }
+
+        var err = new Error();
+
+        if (typeof err.stack === "string" && err.stack.split("\n")[0].indexOf("stackDetection@") >= 0) {
+          stackFramePattern = /@/;
+          formatStack = v8stackFormatter;
+          indentStackFrames = true;
+          return function captureStackTrace(o) {
+            o.stack = new Error().stack;
+          };
+        }
+
+        var hasStackAfterThrow;
+
+        try {
+          throw new Error();
+        } catch (e) {
+          hasStackAfterThrow = "stack" in e;
+        }
+
+        if (!("stack" in err) && hasStackAfterThrow && typeof Error.stackTraceLimit === "number") {
+          stackFramePattern = v8stackFramePattern;
+          formatStack = v8stackFormatter;
+          return function captureStackTrace(o) {
+            Error.stackTraceLimit += 6;
+
+            try {
+              throw new Error();
+            } catch (e) {
+              o.stack = e.stack;
+            }
+
+            Error.stackTraceLimit -= 6;
+          };
+        }
+
+        formatStack = function formatStack(stack, error) {
+          if (typeof stack === "string") return stack;
+
+          if (((0, _typeof2["default"])(error) === "object" || typeof error === "function") && error.name !== undefined && error.message !== undefined) {
+            return error.toString();
+          }
+
+          return formatNonError(error);
+        };
+
+        return null;
+      }([]);
+
+      if (typeof console !== "undefined" && typeof console.warn !== "undefined") {
+        printWarning = function printWarning(message) {
+          console.warn(message);
+        };
+
+        if (util.isNode && process.stderr.isTTY) {
+          printWarning = function printWarning(message, isSoft) {
+            var color = isSoft ? "\x1B[33m" : "\x1B[31m";
+            console.warn(color + message + "\x1B[0m\n");
+          };
+        } else if (!util.isNode && typeof new Error().stack === "string") {
+          printWarning = function printWarning(message, isSoft) {
+            console.warn("%c" + message, isSoft ? "color: darkorange" : "color: red");
+          };
+        }
+      }
+
+      var config = {
+        warnings: warnings,
+        longStackTraces: false,
+        cancellation: false,
+        monitoring: false,
+        asyncHooks: false
+      };
+      if (longStackTraces) Promise.longStackTraces();
+      return {
+        asyncHooks: function asyncHooks() {
+          return config.asyncHooks;
+        },
+        longStackTraces: function longStackTraces() {
+          return config.longStackTraces;
+        },
+        warnings: function warnings() {
+          return config.warnings;
+        },
+        cancellation: function cancellation() {
+          return config.cancellation;
+        },
+        monitoring: function monitoring() {
+          return config.monitoring;
+        },
+        propagateFromFunction: function propagateFromFunction() {
+          return _propagateFromFunction2;
+        },
+        boundValueFunction: function boundValueFunction() {
+          return _boundValueFunction2;
+        },
+        checkForgottenReturns: checkForgottenReturns,
+        setBounds: setBounds,
+        warn: warn,
+        deprecated: deprecated,
+        CapturedTrace: CapturedTrace,
+        fireDomEvent: fireDomEvent,
+        fireGlobalEvent: fireGlobalEvent
+      };
+    };
+  }, {
+    "./errors": 49,
+    "./es5": 50,
+    "./util": 73
+  }],
+  47: [function (require, module, exports) {
+    arguments[4][10][0].apply(exports, arguments);
+  }, {
+    "dup": 10
+  }],
+  48: [function (require, module, exports) {
+    arguments[4][11][0].apply(exports, arguments);
+  }, {
+    "dup": 11
+  }],
+  49: [function (require, module, exports) {
+    arguments[4][12][0].apply(exports, arguments);
+  }, {
+    "./es5": 50,
+    "./util": 73,
+    "dup": 12
+  }],
+  50: [function (require, module, exports) {
+    arguments[4][13][0].apply(exports, arguments);
+  }, {
+    "dup": 13
+  }],
+  51: [function (require, module, exports) {
+    arguments[4][14][0].apply(exports, arguments);
+  }, {
+    "dup": 14
+  }],
+  52: [function (require, module, exports) {
+    arguments[4][15][0].apply(exports, arguments);
+  }, {
+    "./catch_filter": 44,
+    "./util": 73,
+    "dup": 15
+  }],
+  53: [function (require, module, exports) {
+    arguments[4][16][0].apply(exports, arguments);
+  }, {
+    "./errors": 49,
+    "./util": 73,
+    "dup": 16
+  }],
+  54: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, PromiseArray, tryConvertToPromise, INTERNAL, async) {
+      var util = require("./util");
+
+      var canEvaluate = util.canEvaluate;
+      var tryCatch = util.tryCatch;
+      var errorObj = util.errorObj;
+      var reject;
+
+      if (!false) {
+        if (canEvaluate) {
+          var thenCallback = function thenCallback(i) {
+            return new Function("value", "holder", "                             \n\
+            'use strict';                                                    \n\
+            holder.pIndex = value;                                           \n\
+            holder.checkFulfillment(this);                                   \n\
+            ".replace(/Index/g, i));
+          };
+
+          var promiseSetter = function promiseSetter(i) {
+            return new Function("promise", "holder", "                           \n\
+            'use strict';                                                    \n\
+            holder.pIndex = promise;                                         \n\
+            ".replace(/Index/g, i));
+          };
+
+          var generateHolderClass = function generateHolderClass(total) {
+            var props = new Array(total);
+
+            for (var i = 0; i < props.length; ++i) {
+              props[i] = "this.p" + (i + 1);
+            }
+
+            var assignment = props.join(" = ") + " = null;";
+            var cancellationCode = "var promise;\n" + props.map(function (prop) {
+              return "                                                         \n\
+                promise = " + prop + ";                                      \n\
+                if (promise instanceof Promise) {                            \n\
+                    promise.cancel();                                        \n\
+                }                                                            \n\
+            ";
+            }).join("\n");
+            var passedArguments = props.join(", ");
+            var name = "Holder$" + total;
+            var code = "return function(tryCatch, errorObj, Promise, async) {    \n\
+            'use strict';                                                    \n\
+            function [TheName](fn) {                                         \n\
+                [TheProperties]                                              \n\
+                this.fn = fn;                                                \n\
+                this.asyncNeeded = true;                                     \n\
+                this.now = 0;                                                \n\
+            }                                                                \n\
+                                                                             \n\
+            [TheName].prototype._callFunction = function(promise) {          \n\
+                promise._pushContext();                                      \n\
+                var ret = tryCatch(this.fn)([ThePassedArguments]);           \n\
+                promise._popContext();                                       \n\
+                if (ret === errorObj) {                                      \n\
+                    promise._rejectCallback(ret.e, false);                   \n\
+                } else {                                                     \n\
+                    promise._resolveCallback(ret);                           \n\
+                }                                                            \n\
+            };                                                               \n\
+                                                                             \n\
+            [TheName].prototype.checkFulfillment = function(promise) {       \n\
+                var now = ++this.now;                                        \n\
+                if (now === [TheTotal]) {                                    \n\
+                    if (this.asyncNeeded) {                                  \n\
+                        async.invoke(this._callFunction, this, promise);     \n\
+                    } else {                                                 \n\
+                        this._callFunction(promise);                         \n\
+                    }                                                        \n\
+                                                                             \n\
+                }                                                            \n\
+            };                                                               \n\
+                                                                             \n\
+            [TheName].prototype._resultCancelled = function() {              \n\
+                [CancellationCode]                                           \n\
+            };                                                               \n\
+                                                                             \n\
+            return [TheName];                                                \n\
+        }(tryCatch, errorObj, Promise, async);                               \n\
+        ";
+            code = code.replace(/\[TheName\]/g, name).replace(/\[TheTotal\]/g, total).replace(/\[ThePassedArguments\]/g, passedArguments).replace(/\[TheProperties\]/g, assignment).replace(/\[CancellationCode\]/g, cancellationCode);
+            return new Function("tryCatch", "errorObj", "Promise", "async", code)(tryCatch, errorObj, Promise, async);
+          };
+
+          var holderClasses = [];
+          var thenCallbacks = [];
+          var promiseSetters = [];
+
+          for (var i = 0; i < 8; ++i) {
+            holderClasses.push(generateHolderClass(i + 1));
+            thenCallbacks.push(thenCallback(i + 1));
+            promiseSetters.push(promiseSetter(i + 1));
+          }
+
+          reject = function reject(reason) {
+            this._reject(reason);
+          };
+        }
+      }
+
+      Promise.join = function () {
+        var last = arguments.length - 1;
+        var fn;
+
+        if (last > 0 && typeof arguments[last] === "function") {
+          fn = arguments[last];
+
+          if (!false) {
+            if (last <= 8 && canEvaluate) {
+              var ret = new Promise(INTERNAL);
+
+              ret._captureStackTrace();
+
+              var HolderClass = holderClasses[last - 1];
+              var holder = new HolderClass(fn);
+              var callbacks = thenCallbacks;
+
+              for (var i = 0; i < last; ++i) {
+                var maybePromise = tryConvertToPromise(arguments[i], ret);
+
+                if (maybePromise instanceof Promise) {
+                  maybePromise = maybePromise._target();
+                  var bitField = maybePromise._bitField;
+                  ;
+
+                  if ((bitField & 50397184) === 0) {
+                    maybePromise._then(callbacks[i], reject, undefined, ret, holder);
+
+                    promiseSetters[i](maybePromise, holder);
+                    holder.asyncNeeded = false;
+                  } else if ((bitField & 33554432) !== 0) {
+                    callbacks[i].call(ret, maybePromise._value(), holder);
+                  } else if ((bitField & 16777216) !== 0) {
+                    ret._reject(maybePromise._reason());
+                  } else {
+                    ret._cancel();
+                  }
+                } else {
+                  callbacks[i].call(ret, maybePromise, holder);
+                }
+              }
+
+              if (!ret._isFateSealed()) {
+                if (holder.asyncNeeded) {
+                  var context = Promise._getContext();
+
+                  holder.fn = util.contextBind(context, holder.fn);
+                }
+
+                ret._setAsyncGuaranteed();
+
+                ret._setOnCancel(holder);
+              }
+
+              return ret;
+            }
+          }
+        }
+
+        var $_len = arguments.length;
+        var args = new Array($_len);
+
+        for (var $_i = 0; $_i < $_len; ++$_i) {
+          args[$_i] = arguments[$_i];
+        }
+
+        ;
+        if (fn) args.pop();
+        var ret = new PromiseArray(args).promise();
+        return fn !== undefined ? ret.spread(fn) : ret;
+      };
+    };
+  }, {
+    "./util": 73
+  }],
+  55: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
+      var util = require("./util");
+
+      var tryCatch = util.tryCatch;
+      var errorObj = util.errorObj;
+      var async = Promise._async;
+
+      function MappingPromiseArray(promises, fn, limit, _filter) {
+        this.constructor$(promises);
+
+        this._promise._captureStackTrace();
+
+        var context = Promise._getContext();
+
+        this._callback = util.contextBind(context, fn);
+        this._preservedValues = _filter === INTERNAL ? new Array(this.length()) : null;
+        this._limit = limit;
+        this._inFlight = 0;
+        this._queue = [];
+        async.invoke(this._asyncInit, this, undefined);
+
+        if (util.isArray(promises)) {
+          for (var i = 0; i < promises.length; ++i) {
+            var maybePromise = promises[i];
+
+            if (maybePromise instanceof Promise) {
+              maybePromise.suppressUnhandledRejections();
+            }
+          }
+        }
+      }
+
+      util.inherits(MappingPromiseArray, PromiseArray);
+
+      MappingPromiseArray.prototype._asyncInit = function () {
+        this._init$(undefined, -2);
+      };
+
+      MappingPromiseArray.prototype._init = function () {};
+
+      MappingPromiseArray.prototype._promiseFulfilled = function (value, index) {
+        var values = this._values;
+        var length = this.length();
+        var preservedValues = this._preservedValues;
+        var limit = this._limit;
+
+        if (index < 0) {
+          index = index * -1 - 1;
+          values[index] = value;
+
+          if (limit >= 1) {
+            this._inFlight--;
+
+            this._drainQueue();
+
+            if (this._isResolved()) return true;
+          }
+        } else {
+          if (limit >= 1 && this._inFlight >= limit) {
+            values[index] = value;
+
+            this._queue.push(index);
+
+            return false;
+          }
+
+          if (preservedValues !== null) preservedValues[index] = value;
+          var promise = this._promise;
+          var callback = this._callback;
+
+          var receiver = promise._boundValue();
+
+          promise._pushContext();
+
+          var ret = tryCatch(callback).call(receiver, value, index, length);
+
+          var promiseCreated = promise._popContext();
+
+          debug.checkForgottenReturns(ret, promiseCreated, preservedValues !== null ? "Promise.filter" : "Promise.map", promise);
+
+          if (ret === errorObj) {
+            this._reject(ret.e);
+
+            return true;
+          }
+
+          var maybePromise = tryConvertToPromise(ret, this._promise);
+
+          if (maybePromise instanceof Promise) {
+            maybePromise = maybePromise._target();
+            var bitField = maybePromise._bitField;
+            ;
+
+            if ((bitField & 50397184) === 0) {
+              if (limit >= 1) this._inFlight++;
+              values[index] = maybePromise;
+
+              maybePromise._proxy(this, (index + 1) * -1);
+
+              return false;
+            } else if ((bitField & 33554432) !== 0) {
+              ret = maybePromise._value();
+            } else if ((bitField & 16777216) !== 0) {
+              this._reject(maybePromise._reason());
+
+              return true;
+            } else {
+              this._cancel();
+
+              return true;
+            }
+          }
+
+          values[index] = ret;
+        }
+
+        var totalResolved = ++this._totalResolved;
+
+        if (totalResolved >= length) {
+          if (preservedValues !== null) {
+            this._filter(values, preservedValues);
+          } else {
+            this._resolve(values);
+          }
+
+          return true;
+        }
+
+        return false;
+      };
+
+      MappingPromiseArray.prototype._drainQueue = function () {
+        var queue = this._queue;
+        var limit = this._limit;
+        var values = this._values;
+
+        while (queue.length > 0 && this._inFlight < limit) {
+          if (this._isResolved()) return;
+          var index = queue.pop();
+
+          this._promiseFulfilled(values[index], index);
+        }
+      };
+
+      MappingPromiseArray.prototype._filter = function (booleans, values) {
+        var len = values.length;
+        var ret = new Array(len);
+        var j = 0;
+
+        for (var i = 0; i < len; ++i) {
+          if (booleans[i]) ret[j++] = values[i];
+        }
+
+        ret.length = j;
+
+        this._resolve(ret);
+      };
+
+      MappingPromiseArray.prototype.preservedValues = function () {
+        return this._preservedValues;
+      };
+
+      function map(promises, fn, options, _filter) {
+        if (typeof fn !== "function") {
+          return apiRejection("expecting a function but got " + util.classString(fn));
+        }
+
+        var limit = 0;
+
+        if (options !== undefined) {
+          if ((0, _typeof2["default"])(options) === "object" && options !== null) {
+            if (typeof options.concurrency !== "number") {
+              return Promise.reject(new TypeError("'concurrency' must be a number but it is " + util.classString(options.concurrency)));
+            }
+
+            limit = options.concurrency;
+          } else {
+            return Promise.reject(new TypeError("options argument must be an object but it is " + util.classString(options)));
+          }
+        }
+
+        limit = typeof limit === "number" && isFinite(limit) && limit >= 1 ? limit : 0;
+        return new MappingPromiseArray(promises, fn, limit, _filter).promise();
+      }
+
+      Promise.prototype.map = function (fn, options) {
+        return map(this, fn, options, null);
+      };
+
+      Promise.map = function (promises, fn, options, _filter) {
+        return map(promises, fn, options, _filter);
+      };
+    };
+  }, {
+    "./util": 73
+  }],
+  56: [function (require, module, exports) {
+    arguments[4][19][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 19
+  }],
+  57: [function (require, module, exports) {
+    arguments[4][20][0].apply(exports, arguments);
+  }, {
+    "./errors": 49,
+    "./es5": 50,
+    "./util": 73,
+    "dup": 20
+  }],
+  58: [function (require, module, exports) {
+    arguments[4][21][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 21
+  }],
+  59: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function () {
+      var makeSelfResolutionError = function makeSelfResolutionError() {
+        return new TypeError("circular promise resolution chain\n\n    See http://goo.gl/MqrFmX\n");
+      };
+
+      var reflectHandler = function reflectHandler() {
+        return new Promise.PromiseInspection(this._target());
+      };
+
+      var apiRejection = function apiRejection(msg) {
+        return Promise.reject(new TypeError(msg));
+      };
+
+      function Proxyable() {}
+
+      var UNDEFINED_BINDING = {};
+
+      var util = require("./util");
+
+      util.setReflectHandler(reflectHandler);
+
+      var getDomain = function getDomain() {
+        var domain = process.domain;
+
+        if (domain === undefined) {
+          return null;
+        }
+
+        return domain;
+      };
+
+      var getContextDefault = function getContextDefault() {
+        return null;
+      };
+
+      var getContextDomain = function getContextDomain() {
+        return {
+          domain: getDomain(),
+          async: null
+        };
+      };
+
+      var AsyncResource = util.isNode && util.nodeSupportsAsyncResource ? require("async_hooks").AsyncResource : null;
+
+      var getContextAsyncHooks = function getContextAsyncHooks() {
+        return {
+          domain: getDomain(),
+          async: new AsyncResource("Bluebird::Promise")
+        };
+      };
+
+      var getContext = util.isNode ? getContextDomain : getContextDefault;
+      util.notEnumerableProp(Promise, "_getContext", getContext);
+
+      var enableAsyncHooks = function enableAsyncHooks() {
+        getContext = getContextAsyncHooks;
+        util.notEnumerableProp(Promise, "_getContext", getContextAsyncHooks);
+      };
+
+      var disableAsyncHooks = function disableAsyncHooks() {
+        getContext = getContextDomain;
+        util.notEnumerableProp(Promise, "_getContext", getContextDomain);
+      };
+
+      var es5 = require("./es5");
+
+      var Async = require("./async");
+
+      var async = new Async();
+      es5.defineProperty(Promise, "_async", {
+        value: async
+      });
+
+      var errors = require("./errors");
+
+      var TypeError = Promise.TypeError = errors.TypeError;
+      Promise.RangeError = errors.RangeError;
+      var CancellationError = Promise.CancellationError = errors.CancellationError;
+      Promise.TimeoutError = errors.TimeoutError;
+      Promise.OperationalError = errors.OperationalError;
+      Promise.RejectionError = errors.OperationalError;
+      Promise.AggregateError = errors.AggregateError;
+
+      var INTERNAL = function INTERNAL() {};
+
+      var APPLY = {};
+      var NEXT_FILTER = {};
+
+      var tryConvertToPromise = require("./thenables")(Promise, INTERNAL);
+
+      var PromiseArray = require("./promise_array")(Promise, INTERNAL, tryConvertToPromise, apiRejection, Proxyable);
+
+      var Context = require("./context")(Promise);
+      /*jshint unused:false*/
+
+
+      var createContext = Context.create;
+
+      var debug = require("./debuggability")(Promise, Context, enableAsyncHooks, disableAsyncHooks);
+
+      var CapturedTrace = debug.CapturedTrace;
+
+      var PassThroughHandlerContext = require("./finally")(Promise, tryConvertToPromise, NEXT_FILTER);
+
+      var catchFilter = require("./catch_filter")(NEXT_FILTER);
+
+      var nodebackForPromise = require("./nodeback");
+
+      var errorObj = util.errorObj;
+      var tryCatch = util.tryCatch;
+
+      function check(self, executor) {
+        if (self == null || self.constructor !== Promise) {
+          throw new TypeError("the promise constructor cannot be invoked directly\n\n    See http://goo.gl/MqrFmX\n");
+        }
+
+        if (typeof executor !== "function") {
+          throw new TypeError("expecting a function but got " + util.classString(executor));
+        }
+      }
+
+      function Promise(executor) {
+        if (executor !== INTERNAL) {
+          check(this, executor);
+        }
+
+        this._bitField = 0;
+        this._fulfillmentHandler0 = undefined;
+        this._rejectionHandler0 = undefined;
+        this._promise0 = undefined;
+        this._receiver0 = undefined;
+
+        this._resolveFromExecutor(executor);
+
+        this._promiseCreated();
+
+        this._fireEvent("promiseCreated", this);
+      }
+
+      Promise.prototype.toString = function () {
+        return "[object Promise]";
+      };
+
+      Promise.prototype.caught = Promise.prototype["catch"] = function (fn) {
+        var len = arguments.length;
+
+        if (len > 1) {
+          var catchInstances = new Array(len - 1),
+              j = 0,
+              i;
+
+          for (i = 0; i < len - 1; ++i) {
+            var item = arguments[i];
+
+            if (util.isObject(item)) {
+              catchInstances[j++] = item;
+            } else {
+              return apiRejection("Catch statement predicate: " + "expecting an object but got " + util.classString(item));
+            }
+          }
+
+          catchInstances.length = j;
+          fn = arguments[i];
+
+          if (typeof fn !== "function") {
+            throw new TypeError("The last argument to .catch() " + "must be a function, got " + util.toString(fn));
+          }
+
+          return this.then(undefined, catchFilter(catchInstances, fn, this));
+        }
+
+        return this.then(undefined, fn);
+      };
+
+      Promise.prototype.reflect = function () {
+        return this._then(reflectHandler, reflectHandler, undefined, this, undefined);
+      };
+
+      Promise.prototype.then = function (didFulfill, didReject) {
+        if (debug.warnings() && arguments.length > 0 && typeof didFulfill !== "function" && typeof didReject !== "function") {
+          var msg = ".then() only accepts functions but was passed: " + util.classString(didFulfill);
+
+          if (arguments.length > 1) {
+            msg += ", " + util.classString(didReject);
+          }
+
+          this._warn(msg);
+        }
+
+        return this._then(didFulfill, didReject, undefined, undefined, undefined);
+      };
+
+      Promise.prototype.done = function (didFulfill, didReject) {
+        var promise = this._then(didFulfill, didReject, undefined, undefined, undefined);
+
+        promise._setIsFinal();
+      };
+
+      Promise.prototype.spread = function (fn) {
+        if (typeof fn !== "function") {
+          return apiRejection("expecting a function but got " + util.classString(fn));
+        }
+
+        return this.all()._then(fn, undefined, undefined, APPLY, undefined);
+      };
+
+      Promise.prototype.toJSON = function () {
+        var ret = {
+          isFulfilled: false,
+          isRejected: false,
+          fulfillmentValue: undefined,
+          rejectionReason: undefined
+        };
+
+        if (this.isFulfilled()) {
+          ret.fulfillmentValue = this.value();
+          ret.isFulfilled = true;
+        } else if (this.isRejected()) {
+          ret.rejectionReason = this.reason();
+          ret.isRejected = true;
+        }
+
+        return ret;
+      };
+
+      Promise.prototype.all = function () {
+        if (arguments.length > 0) {
+          this._warn(".all() was passed arguments but it does not take any");
+        }
+
+        return new PromiseArray(this).promise();
+      };
+
+      Promise.prototype.error = function (fn) {
+        return this.caught(util.originatesFromRejection, fn);
+      };
+
+      Promise.getNewLibraryCopy = module.exports;
+
+      Promise.is = function (val) {
+        return val instanceof Promise;
+      };
+
+      Promise.fromNode = Promise.fromCallback = function (fn) {
+        var ret = new Promise(INTERNAL);
+
+        ret._captureStackTrace();
+
+        var multiArgs = arguments.length > 1 ? !!Object(arguments[1]).multiArgs : false;
+        var result = tryCatch(fn)(nodebackForPromise(ret, multiArgs));
+
+        if (result === errorObj) {
+          ret._rejectCallback(result.e, true);
+        }
+
+        if (!ret._isFateSealed()) ret._setAsyncGuaranteed();
+        return ret;
+      };
+
+      Promise.all = function (promises) {
+        return new PromiseArray(promises).promise();
+      };
+
+      Promise.cast = function (obj) {
+        var ret = tryConvertToPromise(obj);
+
+        if (!(ret instanceof Promise)) {
+          ret = new Promise(INTERNAL);
+
+          ret._captureStackTrace();
+
+          ret._setFulfilled();
+
+          ret._rejectionHandler0 = obj;
+        }
+
+        return ret;
+      };
+
+      Promise.resolve = Promise.fulfilled = Promise.cast;
+
+      Promise.reject = Promise.rejected = function (reason) {
+        var ret = new Promise(INTERNAL);
+
+        ret._captureStackTrace();
+
+        ret._rejectCallback(reason, true);
+
+        return ret;
+      };
+
+      Promise.setScheduler = function (fn) {
+        if (typeof fn !== "function") {
+          throw new TypeError("expecting a function but got " + util.classString(fn));
+        }
+
+        return async.setScheduler(fn);
+      };
+
+      Promise.prototype._then = function (didFulfill, didReject, _, receiver, internalData) {
+        var haveInternalData = internalData !== undefined;
+        var promise = haveInternalData ? internalData : new Promise(INTERNAL);
+
+        var target = this._target();
+
+        var bitField = target._bitField;
+
+        if (!haveInternalData) {
+          promise._propagateFrom(this, 3);
+
+          promise._captureStackTrace();
+
+          if (receiver === undefined && (this._bitField & 2097152) !== 0) {
+            if (!((bitField & 50397184) === 0)) {
+              receiver = this._boundValue();
+            } else {
+              receiver = target === this ? undefined : this._boundTo;
+            }
+          }
+
+          this._fireEvent("promiseChained", this, promise);
+        }
+
+        var context = getContext();
+
+        if (!((bitField & 50397184) === 0)) {
+          var handler,
+              value,
+              settler = target._settlePromiseCtx;
+
+          if ((bitField & 33554432) !== 0) {
+            value = target._rejectionHandler0;
+            handler = didFulfill;
+          } else if ((bitField & 16777216) !== 0) {
+            value = target._fulfillmentHandler0;
+            handler = didReject;
+
+            target._unsetRejectionIsUnhandled();
+          } else {
+            settler = target._settlePromiseLateCancellationObserver;
+            value = new CancellationError("late cancellation observer");
+
+            target._attachExtraTrace(value);
+
+            handler = didReject;
+          }
+
+          async.invoke(settler, target, {
+            handler: util.contextBind(context, handler),
+            promise: promise,
+            receiver: receiver,
+            value: value
+          });
+        } else {
+          target._addCallbacks(didFulfill, didReject, promise, receiver, context);
+        }
+
+        return promise;
+      };
+
+      Promise.prototype._length = function () {
+        return this._bitField & 65535;
+      };
+
+      Promise.prototype._isFateSealed = function () {
+        return (this._bitField & 117506048) !== 0;
+      };
+
+      Promise.prototype._isFollowing = function () {
+        return (this._bitField & 67108864) === 67108864;
+      };
+
+      Promise.prototype._setLength = function (len) {
+        this._bitField = this._bitField & -65536 | len & 65535;
+      };
+
+      Promise.prototype._setFulfilled = function () {
+        this._bitField = this._bitField | 33554432;
+
+        this._fireEvent("promiseFulfilled", this);
+      };
+
+      Promise.prototype._setRejected = function () {
+        this._bitField = this._bitField | 16777216;
+
+        this._fireEvent("promiseRejected", this);
+      };
+
+      Promise.prototype._setFollowing = function () {
+        this._bitField = this._bitField | 67108864;
+
+        this._fireEvent("promiseResolved", this);
+      };
+
+      Promise.prototype._setIsFinal = function () {
+        this._bitField = this._bitField | 4194304;
+      };
+
+      Promise.prototype._isFinal = function () {
+        return (this._bitField & 4194304) > 0;
+      };
+
+      Promise.prototype._unsetCancelled = function () {
+        this._bitField = this._bitField & ~65536;
+      };
+
+      Promise.prototype._setCancelled = function () {
+        this._bitField = this._bitField | 65536;
+
+        this._fireEvent("promiseCancelled", this);
+      };
+
+      Promise.prototype._setWillBeCancelled = function () {
+        this._bitField = this._bitField | 8388608;
+      };
+
+      Promise.prototype._setAsyncGuaranteed = function () {
+        if (async.hasCustomScheduler()) return;
+        var bitField = this._bitField;
+        this._bitField = bitField | (bitField & 536870912) >> 2 ^ 134217728;
+      };
+
+      Promise.prototype._setNoAsyncGuarantee = function () {
+        this._bitField = (this._bitField | 536870912) & ~134217728;
+      };
+
+      Promise.prototype._receiverAt = function (index) {
+        var ret = index === 0 ? this._receiver0 : this[index * 4 - 4 + 3];
+
+        if (ret === UNDEFINED_BINDING) {
+          return undefined;
+        } else if (ret === undefined && this._isBound()) {
+          return this._boundValue();
+        }
+
+        return ret;
+      };
+
+      Promise.prototype._promiseAt = function (index) {
+        return this[index * 4 - 4 + 2];
+      };
+
+      Promise.prototype._fulfillmentHandlerAt = function (index) {
+        return this[index * 4 - 4 + 0];
+      };
+
+      Promise.prototype._rejectionHandlerAt = function (index) {
+        return this[index * 4 - 4 + 1];
+      };
+
+      Promise.prototype._boundValue = function () {};
+
+      Promise.prototype._migrateCallback0 = function (follower) {
+        var bitField = follower._bitField;
+        var fulfill = follower._fulfillmentHandler0;
+        var reject = follower._rejectionHandler0;
+        var promise = follower._promise0;
+
+        var receiver = follower._receiverAt(0);
+
+        if (receiver === undefined) receiver = UNDEFINED_BINDING;
+
+        this._addCallbacks(fulfill, reject, promise, receiver, null);
+      };
+
+      Promise.prototype._migrateCallbackAt = function (follower, index) {
+        var fulfill = follower._fulfillmentHandlerAt(index);
+
+        var reject = follower._rejectionHandlerAt(index);
+
+        var promise = follower._promiseAt(index);
+
+        var receiver = follower._receiverAt(index);
+
+        if (receiver === undefined) receiver = UNDEFINED_BINDING;
+
+        this._addCallbacks(fulfill, reject, promise, receiver, null);
+      };
+
+      Promise.prototype._addCallbacks = function (fulfill, reject, promise, receiver, context) {
+        var index = this._length();
+
+        if (index >= 65535 - 4) {
+          index = 0;
+
+          this._setLength(0);
+        }
+
+        if (index === 0) {
+          this._promise0 = promise;
+          this._receiver0 = receiver;
+
+          if (typeof fulfill === "function") {
+            this._fulfillmentHandler0 = util.contextBind(context, fulfill);
+          }
+
+          if (typeof reject === "function") {
+            this._rejectionHandler0 = util.contextBind(context, reject);
+          }
+        } else {
+          var base = index * 4 - 4;
+          this[base + 2] = promise;
+          this[base + 3] = receiver;
+
+          if (typeof fulfill === "function") {
+            this[base + 0] = util.contextBind(context, fulfill);
+          }
+
+          if (typeof reject === "function") {
+            this[base + 1] = util.contextBind(context, reject);
+          }
+        }
+
+        this._setLength(index + 1);
+
+        return index;
+      };
+
+      Promise.prototype._proxy = function (proxyable, arg) {
+        this._addCallbacks(undefined, undefined, arg, proxyable, null);
+      };
+
+      Promise.prototype._resolveCallback = function (value, shouldBind) {
+        if ((this._bitField & 117506048) !== 0) return;
+        if (value === this) return this._rejectCallback(makeSelfResolutionError(), false);
+        var maybePromise = tryConvertToPromise(value, this);
+        if (!(maybePromise instanceof Promise)) return this._fulfill(value);
+        if (shouldBind) this._propagateFrom(maybePromise, 2);
+
+        var promise = maybePromise._target();
+
+        if (promise === this) {
+          this._reject(makeSelfResolutionError());
+
+          return;
+        }
+
+        var bitField = promise._bitField;
+
+        if ((bitField & 50397184) === 0) {
+          var len = this._length();
+
+          if (len > 0) promise._migrateCallback0(this);
+
+          for (var i = 1; i < len; ++i) {
+            promise._migrateCallbackAt(this, i);
+          }
+
+          this._setFollowing();
+
+          this._setLength(0);
+
+          this._setFollowee(maybePromise);
+        } else if ((bitField & 33554432) !== 0) {
+          this._fulfill(promise._value());
+        } else if ((bitField & 16777216) !== 0) {
+          this._reject(promise._reason());
+        } else {
+          var reason = new CancellationError("late cancellation observer");
+
+          promise._attachExtraTrace(reason);
+
+          this._reject(reason);
+        }
+      };
+
+      Promise.prototype._rejectCallback = function (reason, synchronous, ignoreNonErrorWarnings) {
+        var trace = util.ensureErrorObject(reason);
+        var hasStack = trace === reason;
+
+        if (!hasStack && !ignoreNonErrorWarnings && debug.warnings()) {
+          var message = "a promise was rejected with a non-error: " + util.classString(reason);
+
+          this._warn(message, true);
+        }
+
+        this._attachExtraTrace(trace, synchronous ? hasStack : false);
+
+        this._reject(reason);
+      };
+
+      Promise.prototype._resolveFromExecutor = function (executor) {
+        if (executor === INTERNAL) return;
+        var promise = this;
+
+        this._captureStackTrace();
+
+        this._pushContext();
+
+        var synchronous = true;
+
+        var r = this._execute(executor, function (value) {
+          promise._resolveCallback(value);
+        }, function (reason) {
+          promise._rejectCallback(reason, synchronous);
+        });
+
+        synchronous = false;
+
+        this._popContext();
+
+        if (r !== undefined) {
+          promise._rejectCallback(r, true);
+        }
+      };
+
+      Promise.prototype._settlePromiseFromHandler = function (handler, receiver, value, promise) {
+        var bitField = promise._bitField;
+        if ((bitField & 65536) !== 0) return;
+
+        promise._pushContext();
+
+        var x;
+
+        if (receiver === APPLY) {
+          if (!value || typeof value.length !== "number") {
+            x = errorObj;
+            x.e = new TypeError("cannot .spread() a non-array: " + util.classString(value));
+          } else {
+            x = tryCatch(handler).apply(this._boundValue(), value);
+          }
+        } else {
+          x = tryCatch(handler).call(receiver, value);
+        }
+
+        var promiseCreated = promise._popContext();
+
+        bitField = promise._bitField;
+        if ((bitField & 65536) !== 0) return;
+
+        if (x === NEXT_FILTER) {
+          promise._reject(value);
+        } else if (x === errorObj) {
+          promise._rejectCallback(x.e, false);
+        } else {
+          debug.checkForgottenReturns(x, promiseCreated, "", promise, this);
+
+          promise._resolveCallback(x);
+        }
+      };
+
+      Promise.prototype._target = function () {
+        var ret = this;
+
+        while (ret._isFollowing()) {
+          ret = ret._followee();
+        }
+
+        return ret;
+      };
+
+      Promise.prototype._followee = function () {
+        return this._rejectionHandler0;
+      };
+
+      Promise.prototype._setFollowee = function (promise) {
+        this._rejectionHandler0 = promise;
+      };
+
+      Promise.prototype._settlePromise = function (promise, handler, receiver, value) {
+        var isPromise = promise instanceof Promise;
+        var bitField = this._bitField;
+        var asyncGuaranteed = (bitField & 134217728) !== 0;
+
+        if ((bitField & 65536) !== 0) {
+          if (isPromise) promise._invokeInternalOnCancel();
+
+          if (receiver instanceof PassThroughHandlerContext && receiver.isFinallyHandler()) {
+            receiver.cancelPromise = promise;
+
+            if (tryCatch(handler).call(receiver, value) === errorObj) {
+              promise._reject(errorObj.e);
+            }
+          } else if (handler === reflectHandler) {
+            promise._fulfill(reflectHandler.call(receiver));
+          } else if (receiver instanceof Proxyable) {
+            receiver._promiseCancelled(promise);
+          } else if (isPromise || promise instanceof PromiseArray) {
+            promise._cancel();
+          } else {
+            receiver.cancel();
+          }
+        } else if (typeof handler === "function") {
+          if (!isPromise) {
+            handler.call(receiver, value, promise);
+          } else {
+            if (asyncGuaranteed) promise._setAsyncGuaranteed();
+
+            this._settlePromiseFromHandler(handler, receiver, value, promise);
+          }
+        } else if (receiver instanceof Proxyable) {
+          if (!receiver._isResolved()) {
+            if ((bitField & 33554432) !== 0) {
+              receiver._promiseFulfilled(value, promise);
+            } else {
+              receiver._promiseRejected(value, promise);
+            }
+          }
+        } else if (isPromise) {
+          if (asyncGuaranteed) promise._setAsyncGuaranteed();
+
+          if ((bitField & 33554432) !== 0) {
+            promise._fulfill(value);
+          } else {
+            promise._reject(value);
+          }
+        }
+      };
+
+      Promise.prototype._settlePromiseLateCancellationObserver = function (ctx) {
+        var handler = ctx.handler;
+        var promise = ctx.promise;
+        var receiver = ctx.receiver;
+        var value = ctx.value;
+
+        if (typeof handler === "function") {
+          if (!(promise instanceof Promise)) {
+            handler.call(receiver, value, promise);
+          } else {
+            this._settlePromiseFromHandler(handler, receiver, value, promise);
+          }
+        } else if (promise instanceof Promise) {
+          promise._reject(value);
+        }
+      };
+
+      Promise.prototype._settlePromiseCtx = function (ctx) {
+        this._settlePromise(ctx.promise, ctx.handler, ctx.receiver, ctx.value);
+      };
+
+      Promise.prototype._settlePromise0 = function (handler, value, bitField) {
+        var promise = this._promise0;
+
+        var receiver = this._receiverAt(0);
+
+        this._promise0 = undefined;
+        this._receiver0 = undefined;
+
+        this._settlePromise(promise, handler, receiver, value);
+      };
+
+      Promise.prototype._clearCallbackDataAtIndex = function (index) {
+        var base = index * 4 - 4;
+        this[base + 2] = this[base + 3] = this[base + 0] = this[base + 1] = undefined;
+      };
+
+      Promise.prototype._fulfill = function (value) {
+        var bitField = this._bitField;
+        if ((bitField & 117506048) >>> 16) return;
+
+        if (value === this) {
+          var err = makeSelfResolutionError();
+
+          this._attachExtraTrace(err);
+
+          return this._reject(err);
+        }
+
+        this._setFulfilled();
+
+        this._rejectionHandler0 = value;
+
+        if ((bitField & 65535) > 0) {
+          if ((bitField & 134217728) !== 0) {
+            this._settlePromises();
+          } else {
+            async.settlePromises(this);
+          }
+
+          this._dereferenceTrace();
+        }
+      };
+
+      Promise.prototype._reject = function (reason) {
+        var bitField = this._bitField;
+        if ((bitField & 117506048) >>> 16) return;
+
+        this._setRejected();
+
+        this._fulfillmentHandler0 = reason;
+
+        if (this._isFinal()) {
+          return async.fatalError(reason, util.isNode);
+        }
+
+        if ((bitField & 65535) > 0) {
+          async.settlePromises(this);
+        } else {
+          this._ensurePossibleRejectionHandled();
+        }
+      };
+
+      Promise.prototype._fulfillPromises = function (len, value) {
+        for (var i = 1; i < len; i++) {
+          var handler = this._fulfillmentHandlerAt(i);
+
+          var promise = this._promiseAt(i);
+
+          var receiver = this._receiverAt(i);
+
+          this._clearCallbackDataAtIndex(i);
+
+          this._settlePromise(promise, handler, receiver, value);
+        }
+      };
+
+      Promise.prototype._rejectPromises = function (len, reason) {
+        for (var i = 1; i < len; i++) {
+          var handler = this._rejectionHandlerAt(i);
+
+          var promise = this._promiseAt(i);
+
+          var receiver = this._receiverAt(i);
+
+          this._clearCallbackDataAtIndex(i);
+
+          this._settlePromise(promise, handler, receiver, reason);
+        }
+      };
+
+      Promise.prototype._settlePromises = function () {
+        var bitField = this._bitField;
+        var len = bitField & 65535;
+
+        if (len > 0) {
+          if ((bitField & 16842752) !== 0) {
+            var reason = this._fulfillmentHandler0;
+
+            this._settlePromise0(this._rejectionHandler0, reason, bitField);
+
+            this._rejectPromises(len, reason);
+          } else {
+            var value = this._rejectionHandler0;
+
+            this._settlePromise0(this._fulfillmentHandler0, value, bitField);
+
+            this._fulfillPromises(len, value);
+          }
+
+          this._setLength(0);
+        }
+
+        this._clearCancellationData();
+      };
+
+      Promise.prototype._settledValue = function () {
+        var bitField = this._bitField;
+
+        if ((bitField & 33554432) !== 0) {
+          return this._rejectionHandler0;
+        } else if ((bitField & 16777216) !== 0) {
+          return this._fulfillmentHandler0;
+        }
+      };
+
+      if (typeof Symbol !== "undefined" && Symbol.toStringTag) {
+        es5.defineProperty(Promise.prototype, Symbol.toStringTag, {
+          get: function get() {
+            return "Object";
+          }
+        });
+      }
+
+      function deferResolve(v) {
+        this.promise._resolveCallback(v);
+      }
+
+      function deferReject(v) {
+        this.promise._rejectCallback(v, false);
+      }
+
+      Promise.defer = Promise.pending = function () {
+        debug.deprecated("Promise.defer", "new Promise");
+        var promise = new Promise(INTERNAL);
+        return {
+          promise: promise,
+          resolve: deferResolve,
+          reject: deferReject
+        };
+      };
+
+      util.notEnumerableProp(Promise, "_makeSelfResolutionError", makeSelfResolutionError);
+
+      require("./method")(Promise, INTERNAL, tryConvertToPromise, apiRejection, debug);
+
+      require("./bind")(Promise, INTERNAL, tryConvertToPromise, debug);
+
+      require("./cancel")(Promise, PromiseArray, apiRejection, debug);
+
+      require("./direct_resolve")(Promise);
+
+      require("./synchronous_inspection")(Promise);
+
+      require("./join")(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async);
+
+      Promise.Promise = Promise;
+      Promise.version = "3.7.2";
+
+      require('./call_get.js')(Promise);
+
+      require('./generators.js')(Promise, apiRejection, INTERNAL, tryConvertToPromise, Proxyable, debug);
+
+      require('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
+
+      require('./nodeify.js')(Promise);
+
+      require('./promisify.js')(Promise, INTERNAL);
+
+      require('./props.js')(Promise, PromiseArray, tryConvertToPromise, apiRejection);
+
+      require('./race.js')(Promise, INTERNAL, tryConvertToPromise, apiRejection);
+
+      require('./reduce.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
+
+      require('./settle.js')(Promise, PromiseArray, debug);
+
+      require('./some.js')(Promise, PromiseArray, apiRejection);
+
+      require('./timers.js')(Promise, INTERNAL, debug);
+
+      require('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
+
+      require('./any.js')(Promise);
+
+      require('./each.js')(Promise, INTERNAL);
+
+      require('./filter.js')(Promise, INTERNAL);
+
+      util.toFastProperties(Promise);
+      util.toFastProperties(Promise.prototype);
+
+      function fillTypes(value) {
+        var p = new Promise(INTERNAL);
+        p._fulfillmentHandler0 = value;
+        p._rejectionHandler0 = value;
+        p._promise0 = value;
+        p._receiver0 = value;
+      } // Complete slack tracking, opt out of field-type tracking and           
+      // stabilize map                                                         
+
+
+      fillTypes({
+        a: 1
+      });
+      fillTypes({
+        b: 2
+      });
+      fillTypes({
+        c: 3
+      });
+      fillTypes(1);
+      fillTypes(function () {});
+      fillTypes(undefined);
+      fillTypes(false);
+      fillTypes(new Promise(INTERNAL));
+      debug.setBounds(Async.firstLineError, util.lastLineError);
+      return Promise;
+    };
+  }, {
+    "./any.js": 38,
+    "./async": 39,
+    "./bind": 40,
+    "./call_get.js": 42,
+    "./cancel": 43,
+    "./catch_filter": 44,
+    "./context": 45,
+    "./debuggability": 46,
+    "./direct_resolve": 47,
+    "./each.js": 48,
+    "./errors": 49,
+    "./es5": 50,
+    "./filter.js": 51,
+    "./finally": 52,
+    "./generators.js": 53,
+    "./join": 54,
+    "./map.js": 55,
+    "./method": 56,
+    "./nodeback": 57,
+    "./nodeify.js": 58,
+    "./promise_array": 60,
+    "./promisify.js": 61,
+    "./props.js": 62,
+    "./race.js": 64,
+    "./reduce.js": 65,
+    "./settle.js": 67,
+    "./some.js": 68,
+    "./synchronous_inspection": 69,
+    "./thenables": 70,
+    "./timers.js": 71,
+    "./using.js": 72,
+    "./util": 73,
+    "async_hooks": undefined
+  }],
+  60: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, INTERNAL, tryConvertToPromise, apiRejection, Proxyable) {
+      var util = require("./util");
+
+      var isArray = util.isArray;
+
+      function toResolutionValue(val) {
+        switch (val) {
+          case -2:
+            return [];
+
+          case -3:
+            return {};
+
+          case -6:
+            return new Map();
+        }
+      }
+
+      function PromiseArray(values) {
+        var promise = this._promise = new Promise(INTERNAL);
+
+        if (values instanceof Promise) {
+          promise._propagateFrom(values, 3);
+
+          values.suppressUnhandledRejections();
+        }
+
+        promise._setOnCancel(this);
+
+        this._values = values;
+        this._length = 0;
+        this._totalResolved = 0;
+
+        this._init(undefined, -2);
+      }
+
+      util.inherits(PromiseArray, Proxyable);
+
+      PromiseArray.prototype.length = function () {
+        return this._length;
+      };
+
+      PromiseArray.prototype.promise = function () {
+        return this._promise;
+      };
+
+      PromiseArray.prototype._init = function init(_, resolveValueIfEmpty) {
+        var values = tryConvertToPromise(this._values, this._promise);
+
+        if (values instanceof Promise) {
+          values = values._target();
+          var bitField = values._bitField;
+          ;
+          this._values = values;
+
+          if ((bitField & 50397184) === 0) {
+            this._promise._setAsyncGuaranteed();
+
+            return values._then(init, this._reject, undefined, this, resolveValueIfEmpty);
+          } else if ((bitField & 33554432) !== 0) {
+            values = values._value();
+          } else if ((bitField & 16777216) !== 0) {
+            return this._reject(values._reason());
+          } else {
+            return this._cancel();
+          }
+        }
+
+        values = util.asArray(values);
+
+        if (values === null) {
+          var err = apiRejection("expecting an array or an iterable object but got " + util.classString(values)).reason();
+
+          this._promise._rejectCallback(err, false);
+
+          return;
+        }
+
+        if (values.length === 0) {
+          if (resolveValueIfEmpty === -5) {
+            this._resolveEmptyArray();
+          } else {
+            this._resolve(toResolutionValue(resolveValueIfEmpty));
+          }
+
+          return;
+        }
+
+        this._iterate(values);
+      };
+
+      PromiseArray.prototype._iterate = function (values) {
+        var len = this.getActualLength(values.length);
+        this._length = len;
+        this._values = this.shouldCopyValues() ? new Array(len) : this._values;
+        var result = this._promise;
+        var isResolved = false;
+        var bitField = null;
+
+        for (var i = 0; i < len; ++i) {
+          var maybePromise = tryConvertToPromise(values[i], result);
+
+          if (maybePromise instanceof Promise) {
+            maybePromise = maybePromise._target();
+            bitField = maybePromise._bitField;
+          } else {
+            bitField = null;
+          }
+
+          if (isResolved) {
+            if (bitField !== null) {
+              maybePromise.suppressUnhandledRejections();
+            }
+          } else if (bitField !== null) {
+            if ((bitField & 50397184) === 0) {
+              maybePromise._proxy(this, i);
+
+              this._values[i] = maybePromise;
+            } else if ((bitField & 33554432) !== 0) {
+              isResolved = this._promiseFulfilled(maybePromise._value(), i);
+            } else if ((bitField & 16777216) !== 0) {
+              isResolved = this._promiseRejected(maybePromise._reason(), i);
+            } else {
+              isResolved = this._promiseCancelled(i);
+            }
+          } else {
+            isResolved = this._promiseFulfilled(maybePromise, i);
+          }
+        }
+
+        if (!isResolved) result._setAsyncGuaranteed();
+      };
+
+      PromiseArray.prototype._isResolved = function () {
+        return this._values === null;
+      };
+
+      PromiseArray.prototype._resolve = function (value) {
+        this._values = null;
+
+        this._promise._fulfill(value);
+      };
+
+      PromiseArray.prototype._cancel = function () {
+        if (this._isResolved() || !this._promise._isCancellable()) return;
+        this._values = null;
+
+        this._promise._cancel();
+      };
+
+      PromiseArray.prototype._reject = function (reason) {
+        this._values = null;
+
+        this._promise._rejectCallback(reason, false);
+      };
+
+      PromiseArray.prototype._promiseFulfilled = function (value, index) {
+        this._values[index] = value;
+        var totalResolved = ++this._totalResolved;
+
+        if (totalResolved >= this._length) {
+          this._resolve(this._values);
+
+          return true;
+        }
+
+        return false;
+      };
+
+      PromiseArray.prototype._promiseCancelled = function () {
+        this._cancel();
+
+        return true;
+      };
+
+      PromiseArray.prototype._promiseRejected = function (reason) {
+        this._totalResolved++;
+
+        this._reject(reason);
+
+        return true;
+      };
+
+      PromiseArray.prototype._resultCancelled = function () {
+        if (this._isResolved()) return;
+        var values = this._values;
+
+        this._cancel();
+
+        if (values instanceof Promise) {
+          values.cancel();
+        } else {
+          for (var i = 0; i < values.length; ++i) {
+            if (values[i] instanceof Promise) {
+              values[i].cancel();
+            }
+          }
+        }
+      };
+
+      PromiseArray.prototype.shouldCopyValues = function () {
+        return true;
+      };
+
+      PromiseArray.prototype.getActualLength = function (len) {
+        return len;
+      };
+
+      return PromiseArray;
+    };
+  }, {
+    "./util": 73
+  }],
+  61: [function (require, module, exports) {
+    arguments[4][24][0].apply(exports, arguments);
+  }, {
+    "./errors": 49,
+    "./nodeback": 57,
+    "./util": 73,
+    "dup": 24
+  }],
+  62: [function (require, module, exports) {
+    arguments[4][25][0].apply(exports, arguments);
+  }, {
+    "./es5": 50,
+    "./util": 73,
+    "dup": 25
+  }],
+  63: [function (require, module, exports) {
+    arguments[4][26][0].apply(exports, arguments);
+  }, {
+    "dup": 26
+  }],
+  64: [function (require, module, exports) {
+    arguments[4][27][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 27
+  }],
+  65: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
+      var util = require("./util");
+
+      var tryCatch = util.tryCatch;
+
+      function ReductionPromiseArray(promises, fn, initialValue, _each) {
+        this.constructor$(promises);
+
+        var context = Promise._getContext();
+
+        this._fn = util.contextBind(context, fn);
+
+        if (initialValue !== undefined) {
+          initialValue = Promise.resolve(initialValue);
+
+          initialValue._attachCancellationCallback(this);
+        }
+
+        this._initialValue = initialValue;
+        this._currentCancellable = null;
+
+        if (_each === INTERNAL) {
+          this._eachValues = Array(this._length);
+        } else if (_each === 0) {
+          this._eachValues = null;
+        } else {
+          this._eachValues = undefined;
+        }
+
+        this._promise._captureStackTrace();
+
+        this._init$(undefined, -5);
+      }
+
+      util.inherits(ReductionPromiseArray, PromiseArray);
+
+      ReductionPromiseArray.prototype._gotAccum = function (accum) {
+        if (this._eachValues !== undefined && this._eachValues !== null && accum !== INTERNAL) {
+          this._eachValues.push(accum);
+        }
+      };
+
+      ReductionPromiseArray.prototype._eachComplete = function (value) {
+        if (this._eachValues !== null) {
+          this._eachValues.push(value);
+        }
+
+        return this._eachValues;
+      };
+
+      ReductionPromiseArray.prototype._init = function () {};
+
+      ReductionPromiseArray.prototype._resolveEmptyArray = function () {
+        this._resolve(this._eachValues !== undefined ? this._eachValues : this._initialValue);
+      };
+
+      ReductionPromiseArray.prototype.shouldCopyValues = function () {
+        return false;
+      };
+
+      ReductionPromiseArray.prototype._resolve = function (value) {
+        this._promise._resolveCallback(value);
+
+        this._values = null;
+      };
+
+      ReductionPromiseArray.prototype._resultCancelled = function (sender) {
+        if (sender === this._initialValue) return this._cancel();
+        if (this._isResolved()) return;
+
+        this._resultCancelled$();
+
+        if (this._currentCancellable instanceof Promise) {
+          this._currentCancellable.cancel();
+        }
+
+        if (this._initialValue instanceof Promise) {
+          this._initialValue.cancel();
+        }
+      };
+
+      ReductionPromiseArray.prototype._iterate = function (values) {
+        this._values = values;
+        var value;
+        var i;
+        var length = values.length;
+
+        if (this._initialValue !== undefined) {
+          value = this._initialValue;
+          i = 0;
+        } else {
+          value = Promise.resolve(values[0]);
+          i = 1;
+        }
+
+        this._currentCancellable = value;
+
+        for (var j = i; j < length; ++j) {
+          var maybePromise = values[j];
+
+          if (maybePromise instanceof Promise) {
+            maybePromise.suppressUnhandledRejections();
+          }
+        }
+
+        if (!value.isRejected()) {
+          for (; i < length; ++i) {
+            var ctx = {
+              accum: null,
+              value: values[i],
+              index: i,
+              length: length,
+              array: this
+            };
+            value = value._then(gotAccum, undefined, undefined, ctx, undefined);
+
+            if ((i & 127) === 0) {
+              value._setNoAsyncGuarantee();
+            }
+          }
+        }
+
+        if (this._eachValues !== undefined) {
+          value = value._then(this._eachComplete, undefined, undefined, this, undefined);
+        }
+
+        value._then(completed, completed, undefined, value, this);
+      };
+
+      Promise.prototype.reduce = function (fn, initialValue) {
+        return reduce(this, fn, initialValue, null);
+      };
+
+      Promise.reduce = function (promises, fn, initialValue, _each) {
+        return reduce(promises, fn, initialValue, _each);
+      };
+
+      function completed(valueOrReason, array) {
+        if (this.isFulfilled()) {
+          array._resolve(valueOrReason);
+        } else {
+          array._reject(valueOrReason);
+        }
+      }
+
+      function reduce(promises, fn, initialValue, _each) {
+        if (typeof fn !== "function") {
+          return apiRejection("expecting a function but got " + util.classString(fn));
+        }
+
+        var array = new ReductionPromiseArray(promises, fn, initialValue, _each);
+        return array.promise();
+      }
+
+      function gotAccum(accum) {
+        this.accum = accum;
+
+        this.array._gotAccum(accum);
+
+        var value = tryConvertToPromise(this.value, this.array._promise);
+
+        if (value instanceof Promise) {
+          this.array._currentCancellable = value;
+          return value._then(gotValue, undefined, undefined, this, undefined);
+        } else {
+          return gotValue.call(this, value);
+        }
+      }
+
+      function gotValue(value) {
+        var array = this.array;
+        var promise = array._promise;
+        var fn = tryCatch(array._fn);
+
+        promise._pushContext();
+
+        var ret;
+
+        if (array._eachValues !== undefined) {
+          ret = fn.call(promise._boundValue(), value, this.index, this.length);
+        } else {
+          ret = fn.call(promise._boundValue(), this.accum, value, this.index, this.length);
+        }
+
+        if (ret instanceof Promise) {
+          array._currentCancellable = ret;
+        }
+
+        var promiseCreated = promise._popContext();
+
+        debug.checkForgottenReturns(ret, promiseCreated, array._eachValues !== undefined ? "Promise.each" : "Promise.reduce", promise);
+        return ret;
+      }
+    };
+  }, {
+    "./util": 73
+  }],
+  66: [function (require, module, exports) {
+    "use strict";
+
+    var util = require("./util");
+
+    var schedule;
+
+    var noAsyncScheduler = function noAsyncScheduler() {
+      throw new Error("No async scheduler available\n\n    See http://goo.gl/MqrFmX\n");
+    };
+
+    var NativePromise = util.getNativePromise();
+
+    if (util.isNode && typeof MutationObserver === "undefined") {
+      var GlobalSetImmediate = global.setImmediate;
+      var ProcessNextTick = process.nextTick;
+      schedule = util.isRecentNode ? function (fn) {
+        GlobalSetImmediate.call(global, fn);
+      } : function (fn) {
+        ProcessNextTick.call(process, fn);
+      };
+    } else if (typeof NativePromise === "function" && typeof NativePromise.resolve === "function") {
+      var nativePromise = NativePromise.resolve();
+
+      schedule = function schedule(fn) {
+        nativePromise.then(fn);
+      };
+    } else if (typeof MutationObserver !== "undefined" && !(typeof window !== "undefined" && window.navigator && (window.navigator.standalone || window.cordova)) && "classList" in document.documentElement) {
+      schedule = function () {
+        var div = document.createElement("div");
+        var opts = {
+          attributes: true
+        };
+        var toggleScheduled = false;
+        var div2 = document.createElement("div");
+        var o2 = new MutationObserver(function () {
+          div.classList.toggle("foo");
+          toggleScheduled = false;
+        });
+        o2.observe(div2, opts);
+
+        var scheduleToggle = function scheduleToggle() {
+          if (toggleScheduled) return;
+          toggleScheduled = true;
+          div2.classList.toggle("foo");
+        };
+
+        return function schedule(fn) {
+          var o = new MutationObserver(function () {
+            o.disconnect();
+            fn();
+          });
+          o.observe(div, opts);
+          scheduleToggle();
+        };
+      }();
+    } else if (typeof setImmediate !== "undefined") {
+      schedule = function schedule(fn) {
+        setImmediate(fn);
+      };
+    } else if (typeof setTimeout !== "undefined") {
+      schedule = function schedule(fn) {
+        setTimeout(fn, 0);
+      };
+    } else {
+      schedule = noAsyncScheduler;
+    }
+
+    module.exports = schedule;
+  }, {
+    "./util": 73
+  }],
+  67: [function (require, module, exports) {
+    "use strict";
+
+    module.exports = function (Promise, PromiseArray, debug) {
+      var PromiseInspection = Promise.PromiseInspection;
+
+      var util = require("./util");
+
+      function SettledPromiseArray(values) {
+        this.constructor$(values);
+      }
+
+      util.inherits(SettledPromiseArray, PromiseArray);
+
+      SettledPromiseArray.prototype._promiseResolved = function (index, inspection) {
+        this._values[index] = inspection;
+        var totalResolved = ++this._totalResolved;
+
+        if (totalResolved >= this._length) {
+          this._resolve(this._values);
+
+          return true;
+        }
+
+        return false;
+      };
+
+      SettledPromiseArray.prototype._promiseFulfilled = function (value, index) {
+        var ret = new PromiseInspection();
+        ret._bitField = 33554432;
+        ret._settledValueField = value;
+        return this._promiseResolved(index, ret);
+      };
+
+      SettledPromiseArray.prototype._promiseRejected = function (reason, index) {
+        var ret = new PromiseInspection();
+        ret._bitField = 16777216;
+        ret._settledValueField = reason;
+        return this._promiseResolved(index, ret);
+      };
+
+      Promise.settle = function (promises) {
+        debug.deprecated(".settle()", ".reflect()");
+        return new SettledPromiseArray(promises).promise();
+      };
+
+      Promise.allSettled = function (promises) {
+        return new SettledPromiseArray(promises).promise();
+      };
+
+      Promise.prototype.settle = function () {
+        return Promise.settle(this);
+      };
+    };
+  }, {
+    "./util": 73
+  }],
+  68: [function (require, module, exports) {
+    arguments[4][31][0].apply(exports, arguments);
+  }, {
+    "./errors": 49,
+    "./util": 73,
+    "dup": 31
+  }],
+  69: [function (require, module, exports) {
+    arguments[4][32][0].apply(exports, arguments);
+  }, {
+    "dup": 32
+  }],
+  70: [function (require, module, exports) {
+    arguments[4][33][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 33
+  }],
+  71: [function (require, module, exports) {
+    arguments[4][34][0].apply(exports, arguments);
+  }, {
+    "./util": 73,
+    "dup": 34
+  }],
+  72: [function (require, module, exports) {
+    arguments[4][35][0].apply(exports, arguments);
+  }, {
+    "./errors": 49,
+    "./util": 73,
+    "dup": 35
+  }],
+  73: [function (require, module, exports) {
+    "use strict";
+
+    var es5 = require("./es5");
+
+    var canEvaluate = typeof navigator == "undefined";
+    var errorObj = {
+      e: {}
+    };
+    var tryCatchTarget;
+    var globalObject = typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : this !== undefined ? this : null;
+
+    function tryCatcher() {
+      try {
+        var target = tryCatchTarget;
+        tryCatchTarget = null;
+        return target.apply(this, arguments);
+      } catch (e) {
+        errorObj.e = e;
+        return errorObj;
+      }
+    }
+
+    function tryCatch(fn) {
+      tryCatchTarget = fn;
+      return tryCatcher;
+    }
+
+    var inherits = function inherits(Child, Parent) {
+      var hasProp = {}.hasOwnProperty;
+
+      function T() {
+        this.constructor = Child;
+        this.constructor$ = Parent;
+
+        for (var propertyName in Parent.prototype) {
+          if (hasProp.call(Parent.prototype, propertyName) && propertyName.charAt(propertyName.length - 1) !== "$") {
+            this[propertyName + "$"] = Parent.prototype[propertyName];
+          }
+        }
+      }
+
+      T.prototype = Parent.prototype;
+      Child.prototype = new T();
+      return Child.prototype;
+    };
+
+    function isPrimitive(val) {
+      return val == null || val === true || val === false || typeof val === "string" || typeof val === "number";
+    }
+
+    function isObject(value) {
+      return typeof value === "function" || (0, _typeof2["default"])(value) === "object" && value !== null;
+    }
+
+    function maybeWrapAsError(maybeError) {
+      if (!isPrimitive(maybeError)) return maybeError;
+      return new Error(safeToString(maybeError));
+    }
+
+    function withAppended(target, appendee) {
+      var len = target.length;
+      var ret = new Array(len + 1);
+      var i;
+
+      for (i = 0; i < len; ++i) {
+        ret[i] = target[i];
+      }
+
+      ret[i] = appendee;
+      return ret;
+    }
+
+    function getDataPropertyOrDefault(obj, key, defaultValue) {
+      if (es5.isES5) {
+        var desc = Object.getOwnPropertyDescriptor(obj, key);
+
+        if (desc != null) {
+          return desc.get == null && desc.set == null ? desc.value : defaultValue;
+        }
+      } else {
+        return {}.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+      }
+    }
+
+    function notEnumerableProp(obj, name, value) {
+      if (isPrimitive(obj)) return obj;
+      var descriptor = {
+        value: value,
+        configurable: true,
+        enumerable: false,
+        writable: true
+      };
+      es5.defineProperty(obj, name, descriptor);
+      return obj;
+    }
+
+    function thrower(r) {
+      throw r;
+    }
+
+    var inheritedDataKeys = function () {
+      var excludedPrototypes = [Array.prototype, Object.prototype, Function.prototype];
+
+      var isExcludedProto = function isExcludedProto(val) {
+        for (var i = 0; i < excludedPrototypes.length; ++i) {
+          if (excludedPrototypes[i] === val) {
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      if (es5.isES5) {
+        var getKeys = Object.getOwnPropertyNames;
+        return function (obj) {
+          var ret = [];
+          var visitedKeys = Object.create(null);
+
+          while (obj != null && !isExcludedProto(obj)) {
+            var keys;
+
+            try {
+              keys = getKeys(obj);
+            } catch (e) {
+              return ret;
+            }
+
+            for (var i = 0; i < keys.length; ++i) {
+              var key = keys[i];
+              if (visitedKeys[key]) continue;
+              visitedKeys[key] = true;
+              var desc = Object.getOwnPropertyDescriptor(obj, key);
+
+              if (desc != null && desc.get == null && desc.set == null) {
+                ret.push(key);
+              }
+            }
+
+            obj = es5.getPrototypeOf(obj);
+          }
+
+          return ret;
+        };
+      } else {
+        var hasProp = {}.hasOwnProperty;
+        return function (obj) {
+          if (isExcludedProto(obj)) return [];
+          var ret = [];
+          /*jshint forin:false */
+
+          enumeration: for (var key in obj) {
+            if (hasProp.call(obj, key)) {
+              ret.push(key);
+            } else {
+              for (var i = 0; i < excludedPrototypes.length; ++i) {
+                if (hasProp.call(excludedPrototypes[i], key)) {
+                  continue enumeration;
+                }
+              }
+
+              ret.push(key);
+            }
+          }
+
+          return ret;
+        };
+      }
+    }();
+
+    var thisAssignmentPattern = /this\s*\.\s*\S+\s*=/;
+
+    function isClass(fn) {
+      try {
+        if (typeof fn === "function") {
+          var keys = es5.names(fn.prototype);
+          var hasMethods = es5.isES5 && keys.length > 1;
+          var hasMethodsOtherThanConstructor = keys.length > 0 && !(keys.length === 1 && keys[0] === "constructor");
+          var hasThisAssignmentAndStaticMethods = thisAssignmentPattern.test(fn + "") && es5.names(fn).length > 0;
+
+          if (hasMethods || hasMethodsOtherThanConstructor || hasThisAssignmentAndStaticMethods) {
+            return true;
+          }
+        }
+
+        return false;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function toFastProperties(obj) {
+      /*jshint -W027,-W055,-W031*/
+      function FakeConstructor() {}
+
+      FakeConstructor.prototype = obj;
+      var receiver = new FakeConstructor();
+
+      function ic() {
+        return (0, _typeof2["default"])(receiver.foo);
+      }
+
+      ic();
+      ic();
+      return obj;
+      eval(obj);
+    }
+
+    var rident = /^[a-z$_][a-z$_0-9]*$/i;
+
+    function isIdentifier(str) {
+      return rident.test(str);
+    }
+
+    function filledRange(count, prefix, suffix) {
+      var ret = new Array(count);
+
+      for (var i = 0; i < count; ++i) {
+        ret[i] = prefix + i + suffix;
+      }
+
+      return ret;
+    }
+
+    function safeToString(obj) {
+      try {
+        return obj + "";
+      } catch (e) {
+        return "[no string representation]";
+      }
+    }
+
+    function isError(obj) {
+      return obj instanceof Error || obj !== null && (0, _typeof2["default"])(obj) === "object" && typeof obj.message === "string" && typeof obj.name === "string";
+    }
+
+    function markAsOriginatingFromRejection(e) {
+      try {
+        notEnumerableProp(e, "isOperational", true);
+      } catch (ignore) {}
+    }
+
+    function originatesFromRejection(e) {
+      if (e == null) return false;
+      return e instanceof Error["__BluebirdErrorTypes__"].OperationalError || e["isOperational"] === true;
+    }
+
+    function canAttachTrace(obj) {
+      return isError(obj) && es5.propertyIsWritable(obj, "stack");
+    }
+
+    var ensureErrorObject = function () {
+      if (!("stack" in new Error())) {
+        return function (value) {
+          if (canAttachTrace(value)) return value;
+
+          try {
+            throw new Error(safeToString(value));
+          } catch (err) {
+            return err;
+          }
+        };
+      } else {
+        return function (value) {
+          if (canAttachTrace(value)) return value;
+          return new Error(safeToString(value));
+        };
+      }
+    }();
+
+    function classString(obj) {
+      return {}.toString.call(obj);
+    }
+
+    function copyDescriptors(from, to, filter) {
+      var keys = es5.names(from);
+
+      for (var i = 0; i < keys.length; ++i) {
+        var key = keys[i];
+
+        if (filter(key)) {
+          try {
+            es5.defineProperty(to, key, es5.getDescriptor(from, key));
+          } catch (ignore) {}
+        }
+      }
+    }
+
+    var asArray = function asArray(v) {
+      if (es5.isArray(v)) {
+        return v;
+      }
+
+      return null;
+    };
+
+    if (typeof Symbol !== "undefined" && Symbol.iterator) {
+      var ArrayFrom = typeof Array.from === "function" ? function (v) {
+        return Array.from(v);
+      } : function (v) {
+        var ret = [];
+        var it = v[Symbol.iterator]();
+        var itResult;
+
+        while (!(itResult = it.next()).done) {
+          ret.push(itResult.value);
+        }
+
+        return ret;
+      };
+
+      asArray = function asArray(v) {
+        if (es5.isArray(v)) {
+          return v;
+        } else if (v != null && typeof v[Symbol.iterator] === "function") {
+          return ArrayFrom(v);
+        }
+
+        return null;
+      };
+    }
+
+    var isNode = typeof process !== "undefined" && classString(process).toLowerCase() === "[object process]";
+    var hasEnvVariables = typeof process !== "undefined" && typeof process.env !== "undefined";
+
+    function env(key) {
+      return hasEnvVariables ? process.env[key] : undefined;
+    }
+
+    function getNativePromise() {
+      if (typeof Promise === "function") {
+        try {
+          var promise = new Promise(function () {});
+
+          if (classString(promise) === "[object Promise]") {
+            return Promise;
+          }
+        } catch (e) {}
+      }
+    }
+
+    var reflectHandler;
+
+    function contextBind(ctx, cb) {
+      if (ctx === null || typeof cb !== "function" || cb === reflectHandler) {
+        return cb;
+      }
+
+      if (ctx.domain !== null) {
+        cb = ctx.domain.bind(cb);
+      }
+
+      var async = ctx.async;
+
+      if (async !== null) {
+        var old = cb;
+
+        cb = function cb() {
+          var $_len = arguments.length + 2;
+          var args = new Array($_len);
+
+          for (var $_i = 2; $_i < $_len; ++$_i) {
+            args[$_i] = arguments[$_i - 2];
+          }
+
+          ;
+          args[0] = old;
+          args[1] = this;
+          return async.runInAsyncScope.apply(async, args);
+        };
+      }
+
+      return cb;
+    }
+
+    var ret = {
+      setReflectHandler: function setReflectHandler(fn) {
+        reflectHandler = fn;
+      },
+      isClass: isClass,
+      isIdentifier: isIdentifier,
+      inheritedDataKeys: inheritedDataKeys,
+      getDataPropertyOrDefault: getDataPropertyOrDefault,
+      thrower: thrower,
+      isArray: es5.isArray,
+      asArray: asArray,
+      notEnumerableProp: notEnumerableProp,
+      isPrimitive: isPrimitive,
+      isObject: isObject,
+      isError: isError,
+      canEvaluate: canEvaluate,
+      errorObj: errorObj,
+      tryCatch: tryCatch,
+      inherits: inherits,
+      withAppended: withAppended,
+      maybeWrapAsError: maybeWrapAsError,
+      toFastProperties: toFastProperties,
+      filledRange: filledRange,
+      toString: safeToString,
+      canAttachTrace: canAttachTrace,
+      ensureErrorObject: ensureErrorObject,
+      originatesFromRejection: originatesFromRejection,
+      markAsOriginatingFromRejection: markAsOriginatingFromRejection,
+      classString: classString,
+      copyDescriptors: copyDescriptors,
+      isNode: isNode,
+      hasEnvVariables: hasEnvVariables,
+      env: env,
+      global: globalObject,
+      getNativePromise: getNativePromise,
+      contextBind: contextBind
+    };
+
+    ret.isRecentNode = ret.isNode && function () {
+      var version;
+
+      if (process.versions && process.versions.node) {
+        version = process.versions.node.split(".").map(Number);
+      } else if (process.version) {
+        version = process.version.split(".").map(Number);
+      }
+
+      return version[0] === 0 && version[1] > 10 || version[0] > 0;
+    }();
+
+    ret.nodeSupportsAsyncResource = ret.isNode && function () {
+      var supportsAsync = false;
+
+      try {
+        var res = require("async_hooks").AsyncResource;
+
+        supportsAsync = typeof res.prototype.runInAsyncScope === "function";
+      } catch (e) {
+        supportsAsync = false;
+      }
+
+      return supportsAsync;
+    }();
+
+    if (ret.isNode) ret.toFastProperties(process);
+
+    try {
+      throw new Error();
+    } catch (e) {
+      ret.lastLineError = e;
+    }
+
+    module.exports = ret;
+  }, {
+    "./es5": 50,
+    "async_hooks": undefined
+  }],
+  74: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var mkdirpSync = require('../mkdirs').mkdirsSync;
+
+    var utimesSync = require('../util/utimes.js').utimesMillisSync;
+
+    var stat = require('../util/stat');
+
+    function copySync(src, dest, opts) {
+      if (typeof opts === 'function') {
+        opts = {
+          filter: opts
+        };
+      }
+
+      opts = opts || {};
+      opts.clobber = 'clobber' in opts ? !!opts.clobber : true; // default to true for now
+
+      opts.overwrite = 'overwrite' in opts ? !!opts.overwrite : opts.clobber; // overwrite falls back to clobber
+      // Warn about using preserveTimestamps on 32-bit node
+
+      if (opts.preserveTimestamps && process.arch === 'ia32') {
+        console.warn("fs-extra: Using the preserveTimestamps option in 32-bit node is not recommended;\n\n    see https://github.com/jprichardson/node-fs-extra/issues/269");
+      }
+
+      var _stat$checkPathsSync = stat.checkPathsSync(src, dest, 'copy'),
+          srcStat = _stat$checkPathsSync.srcStat,
+          destStat = _stat$checkPathsSync.destStat;
+
+      stat.checkParentPathsSync(src, srcStat, dest, 'copy');
+      return handleFilterAndCopy(destStat, src, dest, opts);
+    }
+
+    function handleFilterAndCopy(destStat, src, dest, opts) {
+      if (opts.filter && !opts.filter(src, dest)) return;
+      var destParent = path.dirname(dest);
+      if (!fs.existsSync(destParent)) mkdirpSync(destParent);
+      return startCopy(destStat, src, dest, opts);
+    }
+
+    function startCopy(destStat, src, dest, opts) {
+      if (opts.filter && !opts.filter(src, dest)) return;
+      return getStats(destStat, src, dest, opts);
+    }
+
+    function getStats(destStat, src, dest, opts) {
+      var statSync = opts.dereference ? fs.statSync : fs.lstatSync;
+      var srcStat = statSync(src);
+      if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts);else if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts);else if (srcStat.isSymbolicLink()) return onLink(destStat, src, dest, opts);
+    }
+
+    function onFile(srcStat, destStat, src, dest, opts) {
+      if (!destStat) return copyFile(srcStat, src, dest, opts);
+      return mayCopyFile(srcStat, src, dest, opts);
+    }
+
+    function mayCopyFile(srcStat, src, dest, opts) {
+      if (opts.overwrite) {
+        fs.unlinkSync(dest);
+        return copyFile(srcStat, src, dest, opts);
+      } else if (opts.errorOnExist) {
+        throw new Error("'".concat(dest, "' already exists"));
+      }
+    }
+
+    function copyFile(srcStat, src, dest, opts) {
+      if (typeof fs.copyFileSync === 'function') {
+        fs.copyFileSync(src, dest);
+        fs.chmodSync(dest, srcStat.mode);
+
+        if (opts.preserveTimestamps) {
+          return utimesSync(dest, srcStat.atime, srcStat.mtime);
+        }
+
+        return;
+      }
+
+      return copyFileFallback(srcStat, src, dest, opts);
+    }
+
+    function copyFileFallback(srcStat, src, dest, opts) {
+      var BUF_LENGTH = 64 * 1024;
+
+      var _buff = require('../util/buffer')(BUF_LENGTH);
+
+      var fdr = fs.openSync(src, 'r');
+      var fdw = fs.openSync(dest, 'w', srcStat.mode);
+      var pos = 0;
+
+      while (pos < srcStat.size) {
+        var bytesRead = fs.readSync(fdr, _buff, 0, BUF_LENGTH, pos);
+        fs.writeSync(fdw, _buff, 0, bytesRead);
+        pos += bytesRead;
+      }
+
+      if (opts.preserveTimestamps) fs.futimesSync(fdw, srcStat.atime, srcStat.mtime);
+      fs.closeSync(fdr);
+      fs.closeSync(fdw);
+    }
+
+    function onDir(srcStat, destStat, src, dest, opts) {
+      if (!destStat) return mkDirAndCopy(srcStat, src, dest, opts);
+
+      if (destStat && !destStat.isDirectory()) {
+        throw new Error("Cannot overwrite non-directory '".concat(dest, "' with directory '").concat(src, "'."));
+      }
+
+      return copyDir(src, dest, opts);
+    }
+
+    function mkDirAndCopy(srcStat, src, dest, opts) {
+      fs.mkdirSync(dest);
+      copyDir(src, dest, opts);
+      return fs.chmodSync(dest, srcStat.mode);
+    }
+
+    function copyDir(src, dest, opts) {
+      fs.readdirSync(src).forEach(function (item) {
+        return copyDirItem(item, src, dest, opts);
+      });
+    }
+
+    function copyDirItem(item, src, dest, opts) {
+      var srcItem = path.join(src, item);
+      var destItem = path.join(dest, item);
+
+      var _stat$checkPathsSync2 = stat.checkPathsSync(srcItem, destItem, 'copy'),
+          destStat = _stat$checkPathsSync2.destStat;
+
+      return startCopy(destStat, srcItem, destItem, opts);
+    }
+
+    function onLink(destStat, src, dest, opts) {
+      var resolvedSrc = fs.readlinkSync(src);
+
+      if (opts.dereference) {
+        resolvedSrc = path.resolve(process.cwd(), resolvedSrc);
+      }
+
+      if (!destStat) {
+        return fs.symlinkSync(resolvedSrc, dest);
+      } else {
+        var resolvedDest;
+
+        try {
+          resolvedDest = fs.readlinkSync(dest);
+        } catch (err) {
+          // dest exists and is a regular file or directory,
+          // Windows may throw UNKNOWN error. If dest already exists,
+          // fs throws error anyway, so no need to guard against it here.
+          if (err.code === 'EINVAL' || err.code === 'UNKNOWN') return fs.symlinkSync(resolvedSrc, dest);
+          throw err;
+        }
+
+        if (opts.dereference) {
+          resolvedDest = path.resolve(process.cwd(), resolvedDest);
+        }
+
+        if (stat.isSrcSubdir(resolvedSrc, resolvedDest)) {
+          throw new Error("Cannot copy '".concat(resolvedSrc, "' to a subdirectory of itself, '").concat(resolvedDest, "'."));
+        } // prevent copy if src is a subdir of dest since unlinking
+        // dest in this case would result in removing src contents
+        // and therefore a broken symlink would be created.
+
+
+        if (fs.statSync(dest).isDirectory() && stat.isSrcSubdir(resolvedDest, resolvedSrc)) {
+          throw new Error("Cannot overwrite '".concat(resolvedDest, "' with '").concat(resolvedSrc, "'."));
+        }
+
+        return copyLink(resolvedSrc, dest);
+      }
+    }
+
+    function copyLink(resolvedSrc, dest) {
+      fs.unlinkSync(dest);
+      return fs.symlinkSync(resolvedSrc, dest);
+    }
+
+    module.exports = copySync;
+  }, {
+    "../mkdirs": 91,
+    "../util/buffer": 103,
+    "../util/stat": 104,
+    "../util/utimes.js": 105,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  75: [function (require, module, exports) {
+    'use strict';
+
+    module.exports = {
+      copySync: require('./copy-sync')
+    };
+  }, {
+    "./copy-sync": 74
+  }],
+  76: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var mkdirp = require('../mkdirs').mkdirs;
+
+    var pathExists = require('../path-exists').pathExists;
+
+    var utimes = require('../util/utimes').utimesMillis;
+
+    var stat = require('../util/stat');
+
+    function copy(src, dest, opts, cb) {
+      if (typeof opts === 'function' && !cb) {
+        cb = opts;
+        opts = {};
+      } else if (typeof opts === 'function') {
+        opts = {
+          filter: opts
+        };
+      }
+
+      cb = cb || function () {};
+
+      opts = opts || {};
+      opts.clobber = 'clobber' in opts ? !!opts.clobber : true; // default to true for now
+
+      opts.overwrite = 'overwrite' in opts ? !!opts.overwrite : opts.clobber; // overwrite falls back to clobber
+      // Warn about using preserveTimestamps on 32-bit node
+
+      if (opts.preserveTimestamps && process.arch === 'ia32') {
+        console.warn("fs-extra: Using the preserveTimestamps option in 32-bit node is not recommended;\n\n    see https://github.com/jprichardson/node-fs-extra/issues/269");
+      }
+
+      stat.checkPaths(src, dest, 'copy', function (err, stats) {
+        if (err) return cb(err);
+        var srcStat = stats.srcStat,
+            destStat = stats.destStat;
+        stat.checkParentPaths(src, srcStat, dest, 'copy', function (err) {
+          if (err) return cb(err);
+          if (opts.filter) return handleFilter(checkParentDir, destStat, src, dest, opts, cb);
+          return checkParentDir(destStat, src, dest, opts, cb);
+        });
+      });
+    }
+
+    function checkParentDir(destStat, src, dest, opts, cb) {
+      var destParent = path.dirname(dest);
+      pathExists(destParent, function (err, dirExists) {
+        if (err) return cb(err);
+        if (dirExists) return startCopy(destStat, src, dest, opts, cb);
+        mkdirp(destParent, function (err) {
+          if (err) return cb(err);
+          return startCopy(destStat, src, dest, opts, cb);
+        });
+      });
+    }
+
+    function handleFilter(onInclude, destStat, src, dest, opts, cb) {
+      Promise.resolve(opts.filter(src, dest)).then(function (include) {
+        if (include) return onInclude(destStat, src, dest, opts, cb);
+        return cb();
+      }, function (error) {
+        return cb(error);
+      });
+    }
+
+    function startCopy(destStat, src, dest, opts, cb) {
+      if (opts.filter) return handleFilter(getStats, destStat, src, dest, opts, cb);
+      return getStats(destStat, src, dest, opts, cb);
+    }
+
+    function getStats(destStat, src, dest, opts, cb) {
+      var stat = opts.dereference ? fs.stat : fs.lstat;
+      stat(src, function (err, srcStat) {
+        if (err) return cb(err);
+        if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts, cb);else if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts, cb);else if (srcStat.isSymbolicLink()) return onLink(destStat, src, dest, opts, cb);
+      });
+    }
+
+    function onFile(srcStat, destStat, src, dest, opts, cb) {
+      if (!destStat) return copyFile(srcStat, src, dest, opts, cb);
+      return mayCopyFile(srcStat, src, dest, opts, cb);
+    }
+
+    function mayCopyFile(srcStat, src, dest, opts, cb) {
+      if (opts.overwrite) {
+        fs.unlink(dest, function (err) {
+          if (err) return cb(err);
+          return copyFile(srcStat, src, dest, opts, cb);
+        });
+      } else if (opts.errorOnExist) {
+        return cb(new Error("'".concat(dest, "' already exists")));
+      } else return cb();
+    }
+
+    function copyFile(srcStat, src, dest, opts, cb) {
+      if (typeof fs.copyFile === 'function') {
+        return fs.copyFile(src, dest, function (err) {
+          if (err) return cb(err);
+          return setDestModeAndTimestamps(srcStat, dest, opts, cb);
+        });
+      }
+
+      return copyFileFallback(srcStat, src, dest, opts, cb);
+    }
+
+    function copyFileFallback(srcStat, src, dest, opts, cb) {
+      var rs = fs.createReadStream(src);
+      rs.on('error', function (err) {
+        return cb(err);
+      }).once('open', function () {
+        var ws = fs.createWriteStream(dest, {
+          mode: srcStat.mode
+        });
+        ws.on('error', function (err) {
+          return cb(err);
+        }).on('open', function () {
+          return rs.pipe(ws);
+        }).once('close', function () {
+          return setDestModeAndTimestamps(srcStat, dest, opts, cb);
+        });
+      });
+    }
+
+    function setDestModeAndTimestamps(srcStat, dest, opts, cb) {
+      fs.chmod(dest, srcStat.mode, function (err) {
+        if (err) return cb(err);
+
+        if (opts.preserveTimestamps) {
+          return utimes(dest, srcStat.atime, srcStat.mtime, cb);
+        }
+
+        return cb();
+      });
+    }
+
+    function onDir(srcStat, destStat, src, dest, opts, cb) {
+      if (!destStat) return mkDirAndCopy(srcStat, src, dest, opts, cb);
+
+      if (destStat && !destStat.isDirectory()) {
+        return cb(new Error("Cannot overwrite non-directory '".concat(dest, "' with directory '").concat(src, "'.")));
+      }
+
+      return copyDir(src, dest, opts, cb);
+    }
+
+    function mkDirAndCopy(srcStat, src, dest, opts, cb) {
+      fs.mkdir(dest, function (err) {
+        if (err) return cb(err);
+        copyDir(src, dest, opts, function (err) {
+          if (err) return cb(err);
+          return fs.chmod(dest, srcStat.mode, cb);
+        });
+      });
+    }
+
+    function copyDir(src, dest, opts, cb) {
+      fs.readdir(src, function (err, items) {
+        if (err) return cb(err);
+        return copyDirItems(items, src, dest, opts, cb);
+      });
+    }
+
+    function copyDirItems(items, src, dest, opts, cb) {
+      var item = items.pop();
+      if (!item) return cb();
+      return copyDirItem(items, item, src, dest, opts, cb);
+    }
+
+    function copyDirItem(items, item, src, dest, opts, cb) {
+      var srcItem = path.join(src, item);
+      var destItem = path.join(dest, item);
+      stat.checkPaths(srcItem, destItem, 'copy', function (err, stats) {
+        if (err) return cb(err);
+        var destStat = stats.destStat;
+        startCopy(destStat, srcItem, destItem, opts, function (err) {
+          if (err) return cb(err);
+          return copyDirItems(items, src, dest, opts, cb);
+        });
+      });
+    }
+
+    function onLink(destStat, src, dest, opts, cb) {
+      fs.readlink(src, function (err, resolvedSrc) {
+        if (err) return cb(err);
+
+        if (opts.dereference) {
+          resolvedSrc = path.resolve(process.cwd(), resolvedSrc);
+        }
+
+        if (!destStat) {
+          return fs.symlink(resolvedSrc, dest, cb);
+        } else {
+          fs.readlink(dest, function (err, resolvedDest) {
+            if (err) {
+              // dest exists and is a regular file or directory,
+              // Windows may throw UNKNOWN error. If dest already exists,
+              // fs throws error anyway, so no need to guard against it here.
+              if (err.code === 'EINVAL' || err.code === 'UNKNOWN') return fs.symlink(resolvedSrc, dest, cb);
+              return cb(err);
+            }
+
+            if (opts.dereference) {
+              resolvedDest = path.resolve(process.cwd(), resolvedDest);
+            }
+
+            if (stat.isSrcSubdir(resolvedSrc, resolvedDest)) {
+              return cb(new Error("Cannot copy '".concat(resolvedSrc, "' to a subdirectory of itself, '").concat(resolvedDest, "'.")));
+            } // do not copy if src is a subdir of dest since unlinking
+            // dest in this case would result in removing src contents
+            // and therefore a broken symlink would be created.
+
+
+            if (destStat.isDirectory() && stat.isSrcSubdir(resolvedDest, resolvedSrc)) {
+              return cb(new Error("Cannot overwrite '".concat(resolvedDest, "' with '").concat(resolvedSrc, "'.")));
+            }
+
+            return copyLink(resolvedSrc, dest, cb);
+          });
+        }
+      });
+    }
+
+    function copyLink(resolvedSrc, dest, cb) {
+      fs.unlink(dest, function (err) {
+        if (err) return cb(err);
+        return fs.symlink(resolvedSrc, dest, cb);
+      });
+    }
+
+    module.exports = copy;
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "../util/stat": 104,
+    "../util/utimes": 105,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  77: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    module.exports = {
+      copy: u(require('./copy'))
+    };
+  }, {
+    "./copy": 76,
+    "universalify": 125
+  }],
+  78: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var mkdir = require('../mkdirs');
+
+    var remove = require('../remove');
+
+    var emptyDir = u(function emptyDir(dir, callback) {
+      callback = callback || function () {};
+
+      fs.readdir(dir, function (err, items) {
+        if (err) return mkdir.mkdirs(dir, callback);
+        items = items.map(function (item) {
+          return path.join(dir, item);
+        });
+        deleteItem();
+
+        function deleteItem() {
+          var item = items.pop();
+          if (!item) return callback();
+          remove.remove(item, function (err) {
+            if (err) return callback(err);
+            deleteItem();
+          });
+        }
+      });
+    });
+
+    function emptyDirSync(dir) {
+      var items;
+
+      try {
+        items = fs.readdirSync(dir);
+      } catch (err) {
+        return mkdir.mkdirsSync(dir);
+      }
+
+      items.forEach(function (item) {
+        item = path.join(dir, item);
+        remove.removeSync(item);
+      });
+    }
+
+    module.exports = {
+      emptyDirSync: emptyDirSync,
+      emptydirSync: emptyDirSync,
+      emptyDir: emptyDir,
+      emptydir: emptyDir
+    };
+  }, {
+    "../mkdirs": 91,
+    "../remove": 101,
+    "graceful-fs": 107,
+    "path": undefined,
+    "universalify": 125
+  }],
+  79: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var path = require('path');
+
+    var fs = require('graceful-fs');
+
+    var mkdir = require('../mkdirs');
+
+    var pathExists = require('../path-exists').pathExists;
+
+    function createFile(file, callback) {
+      function makeFile() {
+        fs.writeFile(file, '', function (err) {
+          if (err) return callback(err);
+          callback();
+        });
+      }
+
+      fs.stat(file, function (err, stats) {
+        // eslint-disable-line handle-callback-err
+        if (!err && stats.isFile()) return callback();
+        var dir = path.dirname(file);
+        pathExists(dir, function (err, dirExists) {
+          if (err) return callback(err);
+          if (dirExists) return makeFile();
+          mkdir.mkdirs(dir, function (err) {
+            if (err) return callback(err);
+            makeFile();
+          });
+        });
+      });
+    }
+
+    function createFileSync(file) {
+      var stats;
+
+      try {
+        stats = fs.statSync(file);
+      } catch (e) {}
+
+      if (stats && stats.isFile()) return;
+      var dir = path.dirname(file);
+
+      if (!fs.existsSync(dir)) {
+        mkdir.mkdirsSync(dir);
+      }
+
+      fs.writeFileSync(file, '');
+    }
+
+    module.exports = {
+      createFile: u(createFile),
+      createFileSync: createFileSync
+    };
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "graceful-fs": 107,
+    "path": undefined,
+    "universalify": 125
+  }],
+  80: [function (require, module, exports) {
+    'use strict';
+
+    var file = require('./file');
+
+    var link = require('./link');
+
+    var symlink = require('./symlink');
+
+    module.exports = {
+      // file
+      createFile: file.createFile,
+      createFileSync: file.createFileSync,
+      ensureFile: file.createFile,
+      ensureFileSync: file.createFileSync,
+      // link
+      createLink: link.createLink,
+      createLinkSync: link.createLinkSync,
+      ensureLink: link.createLink,
+      ensureLinkSync: link.createLinkSync,
+      // symlink
+      createSymlink: symlink.createSymlink,
+      createSymlinkSync: symlink.createSymlinkSync,
+      ensureSymlink: symlink.createSymlink,
+      ensureSymlinkSync: symlink.createSymlinkSync
+    };
+  }, {
+    "./file": 79,
+    "./link": 81,
+    "./symlink": 84
+  }],
+  81: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var path = require('path');
+
+    var fs = require('graceful-fs');
+
+    var mkdir = require('../mkdirs');
+
+    var pathExists = require('../path-exists').pathExists;
+
+    function createLink(srcpath, dstpath, callback) {
+      function makeLink(srcpath, dstpath) {
+        fs.link(srcpath, dstpath, function (err) {
+          if (err) return callback(err);
+          callback(null);
+        });
+      }
+
+      pathExists(dstpath, function (err, destinationExists) {
+        if (err) return callback(err);
+        if (destinationExists) return callback(null);
+        fs.lstat(srcpath, function (err) {
+          if (err) {
+            err.message = err.message.replace('lstat', 'ensureLink');
+            return callback(err);
+          }
+
+          var dir = path.dirname(dstpath);
+          pathExists(dir, function (err, dirExists) {
+            if (err) return callback(err);
+            if (dirExists) return makeLink(srcpath, dstpath);
+            mkdir.mkdirs(dir, function (err) {
+              if (err) return callback(err);
+              makeLink(srcpath, dstpath);
+            });
+          });
+        });
+      });
+    }
+
+    function createLinkSync(srcpath, dstpath) {
+      var destinationExists = fs.existsSync(dstpath);
+      if (destinationExists) return undefined;
+
+      try {
+        fs.lstatSync(srcpath);
+      } catch (err) {
+        err.message = err.message.replace('lstat', 'ensureLink');
+        throw err;
+      }
+
+      var dir = path.dirname(dstpath);
+      var dirExists = fs.existsSync(dir);
+      if (dirExists) return fs.linkSync(srcpath, dstpath);
+      mkdir.mkdirsSync(dir);
+      return fs.linkSync(srcpath, dstpath);
+    }
+
+    module.exports = {
+      createLink: u(createLink),
+      createLinkSync: createLinkSync
+    };
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "graceful-fs": 107,
+    "path": undefined,
+    "universalify": 125
+  }],
+  82: [function (require, module, exports) {
+    'use strict';
+
+    var path = require('path');
+
+    var fs = require('graceful-fs');
+
+    var pathExists = require('../path-exists').pathExists;
+    /**
+     * Function that returns two types of paths, one relative to symlink, and one
+     * relative to the current working directory. Checks if path is absolute or
+     * relative. If the path is relative, this function checks if the path is
+     * relative to symlink or relative to current working directory. This is an
+     * initiative to find a smarter `srcpath` to supply when building symlinks.
+     * This allows you to determine which path to use out of one of three possible
+     * types of source paths. The first is an absolute path. This is detected by
+     * `path.isAbsolute()`. When an absolute path is provided, it is checked to
+     * see if it exists. If it does it's used, if not an error is returned
+     * (callback)/ thrown (sync). The other two options for `srcpath` are a
+     * relative url. By default Node's `fs.symlink` works by creating a symlink
+     * using `dstpath` and expects the `srcpath` to be relative to the newly
+     * created symlink. If you provide a `srcpath` that does not exist on the file
+     * system it results in a broken symlink. To minimize this, the function
+     * checks to see if the 'relative to symlink' source file exists, and if it
+     * does it will use it. If it does not, it checks if there's a file that
+     * exists that is relative to the current working directory, if does its used.
+     * This preserves the expectations of the original fs.symlink spec and adds
+     * the ability to pass in `relative to current working direcotry` paths.
+     */
+
+
+    function symlinkPaths(srcpath, dstpath, callback) {
+      if (path.isAbsolute(srcpath)) {
+        return fs.lstat(srcpath, function (err) {
+          if (err) {
+            err.message = err.message.replace('lstat', 'ensureSymlink');
+            return callback(err);
+          }
+
+          return callback(null, {
+            'toCwd': srcpath,
+            'toDst': srcpath
+          });
+        });
+      } else {
+        var dstdir = path.dirname(dstpath);
+        var relativeToDst = path.join(dstdir, srcpath);
+        return pathExists(relativeToDst, function (err, exists) {
+          if (err) return callback(err);
+
+          if (exists) {
+            return callback(null, {
+              'toCwd': relativeToDst,
+              'toDst': srcpath
+            });
+          } else {
+            return fs.lstat(srcpath, function (err) {
+              if (err) {
+                err.message = err.message.replace('lstat', 'ensureSymlink');
+                return callback(err);
+              }
+
+              return callback(null, {
+                'toCwd': srcpath,
+                'toDst': path.relative(dstdir, srcpath)
+              });
+            });
+          }
+        });
+      }
+    }
+
+    function symlinkPathsSync(srcpath, dstpath) {
+      var exists;
+
+      if (path.isAbsolute(srcpath)) {
+        exists = fs.existsSync(srcpath);
+        if (!exists) throw new Error('absolute srcpath does not exist');
+        return {
+          'toCwd': srcpath,
+          'toDst': srcpath
+        };
+      } else {
+        var dstdir = path.dirname(dstpath);
+        var relativeToDst = path.join(dstdir, srcpath);
+        exists = fs.existsSync(relativeToDst);
+
+        if (exists) {
+          return {
+            'toCwd': relativeToDst,
+            'toDst': srcpath
+          };
+        } else {
+          exists = fs.existsSync(srcpath);
+          if (!exists) throw new Error('relative srcpath does not exist');
+          return {
+            'toCwd': srcpath,
+            'toDst': path.relative(dstdir, srcpath)
+          };
+        }
+      }
+    }
+
+    module.exports = {
+      symlinkPaths: symlinkPaths,
+      symlinkPathsSync: symlinkPathsSync
+    };
+  }, {
+    "../path-exists": 100,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  83: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    function symlinkType(srcpath, type, callback) {
+      callback = typeof type === 'function' ? type : callback;
+      type = typeof type === 'function' ? false : type;
+      if (type) return callback(null, type);
+      fs.lstat(srcpath, function (err, stats) {
+        if (err) return callback(null, 'file');
+        type = stats && stats.isDirectory() ? 'dir' : 'file';
+        callback(null, type);
+      });
+    }
+
+    function symlinkTypeSync(srcpath, type) {
+      var stats;
+      if (type) return type;
+
+      try {
+        stats = fs.lstatSync(srcpath);
+      } catch (e) {
+        return 'file';
+      }
+
+      return stats && stats.isDirectory() ? 'dir' : 'file';
+    }
+
+    module.exports = {
+      symlinkType: symlinkType,
+      symlinkTypeSync: symlinkTypeSync
+    };
+  }, {
+    "graceful-fs": 107
+  }],
+  84: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var path = require('path');
+
+    var fs = require('graceful-fs');
+
+    var _mkdirs = require('../mkdirs');
+
+    var mkdirs = _mkdirs.mkdirs;
+    var mkdirsSync = _mkdirs.mkdirsSync;
+
+    var _symlinkPaths = require('./symlink-paths');
+
+    var symlinkPaths = _symlinkPaths.symlinkPaths;
+    var symlinkPathsSync = _symlinkPaths.symlinkPathsSync;
+
+    var _symlinkType = require('./symlink-type');
+
+    var symlinkType = _symlinkType.symlinkType;
+    var symlinkTypeSync = _symlinkType.symlinkTypeSync;
+
+    var pathExists = require('../path-exists').pathExists;
+
+    function createSymlink(srcpath, dstpath, type, callback) {
+      callback = typeof type === 'function' ? type : callback;
+      type = typeof type === 'function' ? false : type;
+      pathExists(dstpath, function (err, destinationExists) {
+        if (err) return callback(err);
+        if (destinationExists) return callback(null);
+        symlinkPaths(srcpath, dstpath, function (err, relative) {
+          if (err) return callback(err);
+          srcpath = relative.toDst;
+          symlinkType(relative.toCwd, type, function (err, type) {
+            if (err) return callback(err);
+            var dir = path.dirname(dstpath);
+            pathExists(dir, function (err, dirExists) {
+              if (err) return callback(err);
+              if (dirExists) return fs.symlink(srcpath, dstpath, type, callback);
+              mkdirs(dir, function (err) {
+                if (err) return callback(err);
+                fs.symlink(srcpath, dstpath, type, callback);
+              });
+            });
+          });
+        });
+      });
+    }
+
+    function createSymlinkSync(srcpath, dstpath, type) {
+      var destinationExists = fs.existsSync(dstpath);
+      if (destinationExists) return undefined;
+      var relative = symlinkPathsSync(srcpath, dstpath);
+      srcpath = relative.toDst;
+      type = symlinkTypeSync(relative.toCwd, type);
+      var dir = path.dirname(dstpath);
+      var exists = fs.existsSync(dir);
+      if (exists) return fs.symlinkSync(srcpath, dstpath, type);
+      mkdirsSync(dir);
+      return fs.symlinkSync(srcpath, dstpath, type);
+    }
+
+    module.exports = {
+      createSymlink: u(createSymlink),
+      createSymlinkSync: createSymlinkSync
+    };
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "./symlink-paths": 82,
+    "./symlink-type": 83,
+    "graceful-fs": 107,
+    "path": undefined,
+    "universalify": 125
+  }],
+  85: [function (require, module, exports) {
+    'use strict'; // This is adapted from https://github.com/normalize/mz
+    // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
+
+    var u = require('universalify').fromCallback;
+
+    var fs = require('graceful-fs');
+
+    var api = ['access', 'appendFile', 'chmod', 'chown', 'close', 'copyFile', 'fchmod', 'fchown', 'fdatasync', 'fstat', 'fsync', 'ftruncate', 'futimes', 'lchown', 'lchmod', 'link', 'lstat', 'mkdir', 'mkdtemp', 'open', 'readFile', 'readdir', 'readlink', 'realpath', 'rename', 'rmdir', 'stat', 'symlink', 'truncate', 'unlink', 'utimes', 'writeFile'].filter(function (key) {
+      // Some commands are not available on some systems. Ex:
+      // fs.copyFile was added in Node.js v8.5.0
+      // fs.mkdtemp was added in Node.js v5.10.0
+      // fs.lchown is not available on at least some Linux
+      return typeof fs[key] === 'function';
+    }); // Export all keys:
+
+    Object.keys(fs).forEach(function (key) {
+      if (key === 'promises') {
+        // fs.promises is a getter property that triggers ExperimentalWarning
+        // Don't re-export it here, the getter is defined in "lib/index.js"
+        return;
+      }
+
+      exports[key] = fs[key];
+    }); // Universalify async methods:
+
+    api.forEach(function (method) {
+      exports[method] = u(fs[method]);
+    }); // We differ from mz/fs in that we still ship the old, broken, fs.exists()
+    // since we are a drop-in replacement for the native module
+
+    exports.exists = function (filename, callback) {
+      if (typeof callback === 'function') {
+        return fs.exists(filename, callback);
+      }
+
+      return new Promise(function (resolve) {
+        return fs.exists(filename, resolve);
+      });
+    }; // fs.read() & fs.write need special treatment due to multiple callback args
+
+
+    exports.read = function (fd, buffer, offset, length, position, callback) {
+      if (typeof callback === 'function') {
+        return fs.read(fd, buffer, offset, length, position, callback);
+      }
+
+      return new Promise(function (resolve, reject) {
+        fs.read(fd, buffer, offset, length, position, function (err, bytesRead, buffer) {
+          if (err) return reject(err);
+          resolve({
+            bytesRead: bytesRead,
+            buffer: buffer
+          });
+        });
+      });
+    }; // Function signature can be
+    // fs.write(fd, buffer[, offset[, length[, position]]], callback)
+    // OR
+    // fs.write(fd, string[, position[, encoding]], callback)
+    // We need to handle both cases, so we use ...args
+
+
+    exports.write = function (fd, buffer) {
+      for (var _len = arguments.length, args = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
+        args[_key - 2] = arguments[_key];
+      }
+
+      if (typeof args[args.length - 1] === 'function') {
+        return fs.write.apply(fs, [fd, buffer].concat(args));
+      }
+
+      return new Promise(function (resolve, reject) {
+        fs.write.apply(fs, [fd, buffer].concat(args, [function (err, bytesWritten, buffer) {
+          if (err) return reject(err);
+          resolve({
+            bytesWritten: bytesWritten,
+            buffer: buffer
+          });
+        }]));
+      });
+    }; // fs.realpath.native only available in Node v9.2+
+
+
+    if (typeof fs.realpath["native"] === 'function') {
+      exports.realpath["native"] = u(fs.realpath["native"]);
+    }
+  }, {
+    "graceful-fs": 107,
+    "universalify": 125
+  }],
+  86: [function (require, module, exports) {
+    'use strict';
+
+    module.exports = Object.assign({}, // Export promiseified graceful-fs:
+    require('./fs'), // Export extra methods:
+    require('./copy-sync'), require('./copy'), require('./empty'), require('./ensure'), require('./json'), require('./mkdirs'), require('./move-sync'), require('./move'), require('./output'), require('./path-exists'), require('./remove')); // Export fs.promises as a getter property so that we don't trigger
+    // ExperimentalWarning before fs.promises is actually accessed.
+
+    var fs = require('fs');
+
+    if (Object.getOwnPropertyDescriptor(fs, 'promises')) {
+      Object.defineProperty(module.exports, 'promises', {
+        get: function get() {
+          return fs.promises;
+        }
+      });
+    }
+  }, {
+    "./copy": 77,
+    "./copy-sync": 75,
+    "./empty": 78,
+    "./ensure": 80,
+    "./fs": 85,
+    "./json": 87,
+    "./mkdirs": 91,
+    "./move": 97,
+    "./move-sync": 95,
+    "./output": 99,
+    "./path-exists": 100,
+    "./remove": 101,
+    "fs": undefined
+  }],
+  87: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var jsonFile = require('./jsonfile');
+
+    jsonFile.outputJson = u(require('./output-json'));
+    jsonFile.outputJsonSync = require('./output-json-sync'); // aliases
+
+    jsonFile.outputJSON = jsonFile.outputJson;
+    jsonFile.outputJSONSync = jsonFile.outputJsonSync;
+    jsonFile.writeJSON = jsonFile.writeJson;
+    jsonFile.writeJSONSync = jsonFile.writeJsonSync;
+    jsonFile.readJSON = jsonFile.readJson;
+    jsonFile.readJSONSync = jsonFile.readJsonSync;
+    module.exports = jsonFile;
+  }, {
+    "./jsonfile": 88,
+    "./output-json": 90,
+    "./output-json-sync": 89,
+    "universalify": 125
+  }],
+  88: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var jsonFile = require('jsonfile');
+
+    module.exports = {
+      // jsonfile exports
+      readJson: u(jsonFile.readFile),
+      readJsonSync: jsonFile.readFileSync,
+      writeJson: u(jsonFile.writeFile),
+      writeJsonSync: jsonFile.writeFileSync
+    };
+  }, {
+    "jsonfile": 114,
+    "universalify": 125
+  }],
+  89: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var mkdir = require('../mkdirs');
+
+    var jsonFile = require('./jsonfile');
+
+    function outputJsonSync(file, data, options) {
+      var dir = path.dirname(file);
+
+      if (!fs.existsSync(dir)) {
+        mkdir.mkdirsSync(dir);
+      }
+
+      jsonFile.writeJsonSync(file, data, options);
+    }
+
+    module.exports = outputJsonSync;
+  }, {
+    "../mkdirs": 91,
+    "./jsonfile": 88,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  90: [function (require, module, exports) {
+    'use strict';
+
+    var path = require('path');
+
+    var mkdir = require('../mkdirs');
+
+    var pathExists = require('../path-exists').pathExists;
+
+    var jsonFile = require('./jsonfile');
+
+    function outputJson(file, data, options, callback) {
+      if (typeof options === 'function') {
+        callback = options;
+        options = {};
+      }
+
+      var dir = path.dirname(file);
+      pathExists(dir, function (err, itDoes) {
+        if (err) return callback(err);
+        if (itDoes) return jsonFile.writeJson(file, data, options, callback);
+        mkdir.mkdirs(dir, function (err) {
+          if (err) return callback(err);
+          jsonFile.writeJson(file, data, options, callback);
+        });
+      });
+    }
+
+    module.exports = outputJson;
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "./jsonfile": 88,
+    "path": undefined
+  }],
+  91: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var mkdirs = u(require('./mkdirs'));
+
+    var mkdirsSync = require('./mkdirs-sync');
+
+    module.exports = {
+      mkdirs: mkdirs,
+      mkdirsSync: mkdirsSync,
+      // alias
+      mkdirp: mkdirs,
+      mkdirpSync: mkdirsSync,
+      ensureDir: mkdirs,
+      ensureDirSync: mkdirsSync
+    };
+  }, {
+    "./mkdirs": 93,
+    "./mkdirs-sync": 92,
+    "universalify": 125
+  }],
+  92: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var invalidWin32Path = require('./win32').invalidWin32Path;
+
+    var o777 = parseInt('0777', 8);
+
+    function mkdirsSync(p, opts, made) {
+      if (!opts || (0, _typeof2["default"])(opts) !== 'object') {
+        opts = {
+          mode: opts
+        };
+      }
+
+      var mode = opts.mode;
+      var xfs = opts.fs || fs;
+
+      if (process.platform === 'win32' && invalidWin32Path(p)) {
+        var errInval = new Error(p + ' contains invalid WIN32 path characters.');
+        errInval.code = 'EINVAL';
+        throw errInval;
+      }
+
+      if (mode === undefined) {
+        mode = o777 & ~process.umask();
+      }
+
+      if (!made) made = null;
+      p = path.resolve(p);
+
+      try {
+        xfs.mkdirSync(p, mode);
+        made = made || p;
+      } catch (err0) {
+        if (err0.code === 'ENOENT') {
+          if (path.dirname(p) === p) throw err0;
+          made = mkdirsSync(path.dirname(p), opts, made);
+          mkdirsSync(p, opts, made);
+        } else {
+          // In the case of any other error, just see if there's a dir there
+          // already. If so, then hooray!  If not, then something is borked.
+          var stat;
+
+          try {
+            stat = xfs.statSync(p);
+          } catch (err1) {
+            throw err0;
+          }
+
+          if (!stat.isDirectory()) throw err0;
+        }
+      }
+
+      return made;
+    }
+
+    module.exports = mkdirsSync;
+  }, {
+    "./win32": 94,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  93: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var invalidWin32Path = require('./win32').invalidWin32Path;
+
+    var o777 = parseInt('0777', 8);
+
+    function mkdirs(p, opts, callback, made) {
+      if (typeof opts === 'function') {
+        callback = opts;
+        opts = {};
+      } else if (!opts || (0, _typeof2["default"])(opts) !== 'object') {
+        opts = {
+          mode: opts
+        };
+      }
+
+      if (process.platform === 'win32' && invalidWin32Path(p)) {
+        var errInval = new Error(p + ' contains invalid WIN32 path characters.');
+        errInval.code = 'EINVAL';
+        return callback(errInval);
+      }
+
+      var mode = opts.mode;
+      var xfs = opts.fs || fs;
+
+      if (mode === undefined) {
+        mode = o777 & ~process.umask();
+      }
+
+      if (!made) made = null;
+
+      callback = callback || function () {};
+
+      p = path.resolve(p);
+      xfs.mkdir(p, mode, function (er) {
+        if (!er) {
+          made = made || p;
+          return callback(null, made);
+        }
+
+        switch (er.code) {
+          case 'ENOENT':
+            if (path.dirname(p) === p) return callback(er);
+            mkdirs(path.dirname(p), opts, function (er, made) {
+              if (er) callback(er, made);else mkdirs(p, opts, callback, made);
+            });
+            break;
+          // In the case of any other error, just see if there's a dir
+          // there already.  If so, then hooray!  If not, then something
+          // is borked.
+
+          default:
+            xfs.stat(p, function (er2, stat) {
+              // if the stat fails, then that's super weird.
+              // let the original error be the failure reason.
+              if (er2 || !stat.isDirectory()) callback(er, made);else callback(null, made);
+            });
+            break;
+        }
+      });
+    }
+
+    module.exports = mkdirs;
+  }, {
+    "./win32": 94,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  94: [function (require, module, exports) {
+    'use strict';
+
+    var path = require('path'); // get drive on windows
+
+
+    function getRootPath(p) {
+      p = path.normalize(path.resolve(p)).split(path.sep);
+      if (p.length > 0) return p[0];
+      return null;
+    } // http://stackoverflow.com/a/62888/10333 contains more accurate
+    // TODO: expand to include the rest
+
+
+    var INVALID_PATH_CHARS = /[<>:"|?*]/;
+
+    function invalidWin32Path(p) {
+      var rp = getRootPath(p);
+      p = p.replace(rp, '');
+      return INVALID_PATH_CHARS.test(p);
+    }
+
+    module.exports = {
+      getRootPath: getRootPath,
+      invalidWin32Path: invalidWin32Path
+    };
+  }, {
+    "path": undefined
+  }],
+  95: [function (require, module, exports) {
+    'use strict';
+
+    module.exports = {
+      moveSync: require('./move-sync')
+    };
+  }, {
+    "./move-sync": 96
+  }],
+  96: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var copySync = require('../copy-sync').copySync;
+
+    var removeSync = require('../remove').removeSync;
+
+    var mkdirpSync = require('../mkdirs').mkdirpSync;
+
+    var stat = require('../util/stat');
+
+    function moveSync(src, dest, opts) {
+      opts = opts || {};
+      var overwrite = opts.overwrite || opts.clobber || false;
+
+      var _stat$checkPathsSync3 = stat.checkPathsSync(src, dest, 'move'),
+          srcStat = _stat$checkPathsSync3.srcStat;
+
+      stat.checkParentPathsSync(src, srcStat, dest, 'move');
+      mkdirpSync(path.dirname(dest));
+      return doRename(src, dest, overwrite);
+    }
+
+    function doRename(src, dest, overwrite) {
+      if (overwrite) {
+        removeSync(dest);
+        return rename(src, dest, overwrite);
+      }
+
+      if (fs.existsSync(dest)) throw new Error('dest already exists.');
+      return rename(src, dest, overwrite);
+    }
+
+    function rename(src, dest, overwrite) {
+      try {
+        fs.renameSync(src, dest);
+      } catch (err) {
+        if (err.code !== 'EXDEV') throw err;
+        return moveAcrossDevice(src, dest, overwrite);
+      }
+    }
+
+    function moveAcrossDevice(src, dest, overwrite) {
+      var opts = {
+        overwrite: overwrite,
+        errorOnExist: true
+      };
+      copySync(src, dest, opts);
+      return removeSync(src);
+    }
+
+    module.exports = moveSync;
+  }, {
+    "../copy-sync": 75,
+    "../mkdirs": 91,
+    "../remove": 101,
+    "../util/stat": 104,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  97: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    module.exports = {
+      move: u(require('./move'))
+    };
+  }, {
+    "./move": 98,
+    "universalify": 125
+  }],
+  98: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var copy = require('../copy').copy;
+
+    var remove = require('../remove').remove;
+
+    var mkdirp = require('../mkdirs').mkdirp;
+
+    var pathExists = require('../path-exists').pathExists;
+
+    var stat = require('../util/stat');
+
+    function move(src, dest, opts, cb) {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+
+      var overwrite = opts.overwrite || opts.clobber || false;
+      stat.checkPaths(src, dest, 'move', function (err, stats) {
+        if (err) return cb(err);
+        var srcStat = stats.srcStat;
+        stat.checkParentPaths(src, srcStat, dest, 'move', function (err) {
+          if (err) return cb(err);
+          mkdirp(path.dirname(dest), function (err) {
+            if (err) return cb(err);
+            return doRename(src, dest, overwrite, cb);
+          });
+        });
+      });
+    }
+
+    function doRename(src, dest, overwrite, cb) {
+      if (overwrite) {
+        return remove(dest, function (err) {
+          if (err) return cb(err);
+          return rename(src, dest, overwrite, cb);
+        });
+      }
+
+      pathExists(dest, function (err, destExists) {
+        if (err) return cb(err);
+        if (destExists) return cb(new Error('dest already exists.'));
+        return rename(src, dest, overwrite, cb);
+      });
+    }
+
+    function rename(src, dest, overwrite, cb) {
+      fs.rename(src, dest, function (err) {
+        if (!err) return cb();
+        if (err.code !== 'EXDEV') return cb(err);
+        return moveAcrossDevice(src, dest, overwrite, cb);
+      });
+    }
+
+    function moveAcrossDevice(src, dest, overwrite, cb) {
+      var opts = {
+        overwrite: overwrite,
+        errorOnExist: true
+      };
+      copy(src, dest, opts, function (err) {
+        if (err) return cb(err);
+        return remove(src, cb);
+      });
+    }
+
+    module.exports = move;
+  }, {
+    "../copy": 77,
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "../remove": 101,
+    "../util/stat": 104,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  99: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var mkdir = require('../mkdirs');
+
+    var pathExists = require('../path-exists').pathExists;
+
+    function outputFile(file, data, encoding, callback) {
+      if (typeof encoding === 'function') {
+        callback = encoding;
+        encoding = 'utf8';
+      }
+
+      var dir = path.dirname(file);
+      pathExists(dir, function (err, itDoes) {
+        if (err) return callback(err);
+        if (itDoes) return fs.writeFile(file, data, encoding, callback);
+        mkdir.mkdirs(dir, function (err) {
+          if (err) return callback(err);
+          fs.writeFile(file, data, encoding, callback);
+        });
+      });
+    }
+
+    function outputFileSync(file) {
+      var dir = path.dirname(file);
+
+      for (var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
+        args[_key2 - 1] = arguments[_key2];
+      }
+
+      if (fs.existsSync(dir)) {
+        return fs.writeFileSync.apply(fs, [file].concat(args));
+      }
+
+      mkdir.mkdirsSync(dir);
+      fs.writeFileSync.apply(fs, [file].concat(args));
+    }
+
+    module.exports = {
+      outputFile: u(outputFile),
+      outputFileSync: outputFileSync
+    };
+  }, {
+    "../mkdirs": 91,
+    "../path-exists": 100,
+    "graceful-fs": 107,
+    "path": undefined,
+    "universalify": 125
+  }],
+  100: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromPromise;
+
+    var fs = require('../fs');
+
+    function pathExists(path) {
+      return fs.access(path).then(function () {
+        return true;
+      })["catch"](function () {
+        return false;
+      });
+    }
+
+    module.exports = {
+      pathExists: u(pathExists),
+      pathExistsSync: fs.existsSync
+    };
+  }, {
+    "../fs": 85,
+    "universalify": 125
+  }],
+  101: [function (require, module, exports) {
+    'use strict';
+
+    var u = require('universalify').fromCallback;
+
+    var rimraf = require('./rimraf');
+
+    module.exports = {
+      remove: u(rimraf),
+      removeSync: rimraf.sync
+    };
+  }, {
+    "./rimraf": 102,
+    "universalify": 125
+  }],
+  102: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var assert = require('assert');
+
+    var isWindows = process.platform === 'win32';
+
+    function defaults(options) {
+      var methods = ['unlink', 'chmod', 'stat', 'lstat', 'rmdir', 'readdir'];
+      methods.forEach(function (m) {
+        options[m] = options[m] || fs[m];
+        m = m + 'Sync';
+        options[m] = options[m] || fs[m];
+      });
+      options.maxBusyTries = options.maxBusyTries || 3;
+    }
+
+    function rimraf(p, options, cb) {
+      var busyTries = 0;
+
+      if (typeof options === 'function') {
+        cb = options;
+        options = {};
+      }
+
+      assert(p, 'rimraf: missing path');
+      assert.strictEqual((0, _typeof2["default"])(p), 'string', 'rimraf: path should be a string');
+      assert.strictEqual((0, _typeof2["default"])(cb), 'function', 'rimraf: callback function required');
+      assert(options, 'rimraf: invalid options argument provided');
+      assert.strictEqual((0, _typeof2["default"])(options), 'object', 'rimraf: options should be object');
+      defaults(options);
+      rimraf_(p, options, function CB(er) {
+        if (er) {
+          if ((er.code === 'EBUSY' || er.code === 'ENOTEMPTY' || er.code === 'EPERM') && busyTries < options.maxBusyTries) {
+            busyTries++;
+            var time = busyTries * 100; // try again, with the same exact callback as this one.
+
+            return setTimeout(function () {
+              return rimraf_(p, options, CB);
+            }, time);
+          } // already gone
+
+
+          if (er.code === 'ENOENT') er = null;
+        }
+
+        cb(er);
+      });
+    } // Two possible strategies.
+    // 1. Assume it's a file.  unlink it, then do the dir stuff on EPERM or EISDIR
+    // 2. Assume it's a directory.  readdir, then do the file stuff on ENOTDIR
+    //
+    // Both result in an extra syscall when you guess wrong.  However, there
+    // are likely far more normal files in the world than directories.  This
+    // is based on the assumption that a the average number of files per
+    // directory is >= 1.
+    //
+    // If anyone ever complains about this, then I guess the strategy could
+    // be made configurable somehow.  But until then, YAGNI.
+
+
+    function rimraf_(p, options, cb) {
+      assert(p);
+      assert(options);
+      assert(typeof cb === 'function'); // sunos lets the root user unlink directories, which is... weird.
+      // so we have to lstat here and make sure it's not a dir.
+
+      options.lstat(p, function (er, st) {
+        if (er && er.code === 'ENOENT') {
+          return cb(null);
+        } // Windows can EPERM on stat.  Life is suffering.
+
+
+        if (er && er.code === 'EPERM' && isWindows) {
+          return fixWinEPERM(p, options, er, cb);
+        }
+
+        if (st && st.isDirectory()) {
+          return rmdir(p, options, er, cb);
+        }
+
+        options.unlink(p, function (er) {
+          if (er) {
+            if (er.code === 'ENOENT') {
+              return cb(null);
+            }
+
+            if (er.code === 'EPERM') {
+              return isWindows ? fixWinEPERM(p, options, er, cb) : rmdir(p, options, er, cb);
+            }
+
+            if (er.code === 'EISDIR') {
+              return rmdir(p, options, er, cb);
+            }
+          }
+
+          return cb(er);
+        });
+      });
+    }
+
+    function fixWinEPERM(p, options, er, cb) {
+      assert(p);
+      assert(options);
+      assert(typeof cb === 'function');
+
+      if (er) {
+        assert(er instanceof Error);
+      }
+
+      options.chmod(p, 438, function (er2) {
+        if (er2) {
+          cb(er2.code === 'ENOENT' ? null : er);
+        } else {
+          options.stat(p, function (er3, stats) {
+            if (er3) {
+              cb(er3.code === 'ENOENT' ? null : er);
+            } else if (stats.isDirectory()) {
+              rmdir(p, options, er, cb);
+            } else {
+              options.unlink(p, cb);
+            }
+          });
+        }
+      });
+    }
+
+    function fixWinEPERMSync(p, options, er) {
+      var stats;
+      assert(p);
+      assert(options);
+
+      if (er) {
+        assert(er instanceof Error);
+      }
+
+      try {
+        options.chmodSync(p, 438);
+      } catch (er2) {
+        if (er2.code === 'ENOENT') {
+          return;
+        } else {
+          throw er;
+        }
+      }
+
+      try {
+        stats = options.statSync(p);
+      } catch (er3) {
+        if (er3.code === 'ENOENT') {
+          return;
+        } else {
+          throw er;
+        }
+      }
+
+      if (stats.isDirectory()) {
+        rmdirSync(p, options, er);
+      } else {
+        options.unlinkSync(p);
+      }
+    }
+
+    function rmdir(p, options, originalEr, cb) {
+      assert(p);
+      assert(options);
+
+      if (originalEr) {
+        assert(originalEr instanceof Error);
+      }
+
+      assert(typeof cb === 'function'); // try to rmdir first, and only readdir on ENOTEMPTY or EEXIST (SunOS)
+      // if we guessed wrong, and it's not a directory, then
+      // raise the original error.
+
+      options.rmdir(p, function (er) {
+        if (er && (er.code === 'ENOTEMPTY' || er.code === 'EEXIST' || er.code === 'EPERM')) {
+          rmkids(p, options, cb);
+        } else if (er && er.code === 'ENOTDIR') {
+          cb(originalEr);
+        } else {
+          cb(er);
+        }
+      });
+    }
+
+    function rmkids(p, options, cb) {
+      assert(p);
+      assert(options);
+      assert(typeof cb === 'function');
+      options.readdir(p, function (er, files) {
+        if (er) return cb(er);
+        var n = files.length;
+        var errState;
+        if (n === 0) return options.rmdir(p, cb);
+        files.forEach(function (f) {
+          rimraf(path.join(p, f), options, function (er) {
+            if (errState) {
+              return;
+            }
+
+            if (er) return cb(errState = er);
+
+            if (--n === 0) {
+              options.rmdir(p, cb);
+            }
+          });
+        });
+      });
+    } // this looks simpler, and is strictly *faster*, but will
+    // tie up the JavaScript thread and fail on excessively
+    // deep directory trees.
+
+
+    function rimrafSync(p, options) {
+      var st;
+      options = options || {};
+      defaults(options);
+      assert(p, 'rimraf: missing path');
+      assert.strictEqual((0, _typeof2["default"])(p), 'string', 'rimraf: path should be a string');
+      assert(options, 'rimraf: missing options');
+      assert.strictEqual((0, _typeof2["default"])(options), 'object', 'rimraf: options should be object');
+
+      try {
+        st = options.lstatSync(p);
+      } catch (er) {
+        if (er.code === 'ENOENT') {
+          return;
+        } // Windows can EPERM on stat.  Life is suffering.
+
+
+        if (er.code === 'EPERM' && isWindows) {
+          fixWinEPERMSync(p, options, er);
+        }
+      }
+
+      try {
+        // sunos lets the root user unlink directories, which is... weird.
+        if (st && st.isDirectory()) {
+          rmdirSync(p, options, null);
+        } else {
+          options.unlinkSync(p);
+        }
+      } catch (er) {
+        if (er.code === 'ENOENT') {
+          return;
+        } else if (er.code === 'EPERM') {
+          return isWindows ? fixWinEPERMSync(p, options, er) : rmdirSync(p, options, er);
+        } else if (er.code !== 'EISDIR') {
+          throw er;
+        }
+
+        rmdirSync(p, options, er);
+      }
+    }
+
+    function rmdirSync(p, options, originalEr) {
+      assert(p);
+      assert(options);
+
+      if (originalEr) {
+        assert(originalEr instanceof Error);
+      }
+
+      try {
+        options.rmdirSync(p);
+      } catch (er) {
+        if (er.code === 'ENOTDIR') {
+          throw originalEr;
+        } else if (er.code === 'ENOTEMPTY' || er.code === 'EEXIST' || er.code === 'EPERM') {
+          rmkidsSync(p, options);
+        } else if (er.code !== 'ENOENT') {
+          throw er;
+        }
+      }
+    }
+
+    function rmkidsSync(p, options) {
+      assert(p);
+      assert(options);
+      options.readdirSync(p).forEach(function (f) {
+        return rimrafSync(path.join(p, f), options);
+      });
+
+      if (isWindows) {
+        // We only end up here once we got ENOTEMPTY at least once, and
+        // at this point, we are guaranteed to have removed all the kids.
+        // So, we know that it won't be ENOENT or ENOTDIR or anything else.
+        // try really hard to delete stuff on windows, because it has a
+        // PROFOUNDLY annoying habit of not closing handles promptly when
+        // files are deleted, resulting in spurious ENOTEMPTY errors.
+        var startTime = Date.now();
+
+        do {
+          try {
+            var ret = options.rmdirSync(p, options);
+            return ret;
+          } catch (er) {}
+        } while (Date.now() - startTime < 500); // give up after 500ms
+
+      } else {
+        var _ret = options.rmdirSync(p, options);
+
+        return _ret;
+      }
+    }
+
+    module.exports = rimraf;
+    rimraf.sync = rimrafSync;
+  }, {
+    "assert": undefined,
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  103: [function (require, module, exports) {
+    'use strict';
+    /* eslint-disable node/no-deprecated-api */
+
+    module.exports = function (size) {
+      if (typeof Buffer.allocUnsafe === 'function') {
+        try {
+          return Buffer.allocUnsafe(size);
+        } catch (e) {
+          return new Buffer(size);
+        }
+      }
+
+      return new Buffer(size);
+    };
+  }, {}],
+  104: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var path = require('path');
+
+    var NODE_VERSION_MAJOR_WITH_BIGINT = 10;
+    var NODE_VERSION_MINOR_WITH_BIGINT = 5;
+    var NODE_VERSION_PATCH_WITH_BIGINT = 0;
+    var nodeVersion = process.versions.node.split('.');
+    var nodeVersionMajor = Number.parseInt(nodeVersion[0], 10);
+    var nodeVersionMinor = Number.parseInt(nodeVersion[1], 10);
+    var nodeVersionPatch = Number.parseInt(nodeVersion[2], 10);
+
+    function nodeSupportsBigInt() {
+      if (nodeVersionMajor > NODE_VERSION_MAJOR_WITH_BIGINT) {
+        return true;
+      } else if (nodeVersionMajor === NODE_VERSION_MAJOR_WITH_BIGINT) {
+        if (nodeVersionMinor > NODE_VERSION_MINOR_WITH_BIGINT) {
+          return true;
+        } else if (nodeVersionMinor === NODE_VERSION_MINOR_WITH_BIGINT) {
+          if (nodeVersionPatch >= NODE_VERSION_PATCH_WITH_BIGINT) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    function getStats(src, dest, cb) {
+      if (nodeSupportsBigInt()) {
+        fs.stat(src, {
+          bigint: true
+        }, function (err, srcStat) {
+          if (err) return cb(err);
+          fs.stat(dest, {
+            bigint: true
+          }, function (err, destStat) {
+            if (err) {
+              if (err.code === 'ENOENT') return cb(null, {
+                srcStat: srcStat,
+                destStat: null
+              });
+              return cb(err);
+            }
+
+            return cb(null, {
+              srcStat: srcStat,
+              destStat: destStat
+            });
+          });
+        });
+      } else {
+        fs.stat(src, function (err, srcStat) {
+          if (err) return cb(err);
+          fs.stat(dest, function (err, destStat) {
+            if (err) {
+              if (err.code === 'ENOENT') return cb(null, {
+                srcStat: srcStat,
+                destStat: null
+              });
+              return cb(err);
+            }
+
+            return cb(null, {
+              srcStat: srcStat,
+              destStat: destStat
+            });
+          });
+        });
+      }
+    }
+
+    function getStatsSync(src, dest) {
+      var srcStat, destStat;
+
+      if (nodeSupportsBigInt()) {
+        srcStat = fs.statSync(src, {
+          bigint: true
+        });
+      } else {
+        srcStat = fs.statSync(src);
+      }
+
+      try {
+        if (nodeSupportsBigInt()) {
+          destStat = fs.statSync(dest, {
+            bigint: true
+          });
+        } else {
+          destStat = fs.statSync(dest);
+        }
+      } catch (err) {
+        if (err.code === 'ENOENT') return {
+          srcStat: srcStat,
+          destStat: null
+        };
+        throw err;
+      }
+
+      return {
+        srcStat: srcStat,
+        destStat: destStat
+      };
+    }
+
+    function checkPaths(src, dest, funcName, cb) {
+      getStats(src, dest, function (err, stats) {
+        if (err) return cb(err);
+        var srcStat = stats.srcStat,
+            destStat = stats.destStat;
+
+        if (destStat && destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
+          return cb(new Error('Source and destination must not be the same.'));
+        }
+
+        if (srcStat.isDirectory() && isSrcSubdir(src, dest)) {
+          return cb(new Error(errMsg(src, dest, funcName)));
+        }
+
+        return cb(null, {
+          srcStat: srcStat,
+          destStat: destStat
+        });
+      });
+    }
+
+    function checkPathsSync(src, dest, funcName) {
+      var _getStatsSync = getStatsSync(src, dest),
+          srcStat = _getStatsSync.srcStat,
+          destStat = _getStatsSync.destStat;
+
+      if (destStat && destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
+        throw new Error('Source and destination must not be the same.');
+      }
+
+      if (srcStat.isDirectory() && isSrcSubdir(src, dest)) {
+        throw new Error(errMsg(src, dest, funcName));
+      }
+
+      return {
+        srcStat: srcStat,
+        destStat: destStat
+      };
+    } // recursively check if dest parent is a subdirectory of src.
+    // It works for all file types including symlinks since it
+    // checks the src and dest inodes. It starts from the deepest
+    // parent and stops once it reaches the src parent or the root path.
+
+
+    function checkParentPaths(src, srcStat, dest, funcName, cb) {
+      var srcParent = path.resolve(path.dirname(src));
+      var destParent = path.resolve(path.dirname(dest));
+      if (destParent === srcParent || destParent === path.parse(destParent).root) return cb();
+
+      if (nodeSupportsBigInt()) {
+        fs.stat(destParent, {
+          bigint: true
+        }, function (err, destStat) {
+          if (err) {
+            if (err.code === 'ENOENT') return cb();
+            return cb(err);
+          }
+
+          if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
+            return cb(new Error(errMsg(src, dest, funcName)));
+          }
+
+          return checkParentPaths(src, srcStat, destParent, funcName, cb);
+        });
+      } else {
+        fs.stat(destParent, function (err, destStat) {
+          if (err) {
+            if (err.code === 'ENOENT') return cb();
+            return cb(err);
+          }
+
+          if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
+            return cb(new Error(errMsg(src, dest, funcName)));
+          }
+
+          return checkParentPaths(src, srcStat, destParent, funcName, cb);
+        });
+      }
+    }
+
+    function checkParentPathsSync(src, srcStat, dest, funcName) {
+      var srcParent = path.resolve(path.dirname(src));
+      var destParent = path.resolve(path.dirname(dest));
+      if (destParent === srcParent || destParent === path.parse(destParent).root) return;
+      var destStat;
+
+      try {
+        if (nodeSupportsBigInt()) {
+          destStat = fs.statSync(destParent, {
+            bigint: true
+          });
+        } else {
+          destStat = fs.statSync(destParent);
+        }
+      } catch (err) {
+        if (err.code === 'ENOENT') return;
+        throw err;
+      }
+
+      if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
+        throw new Error(errMsg(src, dest, funcName));
+      }
+
+      return checkParentPathsSync(src, srcStat, destParent, funcName);
+    } // return true if dest is a subdir of src, otherwise false.
+    // It only checks the path strings.
+
+
+    function isSrcSubdir(src, dest) {
+      var srcArr = path.resolve(src).split(path.sep).filter(function (i) {
+        return i;
+      });
+      var destArr = path.resolve(dest).split(path.sep).filter(function (i) {
+        return i;
+      });
+      return srcArr.reduce(function (acc, cur, i) {
+        return acc && destArr[i] === cur;
+      }, true);
+    }
+
+    function errMsg(src, dest, funcName) {
+      return "Cannot ".concat(funcName, " '").concat(src, "' to a subdirectory of itself, '").concat(dest, "'.");
+    }
+
+    module.exports = {
+      checkPaths: checkPaths,
+      checkPathsSync: checkPathsSync,
+      checkParentPaths: checkParentPaths,
+      checkParentPathsSync: checkParentPathsSync,
+      isSrcSubdir: isSrcSubdir
+    };
+  }, {
+    "graceful-fs": 107,
+    "path": undefined
+  }],
+  105: [function (require, module, exports) {
+    'use strict';
+
+    var fs = require('graceful-fs');
+
+    var os = require('os');
+
+    var path = require('path'); // HFS, ext{2,3}, FAT do not, Node.js v0.10 does not
+
+
+    function hasMillisResSync() {
+      var tmpfile = path.join('millis-test-sync' + Date.now().toString() + Math.random().toString().slice(2));
+      tmpfile = path.join(os.tmpdir(), tmpfile); // 550 millis past UNIX epoch
+
+      var d = new Date(1435410243862);
+      fs.writeFileSync(tmpfile, 'https://github.com/jprichardson/node-fs-extra/pull/141');
+      var fd = fs.openSync(tmpfile, 'r+');
+      fs.futimesSync(fd, d, d);
+      fs.closeSync(fd);
+      return fs.statSync(tmpfile).mtime > 1435410243000;
+    }
+
+    function hasMillisRes(callback) {
+      var tmpfile = path.join('millis-test' + Date.now().toString() + Math.random().toString().slice(2));
+      tmpfile = path.join(os.tmpdir(), tmpfile); // 550 millis past UNIX epoch
+
+      var d = new Date(1435410243862);
+      fs.writeFile(tmpfile, 'https://github.com/jprichardson/node-fs-extra/pull/141', function (err) {
+        if (err) return callback(err);
+        fs.open(tmpfile, 'r+', function (err, fd) {
+          if (err) return callback(err);
+          fs.futimes(fd, d, d, function (err) {
+            if (err) return callback(err);
+            fs.close(fd, function (err) {
+              if (err) return callback(err);
+              fs.stat(tmpfile, function (err, stats) {
+                if (err) return callback(err);
+                callback(null, stats.mtime > 1435410243000);
+              });
+            });
+          });
+        });
+      });
+    }
+
+    function timeRemoveMillis(timestamp) {
+      if (typeof timestamp === 'number') {
+        return Math.floor(timestamp / 1000) * 1000;
+      } else if (timestamp instanceof Date) {
+        return new Date(Math.floor(timestamp.getTime() / 1000) * 1000);
+      } else {
+        throw new Error('fs-extra: timeRemoveMillis() unknown parameter type');
+      }
+    }
+
+    function utimesMillis(path, atime, mtime, callback) {
+      // if (!HAS_MILLIS_RES) return fs.utimes(path, atime, mtime, callback)
+      fs.open(path, 'r+', function (err, fd) {
+        if (err) return callback(err);
+        fs.futimes(fd, atime, mtime, function (futimesErr) {
+          fs.close(fd, function (closeErr) {
+            if (callback) callback(futimesErr || closeErr);
+          });
+        });
+      });
+    }
+
+    function utimesMillisSync(path, atime, mtime) {
+      var fd = fs.openSync(path, 'r+');
+      fs.futimesSync(fd, atime, mtime);
+      return fs.closeSync(fd);
+    }
+
+    module.exports = {
+      hasMillisRes: hasMillisRes,
+      hasMillisResSync: hasMillisResSync,
+      timeRemoveMillis: timeRemoveMillis,
+      utimesMillis: utimesMillis,
+      utimesMillisSync: utimesMillisSync
+    };
+  }, {
+    "graceful-fs": 107,
+    "os": undefined,
+    "path": undefined
+  }],
+  106: [function (require, module, exports) {
+    'use strict';
+
+    module.exports = clone;
+
+    function clone(obj) {
+      if (obj === null || (0, _typeof2["default"])(obj) !== 'object') return obj;
+      if (obj instanceof Object) var copy = {
+        __proto__: obj.__proto__
+      };else var copy = Object.create(null);
+      Object.getOwnPropertyNames(obj).forEach(function (key) {
+        Object.defineProperty(copy, key, Object.getOwnPropertyDescriptor(obj, key));
+      });
+      return copy;
+    }
+  }, {}],
+  107: [function (require, module, exports) {
+    var fs = require('fs');
+
+    var polyfills = require('./polyfills.js');
+
+    var legacy = require('./legacy-streams.js');
+
+    var clone = require('./clone.js');
+
+    var util = require('util');
+    /* istanbul ignore next - node 0.x polyfill */
+
+
+    var gracefulQueue;
+    var previousSymbol;
+    /* istanbul ignore else - node 0.x polyfill */
+
+    if (typeof Symbol === 'function' && typeof Symbol["for"] === 'function') {
+      gracefulQueue = Symbol["for"]('graceful-fs.queue'); // This is used in testing by future versions
+
+      previousSymbol = Symbol["for"]('graceful-fs.previous');
+    } else {
+      gracefulQueue = '___graceful-fs.queue';
+      previousSymbol = '___graceful-fs.previous';
+    }
+
+    function noop() {}
+
+    var debug = noop;
+    if (util.debuglog) debug = util.debuglog('gfs4');else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) debug = function debug() {
+      var m = util.format.apply(util, arguments);
+      m = 'GFS4: ' + m.split(/\n/).join('\nGFS4: ');
+      console.error(m);
+    }; // Once time initialization
+
+    if (!global[gracefulQueue]) {
+      // This queue can be shared by multiple loaded instances
+      var queue = [];
+      Object.defineProperty(global, gracefulQueue, {
+        get: function get() {
+          return queue;
+        }
+      }); // Patch fs.close/closeSync to shared queue version, because we need
+      // to retry() whenever a close happens *anywhere* in the program.
+      // This is essential when multiple graceful-fs instances are
+      // in play at the same time.
+
+      fs.close = function (fs$close) {
+        function close(fd, cb) {
+          return fs$close.call(fs, fd, function (err) {
+            // This function uses the graceful-fs shared queue
+            if (!err) {
+              retry();
+            }
+
+            if (typeof cb === 'function') cb.apply(this, arguments);
+          });
+        }
+
+        Object.defineProperty(close, previousSymbol, {
+          value: fs$close
+        });
+        return close;
+      }(fs.close);
+
+      fs.closeSync = function (fs$closeSync) {
+        function closeSync(fd) {
+          // This function uses the graceful-fs shared queue
+          fs$closeSync.apply(fs, arguments);
+          retry();
+        }
+
+        Object.defineProperty(closeSync, previousSymbol, {
+          value: fs$closeSync
+        });
+        return closeSync;
+      }(fs.closeSync);
+
+      if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) {
+        process.on('exit', function () {
+          debug(global[gracefulQueue]);
+
+          require('assert').equal(global[gracefulQueue].length, 0);
+        });
+      }
+    }
+
+    module.exports = patch(clone(fs));
+
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs.__patched) {
+      module.exports = patch(fs);
+      fs.__patched = true;
+    }
+
+    function patch(fs) {
+      // Everything that references the open() function needs to be in here
+      polyfills(fs);
+      fs.gracefulify = patch;
+      fs.createReadStream = createReadStream;
+      fs.createWriteStream = createWriteStream;
+      var fs$readFile = fs.readFile;
+      fs.readFile = readFile;
+
+      function readFile(path, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$readFile(path, options, cb);
+
+        function go$readFile(path, options, cb) {
+          return fs$readFile(path, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readFile, [path, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$writeFile = fs.writeFile;
+      fs.writeFile = writeFile;
+
+      function writeFile(path, data, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$writeFile(path, data, options, cb);
+
+        function go$writeFile(path, data, options, cb) {
+          return fs$writeFile(path, data, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$writeFile, [path, data, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$appendFile = fs.appendFile;
+      if (fs$appendFile) fs.appendFile = appendFile;
+
+      function appendFile(path, data, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$appendFile(path, data, options, cb);
+
+        function go$appendFile(path, data, options, cb) {
+          return fs$appendFile(path, data, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$appendFile, [path, data, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$readdir = fs.readdir;
+      fs.readdir = readdir;
+
+      function readdir(path, options, cb) {
+        var args = [path];
+
+        if (typeof options !== 'function') {
+          args.push(options);
+        } else {
+          cb = options;
+        }
+
+        args.push(go$readdir$cb);
+        return go$readdir(args);
+
+        function go$readdir$cb(err, files) {
+          if (files && files.sort) files.sort();
+          if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readdir, [args]]);else {
+            if (typeof cb === 'function') cb.apply(this, arguments);
+            retry();
+          }
+        }
+      }
+
+      function go$readdir(args) {
+        return fs$readdir.apply(fs, args);
+      }
+
+      if (process.version.substr(0, 4) === 'v0.8') {
+        var legStreams = legacy(fs);
+        ReadStream = legStreams.ReadStream;
+        WriteStream = legStreams.WriteStream;
+      }
+
+      var fs$ReadStream = fs.ReadStream;
+
+      if (fs$ReadStream) {
+        ReadStream.prototype = Object.create(fs$ReadStream.prototype);
+        ReadStream.prototype.open = ReadStream$open;
+      }
+
+      var fs$WriteStream = fs.WriteStream;
+
+      if (fs$WriteStream) {
+        WriteStream.prototype = Object.create(fs$WriteStream.prototype);
+        WriteStream.prototype.open = WriteStream$open;
+      }
+
+      Object.defineProperty(fs, 'ReadStream', {
+        get: function get() {
+          return ReadStream;
+        },
+        set: function set(val) {
+          ReadStream = val;
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(fs, 'WriteStream', {
+        get: function get() {
+          return WriteStream;
+        },
+        set: function set(val) {
+          WriteStream = val;
+        },
+        enumerable: true,
+        configurable: true
+      }); // legacy names
+
+      var FileReadStream = ReadStream;
+      Object.defineProperty(fs, 'FileReadStream', {
+        get: function get() {
+          return FileReadStream;
+        },
+        set: function set(val) {
+          FileReadStream = val;
+        },
+        enumerable: true,
+        configurable: true
+      });
+      var FileWriteStream = WriteStream;
+      Object.defineProperty(fs, 'FileWriteStream', {
+        get: function get() {
+          return FileWriteStream;
+        },
+        set: function set(val) {
+          FileWriteStream = val;
+        },
+        enumerable: true,
+        configurable: true
+      });
+
+      function ReadStream(path, options) {
+        if (this instanceof ReadStream) return fs$ReadStream.apply(this, arguments), this;else return ReadStream.apply(Object.create(ReadStream.prototype), arguments);
+      }
+
+      function ReadStream$open() {
+        var that = this;
+        open(that.path, that.flags, that.mode, function (err, fd) {
+          if (err) {
+            if (that.autoClose) that.destroy();
+            that.emit('error', err);
+          } else {
+            that.fd = fd;
+            that.emit('open', fd);
+            that.read();
+          }
+        });
+      }
+
+      function WriteStream(path, options) {
+        if (this instanceof WriteStream) return fs$WriteStream.apply(this, arguments), this;else return WriteStream.apply(Object.create(WriteStream.prototype), arguments);
+      }
+
+      function WriteStream$open() {
+        var that = this;
+        open(that.path, that.flags, that.mode, function (err, fd) {
+          if (err) {
+            that.destroy();
+            that.emit('error', err);
+          } else {
+            that.fd = fd;
+            that.emit('open', fd);
+          }
+        });
+      }
+
+      function createReadStream(path, options) {
+        return new fs.ReadStream(path, options);
+      }
+
+      function createWriteStream(path, options) {
+        return new fs.WriteStream(path, options);
+      }
+
+      var fs$open = fs.open;
+      fs.open = open;
+
+      function open(path, flags, mode, cb) {
+        if (typeof mode === 'function') cb = mode, mode = null;
+        return go$open(path, flags, mode, cb);
+
+        function go$open(path, flags, mode, cb) {
+          return fs$open(path, flags, mode, function (err, fd) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$open, [path, flags, mode, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      return fs;
+    }
+
+    function enqueue(elem) {
+      debug('ENQUEUE', elem[0].name, elem[1]);
+      global[gracefulQueue].push(elem);
+    }
+
+    function retry() {
+      var elem = global[gracefulQueue].shift();
+
+      if (elem) {
+        debug('RETRY', elem[0].name, elem[1]);
+        elem[0].apply(null, elem[1]);
+      }
+    }
+  }, {
+    "./clone.js": 106,
+    "./legacy-streams.js": 108,
+    "./polyfills.js": 109,
+    "assert": undefined,
+    "fs": undefined,
+    "util": undefined
+  }],
+  108: [function (require, module, exports) {
+    var Stream = require('stream').Stream;
+
+    module.exports = legacy;
+
+    function legacy(fs) {
+      return {
+        ReadStream: ReadStream,
+        WriteStream: WriteStream
+      };
+
+      function ReadStream(path, options) {
+        if (!(this instanceof ReadStream)) return new ReadStream(path, options);
+        Stream.call(this);
+        var self = this;
+        this.path = path;
+        this.fd = null;
+        this.readable = true;
+        this.paused = false;
+        this.flags = 'r';
+        this.mode = 438;
+        /*=0666*/
+
+        this.bufferSize = 64 * 1024;
+        options = options || {}; // Mixin options into this
+
+        var keys = Object.keys(options);
+
+        for (var index = 0, length = keys.length; index < length; index++) {
+          var key = keys[index];
+          this[key] = options[key];
+        }
+
+        if (this.encoding) this.setEncoding(this.encoding);
+
+        if (this.start !== undefined) {
+          if ('number' !== typeof this.start) {
+            throw TypeError('start must be a Number');
+          }
+
+          if (this.end === undefined) {
+            this.end = Infinity;
+          } else if ('number' !== typeof this.end) {
+            throw TypeError('end must be a Number');
+          }
+
+          if (this.start > this.end) {
+            throw new Error('start must be <= end');
+          }
+
+          this.pos = this.start;
+        }
+
+        if (this.fd !== null) {
+          process.nextTick(function () {
+            self._read();
+          });
+          return;
+        }
+
+        fs.open(this.path, this.flags, this.mode, function (err, fd) {
+          if (err) {
+            self.emit('error', err);
+            self.readable = false;
+            return;
+          }
+
+          self.fd = fd;
+          self.emit('open', fd);
+
+          self._read();
+        });
+      }
+
+      function WriteStream(path, options) {
+        if (!(this instanceof WriteStream)) return new WriteStream(path, options);
+        Stream.call(this);
+        this.path = path;
+        this.fd = null;
+        this.writable = true;
+        this.flags = 'w';
+        this.encoding = 'binary';
+        this.mode = 438;
+        /*=0666*/
+
+        this.bytesWritten = 0;
+        options = options || {}; // Mixin options into this
+
+        var keys = Object.keys(options);
+
+        for (var index = 0, length = keys.length; index < length; index++) {
+          var key = keys[index];
+          this[key] = options[key];
+        }
+
+        if (this.start !== undefined) {
+          if ('number' !== typeof this.start) {
+            throw TypeError('start must be a Number');
+          }
+
+          if (this.start < 0) {
+            throw new Error('start must be >= zero');
+          }
+
+          this.pos = this.start;
+        }
+
+        this.busy = false;
+        this._queue = [];
+
+        if (this.fd === null) {
+          this._open = fs.open;
+
+          this._queue.push([this._open, this.path, this.flags, this.mode, undefined]);
+
+          this.flush();
+        }
+      }
+    }
+  }, {
+    "stream": undefined
+  }],
+  109: [function (require, module, exports) {
+    var constants = require('constants');
+
+    var origCwd = process.cwd;
+    var cwd = null;
+    var platform = process.env.GRACEFUL_FS_PLATFORM || process.platform;
+
+    process.cwd = function () {
+      if (!cwd) cwd = origCwd.call(process);
+      return cwd;
+    };
+
+    try {
+      process.cwd();
+    } catch (er) {}
+
+    var chdir = process.chdir;
+
+    process.chdir = function (d) {
+      cwd = null;
+      chdir.call(process, d);
+    };
+
+    module.exports = patch;
+
+    function patch(fs) {
+      // (re-)implement some things that are known busted or missing.
+      // lchmod, broken prior to 0.6.2
+      // back-port the fix here.
+      if (constants.hasOwnProperty('O_SYMLINK') && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
+        patchLchmod(fs);
+      } // lutimes implementation, or no-op
+
+
+      if (!fs.lutimes) {
+        patchLutimes(fs);
+      } // https://github.com/isaacs/node-graceful-fs/issues/4
+      // Chown should not fail on einval or eperm if non-root.
+      // It should not fail on enosys ever, as this just indicates
+      // that a fs doesn't support the intended operation.
+
+
+      fs.chown = chownFix(fs.chown);
+      fs.fchown = chownFix(fs.fchown);
+      fs.lchown = chownFix(fs.lchown);
+      fs.chmod = chmodFix(fs.chmod);
+      fs.fchmod = chmodFix(fs.fchmod);
+      fs.lchmod = chmodFix(fs.lchmod);
+      fs.chownSync = chownFixSync(fs.chownSync);
+      fs.fchownSync = chownFixSync(fs.fchownSync);
+      fs.lchownSync = chownFixSync(fs.lchownSync);
+      fs.chmodSync = chmodFixSync(fs.chmodSync);
+      fs.fchmodSync = chmodFixSync(fs.fchmodSync);
+      fs.lchmodSync = chmodFixSync(fs.lchmodSync);
+      fs.stat = statFix(fs.stat);
+      fs.fstat = statFix(fs.fstat);
+      fs.lstat = statFix(fs.lstat);
+      fs.statSync = statFixSync(fs.statSync);
+      fs.fstatSync = statFixSync(fs.fstatSync);
+      fs.lstatSync = statFixSync(fs.lstatSync); // if lchmod/lchown do not exist, then make them no-ops
+
+      if (!fs.lchmod) {
+        fs.lchmod = function (path, mode, cb) {
+          if (cb) process.nextTick(cb);
+        };
+
+        fs.lchmodSync = function () {};
+      }
+
+      if (!fs.lchown) {
+        fs.lchown = function (path, uid, gid, cb) {
+          if (cb) process.nextTick(cb);
+        };
+
+        fs.lchownSync = function () {};
+      } // on Windows, A/V software can lock the directory, causing this
+      // to fail with an EACCES or EPERM if the directory contains newly
+      // created files.  Try again on failure, for up to 60 seconds.
+      // Set the timeout this long because some Windows Anti-Virus, such as Parity
+      // bit9, may lock files for up to a minute, causing npm package install
+      // failures. Also, take care to yield the scheduler. Windows scheduling gives
+      // CPU to a busy looping process, which can cause the program causing the lock
+      // contention to be starved of CPU by node, so the contention doesn't resolve.
+
+
+      if (platform === "win32") {
+        fs.rename = function (fs$rename) {
+          return function (from, to, cb) {
+            var start = Date.now();
+            var backoff = 0;
+            fs$rename(from, to, function CB(er) {
+              if (er && (er.code === "EACCES" || er.code === "EPERM") && Date.now() - start < 60000) {
+                setTimeout(function () {
+                  fs.stat(to, function (stater, st) {
+                    if (stater && stater.code === "ENOENT") fs$rename(from, to, CB);else cb(er);
+                  });
+                }, backoff);
+                if (backoff < 100) backoff += 10;
+                return;
+              }
+
+              if (cb) cb(er);
+            });
+          };
+        }(fs.rename);
+      } // if read() returns EAGAIN, then just try it again.
+
+
+      fs.read = function (fs$read) {
+        function read(fd, buffer, offset, length, position, callback_) {
+          var _callback2;
+
+          if (callback_ && typeof callback_ === 'function') {
+            var eagCounter = 0;
+
+            _callback2 = function callback(er, _, __) {
+              if (er && er.code === 'EAGAIN' && eagCounter < 10) {
+                eagCounter++;
+                return fs$read.call(fs, fd, buffer, offset, length, position, _callback2);
+              }
+
+              callback_.apply(this, arguments);
+            };
+          }
+
+          return fs$read.call(fs, fd, buffer, offset, length, position, _callback2);
+        } // This ensures `util.promisify` works as it does for native `fs.read`.
+
+
+        read.__proto__ = fs$read;
+        return read;
+      }(fs.read);
+
+      fs.readSync = function (fs$readSync) {
+        return function (fd, buffer, offset, length, position) {
+          var eagCounter = 0;
+
+          while (true) {
+            try {
+              return fs$readSync.call(fs, fd, buffer, offset, length, position);
+            } catch (er) {
+              if (er.code === 'EAGAIN' && eagCounter < 10) {
+                eagCounter++;
+                continue;
+              }
+
+              throw er;
+            }
+          }
+        };
+      }(fs.readSync);
+
+      function patchLchmod(fs) {
+        fs.lchmod = function (path, mode, callback) {
+          fs.open(path, constants.O_WRONLY | constants.O_SYMLINK, mode, function (err, fd) {
+            if (err) {
+              if (callback) callback(err);
+              return;
+            } // prefer to return the chmod error, if one occurs,
+            // but still try to close, and report closing errors if they occur.
+
+
+            fs.fchmod(fd, mode, function (err) {
+              fs.close(fd, function (err2) {
+                if (callback) callback(err || err2);
+              });
+            });
+          });
+        };
+
+        fs.lchmodSync = function (path, mode) {
+          var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode); // prefer to return the chmod error, if one occurs,
+          // but still try to close, and report closing errors if they occur.
+
+          var threw = true;
+          var ret;
+
+          try {
+            ret = fs.fchmodSync(fd, mode);
+            threw = false;
+          } finally {
+            if (threw) {
+              try {
+                fs.closeSync(fd);
+              } catch (er) {}
+            } else {
+              fs.closeSync(fd);
+            }
+          }
+
+          return ret;
+        };
+      }
+
+      function patchLutimes(fs) {
+        if (constants.hasOwnProperty("O_SYMLINK")) {
+          fs.lutimes = function (path, at, mt, cb) {
+            fs.open(path, constants.O_SYMLINK, function (er, fd) {
+              if (er) {
+                if (cb) cb(er);
+                return;
+              }
+
+              fs.futimes(fd, at, mt, function (er) {
+                fs.close(fd, function (er2) {
+                  if (cb) cb(er || er2);
+                });
+              });
+            });
+          };
+
+          fs.lutimesSync = function (path, at, mt) {
+            var fd = fs.openSync(path, constants.O_SYMLINK);
+            var ret;
+            var threw = true;
+
+            try {
+              ret = fs.futimesSync(fd, at, mt);
+              threw = false;
+            } finally {
+              if (threw) {
+                try {
+                  fs.closeSync(fd);
+                } catch (er) {}
+              } else {
+                fs.closeSync(fd);
+              }
+            }
+
+            return ret;
+          };
+        } else {
+          fs.lutimes = function (_a, _b, _c, cb) {
+            if (cb) process.nextTick(cb);
+          };
+
+          fs.lutimesSync = function () {};
+        }
+      }
+
+      function chmodFix(orig) {
+        if (!orig) return orig;
+        return function (target, mode, cb) {
+          return orig.call(fs, target, mode, function (er) {
+            if (chownErOk(er)) er = null;
+            if (cb) cb.apply(this, arguments);
+          });
+        };
+      }
+
+      function chmodFixSync(orig) {
+        if (!orig) return orig;
+        return function (target, mode) {
+          try {
+            return orig.call(fs, target, mode);
+          } catch (er) {
+            if (!chownErOk(er)) throw er;
+          }
+        };
+      }
+
+      function chownFix(orig) {
+        if (!orig) return orig;
+        return function (target, uid, gid, cb) {
+          return orig.call(fs, target, uid, gid, function (er) {
+            if (chownErOk(er)) er = null;
+            if (cb) cb.apply(this, arguments);
+          });
+        };
+      }
+
+      function chownFixSync(orig) {
+        if (!orig) return orig;
+        return function (target, uid, gid) {
+          try {
+            return orig.call(fs, target, uid, gid);
+          } catch (er) {
+            if (!chownErOk(er)) throw er;
+          }
+        };
+      }
+
+      function statFix(orig) {
+        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
+        // uid + gid.
+
+        return function (target, options, cb) {
+          if (typeof options === 'function') {
+            cb = options;
+            options = null;
+          }
+
+          function callback(er, stats) {
+            if (stats) {
+              if (stats.uid < 0) stats.uid += 0x100000000;
+              if (stats.gid < 0) stats.gid += 0x100000000;
+            }
+
+            if (cb) cb.apply(this, arguments);
+          }
+
+          return options ? orig.call(fs, target, options, callback) : orig.call(fs, target, callback);
+        };
+      }
+
+      function statFixSync(orig) {
+        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
+        // uid + gid.
+
+        return function (target, options) {
+          var stats = options ? orig.call(fs, target, options) : orig.call(fs, target);
+          if (stats.uid < 0) stats.uid += 0x100000000;
+          if (stats.gid < 0) stats.gid += 0x100000000;
+          return stats;
+        };
+      } // ENOSYS means that the fs doesn't support the op. Just ignore
+      // that, because it doesn't matter.
+      //
+      // if there's no getuid, or if getuid() is something other
+      // than 0, and the error is EINVAL or EPERM, then just ignore
+      // it.
+      //
+      // This specific case is a silent failure in cp, install, tar,
+      // and most other unix tools that manage permissions.
+      //
+      // When running as root, or if other types of errors are
+      // encountered, then it's strict.
+
+
+      function chownErOk(er) {
+        if (!er) return true;
+        if (er.code === "ENOSYS") return true;
+        var nonroot = !process.getuid || process.getuid() !== 0;
+
+        if (nonroot) {
+          if (er.code === "EINVAL" || er.code === "EPERM") return true;
+        }
+
+        return false;
+      }
+    }
+  }, {
+    "constants": undefined
+  }],
+  110: [function (require, module, exports) {
+    arguments[4][106][0].apply(exports, arguments);
+  }, {
+    "dup": 106
+  }],
+  111: [function (require, module, exports) {
+    var fs = require('fs');
+
+    var polyfills = require('./polyfills.js');
+
+    var legacy = require('./legacy-streams.js');
+
+    var clone = require('./clone.js');
+
+    var queue = [];
+
+    var util = require('util');
+
+    function noop() {}
+
+    var debug = noop;
+    if (util.debuglog) debug = util.debuglog('gfs4');else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) debug = function debug() {
+      var m = util.format.apply(util, arguments);
+      m = 'GFS4: ' + m.split(/\n/).join('\nGFS4: ');
+      console.error(m);
+    };
+
+    if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) {
+      process.on('exit', function () {
+        debug(queue);
+
+        require('assert').equal(queue.length, 0);
+      });
+    }
+
+    module.exports = patch(clone(fs));
+
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs.__patched) {
+      module.exports = patch(fs);
+      fs.__patched = true;
+    } // Always patch fs.close/closeSync, because we want to
+    // retry() whenever a close happens *anywhere* in the program.
+    // This is essential when multiple graceful-fs instances are
+    // in play at the same time.
+
+
+    module.exports.close = function (fs$close) {
+      return function (fd, cb) {
+        return fs$close.call(fs, fd, function (err) {
+          if (!err) retry();
+          if (typeof cb === 'function') cb.apply(this, arguments);
+        });
+      };
+    }(fs.close);
+
+    module.exports.closeSync = function (fs$closeSync) {
+      return function (fd) {
+        // Note that graceful-fs also retries when fs.closeSync() fails.
+        // Looks like a bug to me, although it's probably a harmless one.
+        var rval = fs$closeSync.apply(fs, arguments);
+        retry();
+        return rval;
+      };
+    }(fs.closeSync); // Only patch fs once, otherwise we'll run into a memory leak if
+    // graceful-fs is loaded multiple times, such as in test environments that
+    // reset the loaded modules between tests.
+    // We look for the string `graceful-fs` from the comment above. This
+    // way we are not adding any extra properties and it will detect if older
+    // versions of graceful-fs are installed.
+
+
+    if (!/\bgraceful-fs\b/.test(fs.closeSync.toString())) {
+      fs.closeSync = module.exports.closeSync;
+      fs.close = module.exports.close;
+    }
+
+    function patch(fs) {
+      // Everything that references the open() function needs to be in here
+      polyfills(fs);
+      fs.gracefulify = patch;
+      fs.FileReadStream = ReadStream; // Legacy name.
+
+      fs.FileWriteStream = WriteStream; // Legacy name.
+
+      fs.createReadStream = createReadStream;
+      fs.createWriteStream = createWriteStream;
+      var fs$readFile = fs.readFile;
+      fs.readFile = readFile;
+
+      function readFile(path, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$readFile(path, options, cb);
+
+        function go$readFile(path, options, cb) {
+          return fs$readFile(path, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readFile, [path, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$writeFile = fs.writeFile;
+      fs.writeFile = writeFile;
+
+      function writeFile(path, data, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$writeFile(path, data, options, cb);
+
+        function go$writeFile(path, data, options, cb) {
+          return fs$writeFile(path, data, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$writeFile, [path, data, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$appendFile = fs.appendFile;
+      if (fs$appendFile) fs.appendFile = appendFile;
+
+      function appendFile(path, data, options, cb) {
+        if (typeof options === 'function') cb = options, options = null;
+        return go$appendFile(path, data, options, cb);
+
+        function go$appendFile(path, data, options, cb) {
+          return fs$appendFile(path, data, options, function (err) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$appendFile, [path, data, options, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      var fs$readdir = fs.readdir;
+      fs.readdir = readdir;
+
+      function readdir(path, options, cb) {
+        var args = [path];
+
+        if (typeof options !== 'function') {
+          args.push(options);
+        } else {
+          cb = options;
+        }
+
+        args.push(go$readdir$cb);
+        return go$readdir(args);
+
+        function go$readdir$cb(err, files) {
+          if (files && files.sort) files.sort();
+          if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readdir, [args]]);else {
+            if (typeof cb === 'function') cb.apply(this, arguments);
+            retry();
+          }
+        }
+      }
+
+      function go$readdir(args) {
+        return fs$readdir.apply(fs, args);
+      }
+
+      if (process.version.substr(0, 4) === 'v0.8') {
+        var legStreams = legacy(fs);
+        ReadStream = legStreams.ReadStream;
+        WriteStream = legStreams.WriteStream;
+      }
+
+      var fs$ReadStream = fs.ReadStream;
+
+      if (fs$ReadStream) {
+        ReadStream.prototype = Object.create(fs$ReadStream.prototype);
+        ReadStream.prototype.open = ReadStream$open;
+      }
+
+      var fs$WriteStream = fs.WriteStream;
+
+      if (fs$WriteStream) {
+        WriteStream.prototype = Object.create(fs$WriteStream.prototype);
+        WriteStream.prototype.open = WriteStream$open;
+      }
+
+      fs.ReadStream = ReadStream;
+      fs.WriteStream = WriteStream;
+
+      function ReadStream(path, options) {
+        if (this instanceof ReadStream) return fs$ReadStream.apply(this, arguments), this;else return ReadStream.apply(Object.create(ReadStream.prototype), arguments);
+      }
+
+      function ReadStream$open() {
+        var that = this;
+        open(that.path, that.flags, that.mode, function (err, fd) {
+          if (err) {
+            if (that.autoClose) that.destroy();
+            that.emit('error', err);
+          } else {
+            that.fd = fd;
+            that.emit('open', fd);
+            that.read();
+          }
+        });
+      }
+
+      function WriteStream(path, options) {
+        if (this instanceof WriteStream) return fs$WriteStream.apply(this, arguments), this;else return WriteStream.apply(Object.create(WriteStream.prototype), arguments);
+      }
+
+      function WriteStream$open() {
+        var that = this;
+        open(that.path, that.flags, that.mode, function (err, fd) {
+          if (err) {
+            that.destroy();
+            that.emit('error', err);
+          } else {
+            that.fd = fd;
+            that.emit('open', fd);
+          }
+        });
+      }
+
+      function createReadStream(path, options) {
+        return new ReadStream(path, options);
+      }
+
+      function createWriteStream(path, options) {
+        return new WriteStream(path, options);
+      }
+
+      var fs$open = fs.open;
+      fs.open = open;
+
+      function open(path, flags, mode, cb) {
+        if (typeof mode === 'function') cb = mode, mode = null;
+        return go$open(path, flags, mode, cb);
+
+        function go$open(path, flags, mode, cb) {
+          return fs$open(path, flags, mode, function (err, fd) {
+            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$open, [path, flags, mode, cb]]);else {
+              if (typeof cb === 'function') cb.apply(this, arguments);
+              retry();
+            }
+          });
+        }
+      }
+
+      return fs;
+    }
+
+    function enqueue(elem) {
+      debug('ENQUEUE', elem[0].name, elem[1]);
+      queue.push(elem);
+    }
+
+    function retry() {
+      var elem = queue.shift();
+
+      if (elem) {
+        debug('RETRY', elem[0].name, elem[1]);
+        elem[0].apply(null, elem[1]);
+      }
+    }
+  }, {
+    "./clone.js": 110,
+    "./legacy-streams.js": 112,
+    "./polyfills.js": 113,
+    "assert": undefined,
+    "fs": undefined,
+    "util": undefined
+  }],
+  112: [function (require, module, exports) {
+    arguments[4][108][0].apply(exports, arguments);
+  }, {
+    "dup": 108,
+    "stream": undefined
+  }],
+  113: [function (require, module, exports) {
+    var constants = require('constants');
+
+    var origCwd = process.cwd;
+    var cwd = null;
+    var platform = process.env.GRACEFUL_FS_PLATFORM || process.platform;
+
+    process.cwd = function () {
+      if (!cwd) cwd = origCwd.call(process);
+      return cwd;
+    };
+
+    try {
+      process.cwd();
+    } catch (er) {}
+
+    var chdir = process.chdir;
+
+    process.chdir = function (d) {
+      cwd = null;
+      chdir.call(process, d);
+    };
+
+    module.exports = patch;
+
+    function patch(fs) {
+      // (re-)implement some things that are known busted or missing.
+      // lchmod, broken prior to 0.6.2
+      // back-port the fix here.
+      if (constants.hasOwnProperty('O_SYMLINK') && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
+        patchLchmod(fs);
+      } // lutimes implementation, or no-op
+
+
+      if (!fs.lutimes) {
+        patchLutimes(fs);
+      } // https://github.com/isaacs/node-graceful-fs/issues/4
+      // Chown should not fail on einval or eperm if non-root.
+      // It should not fail on enosys ever, as this just indicates
+      // that a fs doesn't support the intended operation.
+
+
+      fs.chown = chownFix(fs.chown);
+      fs.fchown = chownFix(fs.fchown);
+      fs.lchown = chownFix(fs.lchown);
+      fs.chmod = chmodFix(fs.chmod);
+      fs.fchmod = chmodFix(fs.fchmod);
+      fs.lchmod = chmodFix(fs.lchmod);
+      fs.chownSync = chownFixSync(fs.chownSync);
+      fs.fchownSync = chownFixSync(fs.fchownSync);
+      fs.lchownSync = chownFixSync(fs.lchownSync);
+      fs.chmodSync = chmodFixSync(fs.chmodSync);
+      fs.fchmodSync = chmodFixSync(fs.fchmodSync);
+      fs.lchmodSync = chmodFixSync(fs.lchmodSync);
+      fs.stat = statFix(fs.stat);
+      fs.fstat = statFix(fs.fstat);
+      fs.lstat = statFix(fs.lstat);
+      fs.statSync = statFixSync(fs.statSync);
+      fs.fstatSync = statFixSync(fs.fstatSync);
+      fs.lstatSync = statFixSync(fs.lstatSync); // if lchmod/lchown do not exist, then make them no-ops
+
+      if (!fs.lchmod) {
+        fs.lchmod = function (path, mode, cb) {
+          if (cb) process.nextTick(cb);
+        };
+
+        fs.lchmodSync = function () {};
+      }
+
+      if (!fs.lchown) {
+        fs.lchown = function (path, uid, gid, cb) {
+          if (cb) process.nextTick(cb);
+        };
+
+        fs.lchownSync = function () {};
+      } // on Windows, A/V software can lock the directory, causing this
+      // to fail with an EACCES or EPERM if the directory contains newly
+      // created files.  Try again on failure, for up to 60 seconds.
+      // Set the timeout this long because some Windows Anti-Virus, such as Parity
+      // bit9, may lock files for up to a minute, causing npm package install
+      // failures. Also, take care to yield the scheduler. Windows scheduling gives
+      // CPU to a busy looping process, which can cause the program causing the lock
+      // contention to be starved of CPU by node, so the contention doesn't resolve.
+
+
+      if (platform === "win32") {
+        fs.rename = function (fs$rename) {
+          return function (from, to, cb) {
+            var start = Date.now();
+            var backoff = 0;
+            fs$rename(from, to, function CB(er) {
+              if (er && (er.code === "EACCES" || er.code === "EPERM") && Date.now() - start < 60000) {
+                setTimeout(function () {
+                  fs.stat(to, function (stater, st) {
+                    if (stater && stater.code === "ENOENT") fs$rename(from, to, CB);else cb(er);
+                  });
+                }, backoff);
+                if (backoff < 100) backoff += 10;
+                return;
+              }
+
+              if (cb) cb(er);
+            });
+          };
+        }(fs.rename);
+      } // if read() returns EAGAIN, then just try it again.
+
+
+      fs.read = function (fs$read) {
+        return function (fd, buffer, offset, length, position, callback_) {
+          var _callback3;
+
+          if (callback_ && typeof callback_ === 'function') {
+            var eagCounter = 0;
+
+            _callback3 = function callback(er, _, __) {
+              if (er && er.code === 'EAGAIN' && eagCounter < 10) {
+                eagCounter++;
+                return fs$read.call(fs, fd, buffer, offset, length, position, _callback3);
+              }
+
+              callback_.apply(this, arguments);
+            };
+          }
+
+          return fs$read.call(fs, fd, buffer, offset, length, position, _callback3);
+        };
+      }(fs.read);
+
+      fs.readSync = function (fs$readSync) {
+        return function (fd, buffer, offset, length, position) {
+          var eagCounter = 0;
+
+          while (true) {
+            try {
+              return fs$readSync.call(fs, fd, buffer, offset, length, position);
+            } catch (er) {
+              if (er.code === 'EAGAIN' && eagCounter < 10) {
+                eagCounter++;
+                continue;
+              }
+
+              throw er;
+            }
+          }
+        };
+      }(fs.readSync);
+
+      function patchLchmod(fs) {
+        fs.lchmod = function (path, mode, callback) {
+          fs.open(path, constants.O_WRONLY | constants.O_SYMLINK, mode, function (err, fd) {
+            if (err) {
+              if (callback) callback(err);
+              return;
+            } // prefer to return the chmod error, if one occurs,
+            // but still try to close, and report closing errors if they occur.
+
+
+            fs.fchmod(fd, mode, function (err) {
+              fs.close(fd, function (err2) {
+                if (callback) callback(err || err2);
+              });
+            });
+          });
+        };
+
+        fs.lchmodSync = function (path, mode) {
+          var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode); // prefer to return the chmod error, if one occurs,
+          // but still try to close, and report closing errors if they occur.
+
+          var threw = true;
+          var ret;
+
+          try {
+            ret = fs.fchmodSync(fd, mode);
+            threw = false;
+          } finally {
+            if (threw) {
+              try {
+                fs.closeSync(fd);
+              } catch (er) {}
+            } else {
+              fs.closeSync(fd);
+            }
+          }
+
+          return ret;
+        };
+      }
+
+      function patchLutimes(fs) {
+        if (constants.hasOwnProperty("O_SYMLINK")) {
+          fs.lutimes = function (path, at, mt, cb) {
+            fs.open(path, constants.O_SYMLINK, function (er, fd) {
+              if (er) {
+                if (cb) cb(er);
+                return;
+              }
+
+              fs.futimes(fd, at, mt, function (er) {
+                fs.close(fd, function (er2) {
+                  if (cb) cb(er || er2);
+                });
+              });
+            });
+          };
+
+          fs.lutimesSync = function (path, at, mt) {
+            var fd = fs.openSync(path, constants.O_SYMLINK);
+            var ret;
+            var threw = true;
+
+            try {
+              ret = fs.futimesSync(fd, at, mt);
+              threw = false;
+            } finally {
+              if (threw) {
+                try {
+                  fs.closeSync(fd);
+                } catch (er) {}
+              } else {
+                fs.closeSync(fd);
+              }
+            }
+
+            return ret;
+          };
+        } else {
+          fs.lutimes = function (_a, _b, _c, cb) {
+            if (cb) process.nextTick(cb);
+          };
+
+          fs.lutimesSync = function () {};
+        }
+      }
+
+      function chmodFix(orig) {
+        if (!orig) return orig;
+        return function (target, mode, cb) {
+          return orig.call(fs, target, mode, function (er) {
+            if (chownErOk(er)) er = null;
+            if (cb) cb.apply(this, arguments);
+          });
+        };
+      }
+
+      function chmodFixSync(orig) {
+        if (!orig) return orig;
+        return function (target, mode) {
+          try {
+            return orig.call(fs, target, mode);
+          } catch (er) {
+            if (!chownErOk(er)) throw er;
+          }
+        };
+      }
+
+      function chownFix(orig) {
+        if (!orig) return orig;
+        return function (target, uid, gid, cb) {
+          return orig.call(fs, target, uid, gid, function (er) {
+            if (chownErOk(er)) er = null;
+            if (cb) cb.apply(this, arguments);
+          });
+        };
+      }
+
+      function chownFixSync(orig) {
+        if (!orig) return orig;
+        return function (target, uid, gid) {
+          try {
+            return orig.call(fs, target, uid, gid);
+          } catch (er) {
+            if (!chownErOk(er)) throw er;
+          }
+        };
+      }
+
+      function statFix(orig) {
+        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
+        // uid + gid.
+
+        return function (target, cb) {
+          return orig.call(fs, target, function (er, stats) {
+            if (!stats) return cb.apply(this, arguments);
+            if (stats.uid < 0) stats.uid += 0x100000000;
+            if (stats.gid < 0) stats.gid += 0x100000000;
+            if (cb) cb.apply(this, arguments);
+          });
+        };
+      }
+
+      function statFixSync(orig) {
+        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
+        // uid + gid.
+
+        return function (target) {
+          var stats = orig.call(fs, target);
+          if (stats.uid < 0) stats.uid += 0x100000000;
+          if (stats.gid < 0) stats.gid += 0x100000000;
+          return stats;
+        };
+      } // ENOSYS means that the fs doesn't support the op. Just ignore
+      // that, because it doesn't matter.
+      //
+      // if there's no getuid, or if getuid() is something other
+      // than 0, and the error is EINVAL or EPERM, then just ignore
+      // it.
+      //
+      // This specific case is a silent failure in cp, install, tar,
+      // and most other unix tools that manage permissions.
+      //
+      // When running as root, or if other types of errors are
+      // encountered, then it's strict.
+
+
+      function chownErOk(er) {
+        if (!er) return true;
+        if (er.code === "ENOSYS") return true;
+        var nonroot = !process.getuid || process.getuid() !== 0;
+
+        if (nonroot) {
+          if (er.code === "EINVAL" || er.code === "EPERM") return true;
+        }
+
+        return false;
+      }
+    }
+  }, {
+    "constants": undefined
+  }],
+  114: [function (require, module, exports) {
+    var _fs;
+
+    try {
+      _fs = require('graceful-fs');
+    } catch (_) {
+      _fs = require('fs');
+    }
+
+    function readFile(file, options, callback) {
+      if (callback == null) {
+        callback = options;
+        options = {};
+      }
+
+      if (typeof options === 'string') {
+        options = {
+          encoding: options
+        };
+      }
+
+      options = options || {};
+      var fs = options.fs || _fs;
+      var shouldThrow = true;
+
+      if ('throws' in options) {
+        shouldThrow = options["throws"];
+      }
+
+      fs.readFile(file, options, function (err, data) {
+        if (err) return callback(err);
+        data = stripBom(data);
+        var obj;
+
+        try {
+          obj = JSON.parse(data, options ? options.reviver : null);
+        } catch (err2) {
+          if (shouldThrow) {
+            err2.message = file + ': ' + err2.message;
+            return callback(err2);
+          } else {
+            return callback(null, null);
+          }
+        }
+
+        callback(null, obj);
+      });
+    }
+
+    function readFileSync(file, options) {
+      options = options || {};
+
+      if (typeof options === 'string') {
+        options = {
+          encoding: options
+        };
+      }
+
+      var fs = options.fs || _fs;
+      var shouldThrow = true;
+
+      if ('throws' in options) {
+        shouldThrow = options["throws"];
+      }
+
+      try {
+        var content = fs.readFileSync(file, options);
+        content = stripBom(content);
+        return JSON.parse(content, options.reviver);
+      } catch (err) {
+        if (shouldThrow) {
+          err.message = file + ': ' + err.message;
+          throw err;
+        } else {
+          return null;
+        }
+      }
+    }
+
+    function stringify(obj, options) {
+      var spaces;
+      var EOL = '\n';
+
+      if ((0, _typeof2["default"])(options) === 'object' && options !== null) {
+        if (options.spaces) {
+          spaces = options.spaces;
+        }
+
+        if (options.EOL) {
+          EOL = options.EOL;
+        }
+      }
+
+      var str = JSON.stringify(obj, options ? options.replacer : null, spaces);
+      return str.replace(/\n/g, EOL) + EOL;
+    }
+
+    function writeFile(file, obj, options, callback) {
+      if (callback == null) {
+        callback = options;
+        options = {};
+      }
+
+      options = options || {};
+      var fs = options.fs || _fs;
+      var str = '';
+
+      try {
+        str = stringify(obj, options);
+      } catch (err) {
+        // Need to return whether a callback was passed or not
+        if (callback) callback(err, null);
+        return;
+      }
+
+      fs.writeFile(file, str, options, callback);
+    }
+
+    function writeFileSync(file, obj, options) {
+      options = options || {};
+      var fs = options.fs || _fs;
+      var str = stringify(obj, options); // not sure if fs.writeFileSync returns anything, but just in case
+
+      return fs.writeFileSync(file, str, options);
+    }
+
+    function stripBom(content) {
+      // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
+      if (Buffer.isBuffer(content)) content = content.toString('utf8');
+      content = content.replace(/^\uFEFF/, '');
+      return content;
+    }
+
+    var jsonfile = {
+      readFile: readFile,
+      readFileSync: readFileSync,
+      writeFile: writeFile,
+      writeFileSync: writeFileSync
+    };
+    module.exports = jsonfile;
+  }, {
+    "fs": undefined,
+    "graceful-fs": 111
+  }],
+  115: [function (require, module, exports) {
     module.exports = function (args, opts) {
       if (!opts) opts = {};
       var flags = {
@@ -7009,7 +14760,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(e[-+]?\d+)?$/.test(x);
     }
   }, {}],
-  39: [function (require, module, exports) {
+  116: [function (require, module, exports) {
     'use strict';
 
     var isWindows = process.platform === 'win32'; // Regex to split a windows path into three parts: [*, device, slash,
@@ -7091,7 +14842,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     module.exports.posix = posix.parse;
     module.exports.win32 = win32.parse;
   }, {}],
-  40: [function (require, module, exports) {
+  117: [function (require, module, exports) {
     var core = require('./lib/core');
 
     var async = require('./lib/async');
@@ -7106,11 +14857,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     exports = async;
     module.exports = async;
   }, {
-    "./lib/async": 41,
-    "./lib/core": 44,
-    "./lib/sync": 47
+    "./lib/async": 118,
+    "./lib/core": 121,
+    "./lib/sync": 124
   }],
-  41: [function (require, module, exports) {
+  118: [function (require, module, exports) {
     var core = require('./core');
 
     var fs = require('fs');
@@ -7343,14 +15094,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 42,
-    "./core": 44,
-    "./node-modules-paths.js": 45,
-    "./normalize-options.js": 46,
+    "./caller.js": 119,
+    "./core": 121,
+    "./node-modules-paths.js": 122,
+    "./normalize-options.js": 123,
     "fs": undefined,
     "path": undefined
   }],
-  42: [function (require, module, exports) {
+  119: [function (require, module, exports) {
     module.exports = function () {
       // see https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
       var origPrepareStackTrace = Error.prepareStackTrace;
@@ -7364,7 +15115,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return stack[2].getFileName();
     };
   }, {}],
-  43: [function (require, module, exports) {
+  120: [function (require, module, exports) {
     module.exports = {
       "assert": true,
       "async_hooks": ">= 8",
@@ -7439,7 +15190,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       "zlib": true
     };
   }, {}],
-  44: [function (require, module, exports) {
+  121: [function (require, module, exports) {
     var current = process.versions && process.versions.node && process.versions.node.split('.') || [];
 
     function specifierIncluded(specifier) {
@@ -7514,9 +15265,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = core;
   }, {
-    "./core.json": 43
+    "./core.json": 120
   }],
-  45: [function (require, module, exports) {
+  122: [function (require, module, exports) {
     var path = require('path');
 
     var parse = path.parse || require('path-parse');
@@ -7559,9 +15310,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
   }, {
     "path": undefined,
-    "path-parse": 39
+    "path-parse": 116
   }],
-  46: [function (require, module, exports) {
+  123: [function (require, module, exports) {
     module.exports = function (x, opts) {
       /**
        * This file is purposefully a passthrough. It's expected that third-party
@@ -7572,7 +15323,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return opts || {};
     };
   }, {}],
-  47: [function (require, module, exports) {
+  124: [function (require, module, exports) {
     var core = require('./core');
 
     var fs = require('fs');
@@ -7740,14 +15491,49 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 42,
-    "./core": 44,
-    "./node-modules-paths.js": 45,
-    "./normalize-options.js": 46,
+    "./caller.js": 119,
+    "./core": 121,
+    "./node-modules-paths.js": 122,
+    "./normalize-options.js": 123,
     "fs": undefined,
     "path": undefined
   }],
-  48: [function (require, module, exports) {
+  125: [function (require, module, exports) {
+    'use strict';
+
+    exports.fromCallback = function (fn) {
+      return Object.defineProperty(function () {
+        var _arguments = arguments,
+            _this = this;
+
+        if (typeof arguments[arguments.length - 1] === 'function') fn.apply(this, arguments);else {
+          return new Promise(function (resolve, reject) {
+            _arguments[_arguments.length] = function (err, res) {
+              if (err) return reject(err);
+              resolve(res);
+            };
+
+            _arguments.length++;
+            fn.apply(_this, _arguments);
+          });
+        }
+      }, 'name', {
+        value: fn.name
+      });
+    };
+
+    exports.fromPromise = function (fn) {
+      return Object.defineProperty(function () {
+        var cb = arguments[arguments.length - 1];
+        if (typeof cb !== 'function') return fn.apply(this, arguments);else fn.apply(this, arguments).then(function (r) {
+          return cb(null, r);
+        }, cb);
+      }, 'name', {
+        value: fn.name
+      });
+    };
+  }, {}],
+  126: [function (require, module, exports) {
     (function (__dirname) {
       var REGEXP_ESCAPE = require("escape-string-regexp");
 
@@ -7936,6 +15722,78 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         script.runInNewContext(sandbox);
         return sandbox.RESULT;
+      };
+
+      Codeblock.prototype.runAsync = function _callee5(variables, options) {
+        var VM, codeblock, code, script, sandbox;
+        return _regenerator["default"].async(function _callee5$(_context8) {
+          while (1) {
+            switch (_context8.prev = _context8.next) {
+              case 0:
+                variables = variables || {};
+                options = options || {};
+                VM = require('vm');
+
+                if (this._compiled) {
+                  _context8.next = 6;
+                  break;
+                }
+
+                codeblock = this.compile(variables);
+                return _context8.abrupt("return", codeblock.runAsync(variables, options));
+
+              case 6:
+                code = this.getCode();
+
+                if (DEBUG) {
+                  console.log("[codeblock] variables:", Object.keys(variables));
+                  console.log("[codeblock] options:", Object.keys(options));
+                  console.log("[codeblock] Code to execute in VM", code);
+                }
+
+                _context8.prev = 8;
+                script = new VM.Script(['RUNNER = async function (', this._args.join(', '), ') { ', code.replace(/&#96;/g, "\`"), ' }'].join(""));
+                _context8.next = 17;
+                break;
+
+              case 12:
+                _context8.prev = 12;
+                _context8.t0 = _context8["catch"](8);
+                console.log("this._code", this._code);
+                console.log("code", code);
+                throw _context8.t0;
+
+              case 17:
+                sandbox = {
+                  console: console,
+                  RESULT: undefined,
+                  THIS: options["this"] || null,
+                  ARGS: this._args.map(function (name) {
+                    return variables[name];
+                  }),
+                  ___WrApCoDe___: ___WrApCoDe___
+                };
+
+                if (options.sandbox) {
+                  Object.keys(options.sandbox).forEach(function (name) {
+                    sandbox[name] = options.sandbox[name];
+                  });
+                }
+
+                script.runInNewContext(sandbox);
+                _context8.next = 22;
+                return _regenerator["default"].awrap(sandbox.RUNNER.apply(sandbox.THIS, sandbox.ARGS));
+
+              case 22:
+                sandbox.RESULT = _context8.sent;
+                return _context8.abrupt("return", sandbox.RESULT);
+
+              case 24:
+              case "end":
+                return _context8.stop();
+            }
+          }
+        }, null, this, [[8, 12]]);
       };
 
       Codeblock.thaw = function (ice) {
@@ -8638,7 +16496,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return TRAVERSE(json).map(function (value) {
           if (typeof value === "string" && /^\{"\.@":"github\.com~0ink~codeblock\/codeblock:Codeblock"/.test(value)) {
             value = Codeblock.thaw(value);
-          } else if ((0, _typeof2["default"])(value) === "object" && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+          } else if (exports.isCodeblock(value)) {
             value = Codeblock.thaw(value);
           }
 
@@ -8660,11 +16518,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return obj;
       };
 
+      exports.isCodeblock = function (obj) {
+        return (0, _typeof2["default"])(obj) === "object" && obj['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock';
+      };
+
       exports.compileAll = function (obj) {
         var TRAVERSE = require("traverse");
 
         return TRAVERSE(obj).map(function (value) {
-          if ((0, _typeof2["default"])(value) === "object" && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+          if (exports.isCodeblock(value)) {
             value = value.compile(this.parent.node);
           }
 
@@ -8677,7 +16539,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           obj = obj(args, exports.Codeblock);
         }
 
-        if ((0, _typeof2["default"])(obj) === "object" && obj['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+        if (exports.isCodeblock(obj)) {
           if (typeof obj.compile !== "function") {
             obj = Codeblock.thaw(obj);
           }
@@ -8813,17 +16675,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     }).call(this, require("path").join(__dirname, "..", "..", "..", "node_modules", "codeblock"));
   }, {
     "$$__filename$$": undefined,
-    "colors": 53,
-    "escape-string-regexp": 61,
-    "esprima": 62,
+    "colors": 131,
+    "escape-string-regexp": 139,
+    "esprima": 140,
     "fs": undefined,
-    "jsonlint": 63,
+    "jsonlint": 141,
     "module": undefined,
     "path": undefined,
-    "traverse": 64,
+    "traverse": 142,
     "vm": undefined
   }],
-  49: [function (require, module, exports) {
+  127: [function (require, module, exports) {
     /*
     
     The MIT License (MIT)
@@ -9023,17 +16885,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     defineProps(colors, init());
   }, {
-    "./custom/trap": 50,
-    "./custom/zalgo": 51,
-    "./maps/america": 54,
-    "./maps/rainbow": 55,
-    "./maps/random": 56,
-    "./maps/zebra": 57,
-    "./styles": 58,
-    "./system/supports-colors": 60,
+    "./custom/trap": 128,
+    "./custom/zalgo": 129,
+    "./maps/america": 132,
+    "./maps/rainbow": 133,
+    "./maps/random": 134,
+    "./maps/zebra": 135,
+    "./styles": 136,
+    "./system/supports-colors": 138,
     "util": undefined
   }],
-  50: [function (require, module, exports) {
+  128: [function (require, module, exports) {
     module['exports'] = function runTheTrap(text, options) {
       var result = '';
       text = text || 'Run the trap, drop the bass';
@@ -9080,7 +16942,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return result;
     };
   }, {}],
-  51: [function (require, module, exports) {
+  129: [function (require, module, exports) {
     // please no
     module['exports'] = function zalgo(text, options) {
       text = text || '   he is here   ';
@@ -9167,7 +17029,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return heComes(text, options);
     };
   }, {}],
-  52: [function (require, module, exports) {
+  130: [function (require, module, exports) {
     var colors = require('./colors');
 
     module['exports'] = function () {
@@ -9258,9 +17120,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {
-    "./colors": 49
+    "./colors": 127
   }],
-  53: [function (require, module, exports) {
+  131: [function (require, module, exports) {
     var colors = require('./colors');
 
     module['exports'] = colors; // Remark: By default, colors will add style properties to String.prototype.
@@ -9275,10 +17137,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     require('./extendStringPrototype')();
   }, {
-    "./colors": 49,
-    "./extendStringPrototype": 52
+    "./colors": 127,
+    "./extendStringPrototype": 130
   }],
-  54: [function (require, module, exports) {
+  132: [function (require, module, exports) {
     module['exports'] = function (colors) {
       return function (letter, i, exploded) {
         if (letter === ' ') return letter;
@@ -9296,7 +17158,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  55: [function (require, module, exports) {
+  133: [function (require, module, exports) {
     module['exports'] = function (colors) {
       // RoY G BiV
       var rainbowColors = ['red', 'yellow', 'green', 'blue', 'magenta'];
@@ -9309,7 +17171,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  56: [function (require, module, exports) {
+  134: [function (require, module, exports) {
     module['exports'] = function (colors) {
       var available = ['underline', 'inverse', 'grey', 'yellow', 'red', 'green', 'blue', 'white', 'cyan', 'magenta'];
       return function (letter, i, exploded) {
@@ -9317,14 +17179,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  57: [function (require, module, exports) {
+  135: [function (require, module, exports) {
     module['exports'] = function (colors) {
       return function (letter, i, exploded) {
         return i % 2 === 0 ? letter : colors.inverse(letter);
       };
     };
   }, {}],
-  58: [function (require, module, exports) {
+  136: [function (require, module, exports) {
     /*
     The MIT License (MIT)
     
@@ -9395,7 +17257,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       style.close = "\x1B[" + val[1] + 'm';
     });
   }, {}],
-  59: [function (require, module, exports) {
+  137: [function (require, module, exports) {
     /*
     MIT License
     
@@ -9429,7 +17291,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return pos !== -1 && (terminatorPos === -1 ? true : pos < terminatorPos);
     };
   }, {}],
-  60: [function (require, module, exports) {
+  138: [function (require, module, exports) {
     /*
     The MIT License (MIT)
     
@@ -9581,10 +17443,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       stderr: getSupportLevel(process.stderr)
     };
   }, {
-    "./has-flag.js": 59,
+    "./has-flag.js": 137,
     "os": undefined
   }],
-  61: [function (require, module, exports) {
+  139: [function (require, module, exports) {
     'use strict';
 
     var matchOperatorsRe = /[|\\{}()[\]^$+*?.]/g;
@@ -9597,7 +17459,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return str.replace(matchOperatorsRe, '\\$&');
     };
   }, {}],
-  62: [function (require, module, exports) {
+  140: [function (require, module, exports) {
     (function webpackUniversalModuleDefinition(root, factory) {
       /* istanbul ignore next */
       if ((0, _typeof2["default"])(exports) === 'object' && (0, _typeof2["default"])(module) === 'object') module.exports = factory();else if (typeof define === 'function' && define.amd) define([], factory);
@@ -17133,7 +24995,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     ;
   }, {}],
-  63: [function (require, module, exports) {
+  141: [function (require, module, exports) {
     /* Jison generated parser */
     var jsonlint = function () {
       var parser = {
@@ -17906,7 +25768,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "path": undefined,
     "system": undefined
   }],
-  64: [function (require, module, exports) {
+  142: [function (require, module, exports) {
     var traverse = module.exports = function (obj) {
       return new Traverse(obj);
     };
@@ -18239,7 +26101,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return key in obj;
     };
   }, {}],
-  65: [function (require, module, exports) {
+  143: [function (require, module, exports) {
     (function (__filename, __dirname) {
       /*
       TODO:
@@ -18252,6 +26114,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       if (process.env.INF_ENABLE_TIMERS) {
         timers.load = Date.now();
+      }
+
+      if (process.env.INF_ENABLE_CONSOLE_TRACE) {
+        var traceModuleName = "debug-trace";
+
+        require(traceModuleName)({
+          always: true
+        });
       }
 
       var CONSOLE = {};
@@ -18354,83 +26224,74 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         if ( // If running after being browserified
         typeof require.main === "undefined" || // If running in NodeJS
         require.main === module) {
-          var main =
-          /*#__PURE__*/
-          function () {
-            var _ref4 = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee4() {
-              var cwd, args, filepath, inf;
-              return _regenerator["default"].wrap(function _callee4$(_context4) {
-                while (1) {
-                  switch (_context4.prev = _context4.next) {
-                    case 0:
-                      _context4.prev = 0;
-                      cwd = process.cwd();
-                      args = MINIMIST(process.argv.slice(2), {
-                        "boolean": [//'verbose',
-                        //'debug',
-                        'progress']
-                      });
+          var main = function main() {
+            var cwd, args, filepath, inf;
+            return _regenerator["default"].async(function main$(_context9) {
+              while (1) {
+                switch (_context9.prev = _context9.next) {
+                  case 0:
+                    _context9.prev = 0;
+                    cwd = process.cwd();
+                    args = MINIMIST(process.argv.slice(2), {
+                      "boolean": [//'verbose',
+                      //'debug',
+                      'progress']
+                    });
+                    args._original = process.argv.slice(2);
 
-                      if (args.debug && !process.env.INF_DEBUG) {
-                        process.env.INF_DEBUG = "1";
-                      }
+                    if (args.debug && !process.env.INF_DEBUG) {
+                      process.env.INF_DEBUG = "1";
+                    }
 
-                      if (args.cwd) {
-                        cwd = PATH.resolve(cwd, args.cwd);
-                        process.chdir(cwd);
-                      }
+                    if (args.cwd) {
+                      cwd = PATH.resolve(cwd, args.cwd);
+                      process.chdir(cwd);
+                    }
 
-                      filepath = args._.shift();
-                      exitContext = {
-                        cwd: cwd,
-                        filepath: filepath
-                      }; // TODO: Implement '--help'
+                    filepath = args._.shift();
+                    exitContext = {
+                      cwd: cwd,
+                      filepath: filepath
+                    }; // TODO: Implement '--help'
 
-                      inf = new INF(cwd, null, args);
+                    inf = new INF(cwd, null, args);
 
-                      if (process.env.INF_ENABLE_TIMERS) {
-                        timers.start = Date.now();
-                      }
+                    if (process.env.INF_ENABLE_TIMERS) {
+                      timers.start = Date.now();
+                    }
 
-                      if (!/^\{/.test(filepath)) {
-                        _context4.next = 14;
-                        break;
-                      }
-
-                      _context4.next = 12;
-                      return inf.runInstructions(filepath);
-
-                    case 12:
-                      _context4.next = 16;
+                    if (!/^\{/.test(filepath)) {
+                      _context9.next = 15;
                       break;
+                    }
 
-                    case 14:
-                      _context4.next = 16;
-                      return inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath)));
+                    _context9.next = 13;
+                    return _regenerator["default"].awrap(inf.runInstructions(filepath));
 
-                    case 16:
-                      _context4.next = 21;
-                      break;
+                  case 13:
+                    _context9.next = 17;
+                    break;
 
-                    case 18:
-                      _context4.prev = 18;
-                      _context4.t0 = _context4["catch"](0);
-                      exitWithError(_context4.t0);
+                  case 15:
+                    _context9.next = 17;
+                    return _regenerator["default"].awrap(inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath))));
 
-                    case 21:
-                    case "end":
-                      return _context4.stop();
-                  }
+                  case 17:
+                    _context9.next = 22;
+                    break;
+
+                  case 19:
+                    _context9.prev = 19;
+                    _context9.t0 = _context9["catch"](0);
+                    exitWithError(_context9.t0);
+
+                  case 22:
+                  case "end":
+                    return _context9.stop();
                 }
-              }, _callee4, null, [[0, 18]]);
-            }));
-
-            return function main() {
-              return _ref4.apply(this, arguments);
-            };
-          }();
+              }
+            }, null, null, [[0, 19]]);
+          };
 
           main();
         }
@@ -18452,183 +26313,173 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(INF, [{
           key: "runInstructionsFile",
-          value: function () {
-            var _runInstructionsFile = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee5(filepath) {
-              var self, path, exists, instructions;
-              return _regenerator["default"].wrap(function _callee5$(_context5) {
-                while (1) {
-                  switch (_context5.prev = _context5.next) {
-                    case 0:
-                      self = this;
+          value: function runInstructionsFile(filepath) {
+            var self, path, exists, instructions;
+            return _regenerator["default"].async(function runInstructionsFile$(_context10) {
+              while (1) {
+                switch (_context10.prev = _context10.next) {
+                  case 0:
+                    self = this;
 
-                      if (/~infi\.log$/.test(filepath)) {
-                        filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
-                      }
+                    if (/~infi\.log$/.test(filepath)) {
+                      filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
+                    }
 
-                      path = PATH.resolve(self.baseDir, filepath);
-                      _context5.next = 5;
-                      return FS.existsAsync(path);
+                    path = PATH.resolve(self.baseDir, filepath);
+                    _context10.next = 5;
+                    return _regenerator["default"].awrap(FS.existsAsync(path));
 
-                    case 5:
-                      exists = _context5.sent;
+                  case 5:
+                    exists = _context10.sent;
 
-                      if (exists) {
-                        _context5.next = 8;
-                        break;
-                      }
+                    if (exists) {
+                      _context10.next = 8;
+                      break;
+                    }
 
-                      throw new Error("[inf] File '" + path + "' not found!");
+                    throw new Error("[inf] File '" + path + "' not found!");
 
-                    case 8:
-                      log("Load file:", path);
-                      _context5.next = 11;
-                      return FS.readFileAsync(path, "utf8");
+                  case 8:
+                    log("Load file:", path);
+                    _context10.next = 11;
+                    return _regenerator["default"].awrap(FS.readFileAsync(path, "utf8"));
 
-                    case 11:
-                      instructions = _context5.sent;
-                      return _context5.abrupt("return", self.runInstructions(instructions, filepath));
+                  case 11:
+                    instructions = _context10.sent;
+                    return _context10.abrupt("return", self.runInstructions(instructions, filepath));
 
-                    case 13:
-                    case "end":
-                      return _context5.stop();
-                  }
+                  case 13:
+                  case "end":
+                    return _context10.stop();
                 }
-              }, _callee5, this);
-            }));
-
-            function runInstructionsFile(_x5) {
-              return _runInstructionsFile.apply(this, arguments);
-            }
-
-            return runInstructionsFile;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "runInstructions",
-          value: function () {
-            var _runInstructions = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee6(instructions, filepath, referringNamespace) {
-              var self, baseDir, instructionObjects;
-              return _regenerator["default"].wrap(function _callee6$(_context6) {
-                while (1) {
-                  switch (_context6.prev = _context6.next) {
-                    case 0:
-                      self = this;
+          value: function runInstructions(instructions, filepath, referringNamespace) {
+            var self, baseDir, instructionObjects;
+            return _regenerator["default"].async(function runInstructions$(_context11) {
+              while (1) {
+                switch (_context11.prev = _context11.next) {
+                  case 0:
+                    self = this;
 
-                      if (!filepath) {
-                        filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
-                      }
+                    if (!filepath) {
+                      filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
+                    }
 
-                      referringNamespace = referringNamespace || self.referringNamespace;
-                      filepath = PATH.resolve(self.baseDir, filepath);
-                      baseDir = PATH.dirname(filepath);
-                      filepath = PATH.basename(filepath);
-                      self.parser = new Parser(baseDir, filepath); // TODO: Instead of first populating 'instructionObjects' and then processing them we should
-                      //       process instruction objects as they come in. This will allow for faster processing of
-                      //       large instruction files.
+                    referringNamespace = referringNamespace || self.referringNamespace;
+                    filepath = PATH.resolve(self.baseDir, filepath);
+                    baseDir = PATH.dirname(filepath);
+                    filepath = PATH.basename(filepath);
+                    self.parser = new Parser(baseDir, filepath); // TODO: Instead of first populating 'instructionObjects' and then processing them we should
+                    //       process instruction objects as they come in. This will allow for faster processing of
+                    //       large instruction files.
 
-                      _context6.next = 9;
-                      return self.parser.parseInstructions(instructions);
+                    _context11.next = 9;
+                    return _regenerator["default"].awrap(self.parser.parseInstructions(instructions));
 
-                    case 9:
-                      instructionObjects = _context6.sent;
-                      self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
-                      self.processor = new Processor(self.namespace);
+                  case 9:
+                    instructionObjects = _context11.sent;
+                    self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
+                    self.processor = new Processor(self.namespace);
 
-                      if (filepath) {
-                        self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
+                    if (filepath) {
+                      self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
 
-                        if (referringNamespace) {
-                          referringNamespace.allPaths.push(PATH.resolve(baseDir, filepath));
-                        }
-                      }
-
-                      _context6.t0 = Promise;
-                      _context6.t1 = instructionObjects;
-                      _context6.next = 17;
-                      return function (instructionObject) {
-                        if (self.namespace.stopped) {
-                          return null;
-                        } // Replace variables
-
-
-                        instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
-                          if (/^\{.+\}$/.test(arguments[1])) {
-                            // Executable expression
-                            var args = self.options;
-                            return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
-                          } else {
-                            // Simple varibale reference
-                            return JSON.stringify(LODASH_GET({
-                              args: self.options
-                            }, arguments[1], ''));
-                          }
-                        });
-                        instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
-                          if (arguments[1] !== '%%') {
-                            return arguments[0];
-                          }
-
-                          if (/^\{.+\}$/.test(arguments[2])) {
-                            // Executable expression
-                            var args = self.options;
-                            return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
-                          } else {
-                            // Simple varibale reference
-                            return LODASH_GET({
-                              args: self.options
-                            }, arguments[2], '');
-                          }
-                        });
-                        instructionObject = instructionObject.split("\t");
-
-                        if (instructionObject.length === 1 && instructionObject[0] === '') {
-                          return;
-                        }
-
-                        return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
-                      };
-
-                    case 17:
-                      _context6.t2 = _context6.sent;
-                      _context6.next = 20;
-                      return _context6.t0.mapSeries.call(_context6.t0, _context6.t1, _context6.t2);
-
-                    case 20:
                       if (referringNamespace) {
-                        Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                          if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-                            referringNamespace.mappedNamespaceAliases[key] = self.namespace.mappedNamespaceAliases[key];
-                          }
-                        });
+                        self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
+                        self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
+                      }
+                    }
+
+                    _context11.t0 = _regenerator["default"];
+                    _context11.t1 = Promise;
+                    _context11.t2 = instructionObjects;
+                    _context11.next = 18;
+                    return _regenerator["default"].awrap(function (instructionObject) {
+                      if (self.namespace.stopped) {
+                        return null;
+                      } // Replace variables
+
+
+                      instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
+                        if (/^\{.+\}$/.test(arguments[1])) {
+                          // Executable expression
+                          var args = self.options;
+                          return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
+                        } else {
+                          // Simple varibale reference
+                          return JSON.stringify(LODASH_GET({
+                            args: self.options
+                          }, arguments[1], ''));
+                        }
+                      });
+                      instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
+                        if (arguments[1] !== '%%') {
+                          return arguments[0];
+                        }
+
+                        if (/^\{.+\}$/.test(arguments[2])) {
+                          // Executable expression
+                          var args = self.options;
+                          return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
+                        } else {
+                          // Simple varibale reference
+                          return LODASH_GET({
+                            args: self.options
+                          }, arguments[2], '');
+                        }
+                      });
+                      instructionObject = instructionObject.split("\t");
+
+                      if (instructionObject.length === 1 && instructionObject[0] === '') {
+                        return;
                       }
 
-                      if (!self.namespace.referringNamespace) {
-                        self.namespace.componentInitContext.emit("processed");
-                      }
+                      return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
+                    });
 
-                      if (filepath) {
-                        self.namespace.pathStack.pop();
-                      }
+                  case 18:
+                    _context11.t3 = _context11.sent;
+                    _context11.t4 = _context11.t1.mapSeries.call(_context11.t1, _context11.t2, _context11.t3);
+                    _context11.next = 22;
+                    return _context11.t0.awrap.call(_context11.t0, _context11.t4);
 
-                      return _context6.abrupt("return", self.namespace.apis);
+                  case 22:
+                    if (referringNamespace && self.namespace.options.mapNamespaceAliasesIntoParent !== false) {
+                      self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                      Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
+                        if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+                          self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+                            if (anchorPrefix) {
+                              return [PATH.join(anchorPrefix.toString(), key), self.namespace.mappedNamespaceAliases[key]];
+                            }
 
-                    case 24:
-                    case "end":
-                      return _context6.stop();
-                  }
+                            return [key, self.namespace.mappedNamespaceAliases[key]];
+                          });
+                        }
+                      });
+                    }
+
+                    if (!self.namespace.referringNamespace) {
+                      self.namespace.componentInitContext.emit("processed");
+                    }
+
+                    if (filepath) {
+                      self.namespace.pathStack.pop();
+                    }
+
+                    return _context11.abrupt("return", self.namespace.apis);
+
+                  case 26:
+                  case "end":
+                    return _context11.stop();
                 }
-              }, _callee6, this);
-            }));
-
-            function runInstructions(_x6, _x7, _x8) {
-              return _runInstructions.apply(this, arguments);
-            }
-
-            return runInstructions;
-          }()
+              }
+            }, null, this);
+          }
         }]);
         return INF;
       }();
@@ -18650,248 +26501,253 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Parser, [{
           key: "parseInstructions",
-          value: function () {
-            var _parseInstructions = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee7(instructions) {
-              var self, sourceExists, infiExists, PARSER_EVENT_DEBUG, instructionObjects;
-              return _regenerator["default"].wrap(function _callee7$(_context7) {
-                while (1) {
-                  switch (_context7.prev = _context7.next) {
-                    case 0:
-                      self = this;
-                      _context7.t0 = self.filepath;
+          value: function parseInstructions(instructions) {
+            var self, sourceExists, infiExists, PARSER_EVENT_DEBUG, instructionObjects;
+            return _regenerator["default"].async(function parseInstructions$(_context12) {
+              while (1) {
+                switch (_context12.prev = _context12.next) {
+                  case 0:
+                    self = this;
+                    _context12.t0 = self.filepath;
 
-                      if (!_context7.t0) {
-                        _context7.next = 6;
-                        break;
+                    if (!_context12.t0) {
+                      _context12.next = 6;
+                      break;
+                    }
+
+                    _context12.next = 5;
+                    return _regenerator["default"].awrap(FS.existsAsync(PATH.join(self.baseDir, self.filepath)));
+
+                  case 5:
+                    _context12.t0 = _context12.sent;
+
+                  case 6:
+                    sourceExists = _context12.t0;
+                    _context12.t1 = self.infiFilepath;
+
+                    if (!_context12.t1) {
+                      _context12.next = 12;
+                      break;
+                    }
+
+                    _context12.next = 11;
+                    return _regenerator["default"].awrap(FS.existsAsync(PATH.join(self.baseDir, self.infiFilepath)));
+
+                  case 11:
+                    _context12.t1 = _context12.sent;
+
+                  case 12:
+                    infiExists = _context12.t1;
+
+                    if (!infiExists) {
+                      _context12.next = 28;
+                      break;
+                    }
+
+                    if (sourceExists) {
+                      _context12.next = 18;
+                      break;
+                    }
+
+                    _context12.next = 17;
+                    return _regenerator["default"].awrap(FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8"));
+
+                  case 17:
+                    return _context12.abrupt("return", _context12.sent.split("\n"));
+
+                  case 18:
+                    _context12.next = 20;
+                    return _regenerator["default"].awrap(FS.statAsync(PATH.join(self.baseDir, self.infiFilepath)));
+
+                  case 20:
+                    _context12.t2 = _context12.sent.mtime;
+                    _context12.next = 23;
+                    return _regenerator["default"].awrap(FS.statAsync(PATH.join(self.baseDir, self.filepath)));
+
+                  case 23:
+                    _context12.t3 = _context12.sent.mtime;
+
+                    if (!(_context12.t2 >= _context12.t3)) {
+                      _context12.next = 28;
+                      break;
+                    }
+
+                    _context12.next = 27;
+                    return _regenerator["default"].awrap(FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8"));
+
+                  case 27:
+                    return _context12.abrupt("return", _context12.sent.split("\n"));
+
+                  case 28:
+                    PARSER_EVENT_DEBUG = false; // Strip shebang
+
+                    instructions = instructions.replace(/^#!.+\n/, ""); // Normalize codeblocks
+
+                    instructions = CODEBLOCK.purifyCode(instructions, {
+                      freezeToJSON: true
+                    }).toString();
+                    if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions(instructions)", instructions);
+                    instructionObjects = []; // Parse JSON using SAX parser which allows for repeated keys.
+
+                    _context12.next = 35;
+                    return _regenerator["default"].awrap(new Promise(function (resolve, reject) {
+                      function onInstructionObject(obj) {
+                        if (Object.keys(obj).length > 0) {
+                          instructionObjects.push(obj);
+                        }
                       }
 
-                      _context7.next = 5;
-                      return FS.existsAsync(PATH.join(self.baseDir, self.filepath));
+                      var parser = CLARINET.parser();
 
-                    case 5:
-                      _context7.t0 = _context7.sent;
+                      parser.onerror = function (err) {
+                        CONSOLE.error("err", err);
+                        CONSOLE.error("self.baseDir", self.baseDir);
+                        CONSOLE.error("filepath", self.filepath);
+                        CONSOLE.error("instructions", instructions);
+                        reject(new Error("Error parsing instructions!"));
+                      };
 
-                    case 6:
-                      sourceExists = _context7.t0;
-                      _context7.t1 = self.infiFilepath;
+                      var rootObj = null;
+                      var currentObject = null;
+                      var currentKey = null;
+                      var previousKeyStack = [];
+                      var previousObjectStack = [];
 
-                      if (!_context7.t1) {
-                        _context7.next = 12;
-                        break;
-                      }
+                      parser.onopenobject = function (key) {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
 
-                      _context7.next = 11;
-                      return FS.existsAsync(PATH.join(self.baseDir, self.infiFilepath));
+                        if (this.depth === 0) {
+                          currentObject = rootObj = {
+                            ___meta: {
+                              line: this.line,
+                              column: this.column,
+                              pos: this.position
+                            }
+                          };
+                        } else {
+                          previousObjectStack.push(currentObject);
 
-                    case 11:
-                      _context7.t1 = _context7.sent;
-
-                    case 12:
-                      infiExists = _context7.t1;
-
-                      if (!infiExists) {
-                        _context7.next = 28;
-                        break;
-                      }
-
-                      if (sourceExists) {
-                        _context7.next = 18;
-                        break;
-                      }
-
-                      _context7.next = 17;
-                      return FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8");
-
-                    case 17:
-                      return _context7.abrupt("return", _context7.sent.split("\n"));
-
-                    case 18:
-                      _context7.next = 20;
-                      return FS.statAsync(PATH.join(self.baseDir, self.infiFilepath));
-
-                    case 20:
-                      _context7.t2 = _context7.sent.mtime;
-                      _context7.next = 23;
-                      return FS.statAsync(PATH.join(self.baseDir, self.filepath));
-
-                    case 23:
-                      _context7.t3 = _context7.sent.mtime;
-
-                      if (!(_context7.t2 >= _context7.t3)) {
-                        _context7.next = 28;
-                        break;
-                      }
-
-                      _context7.next = 27;
-                      return FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8");
-
-                    case 27:
-                      return _context7.abrupt("return", _context7.sent.split("\n"));
-
-                    case 28:
-                      PARSER_EVENT_DEBUG = false; // Strip shebang
-
-                      instructions = instructions.replace(/^#!.+\n/, ""); // Normalize codeblocks
-
-                      instructions = CODEBLOCK.purifyCode(instructions, {
-                        freezeToJSON: true
-                      }).toString();
-                      if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions(instructions)", instructions);
-                      instructionObjects = []; // Parse JSON using SAX parser which allows for repeated keys.
-
-                      _context7.next = 35;
-                      return new Promise(function (resolve, reject) {
-                        function onInstructionObject(obj) {
-                          if (Object.keys(obj).length > 0) {
-                            instructionObjects.push(obj);
+                          if (Array.isArray(currentObject)) {
+                            var obj = {};
+                            obj[key] = {};
+                            currentObject.push(obj);
+                            currentObject = obj;
+                          } else {
+                            currentObject = currentObject[currentKey] = {};
                           }
+
+                          previousKeyStack.push(currentKey);
                         }
 
-                        var parser = CLARINET.parser();
+                        currentKey = key;
+                      };
 
-                        parser.onerror = function (err) {
-                          CONSOLE.error("err", err);
-                          CONSOLE.error("self.baseDir", self.baseDir);
-                          CONSOLE.error("filepath", self.filepath);
-                          CONSOLE.error("instructions", instructions);
-                          reject(new Error("Error parsing instructions!"));
-                        };
+                      parser.onvalue = function (value) {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onvalue", value);
 
-                        var rootObj = null;
-                        var currentObject = null;
-                        var currentKey = null;
-                        var previousKeyStack = [];
-                        var previousObjectStack = [];
+                        if (currentKey === null) {
+                          currentObject.push(value);
+                        } else {
+                          currentObject[currentKey] = value;
+                        }
+                      };
 
-                        parser.onopenobject = function (key) {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
+                      parser.onkey = function (key) {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
 
-                          if (this.depth === 0) {
-                            currentObject = rootObj = {
-                              ___meta: {
-                                line: this.line,
-                                column: this.column,
-                                pos: this.position
-                              }
-                            };
-                          } else {
-                            previousObjectStack.push(currentObject);
-
-                            if (Array.isArray(currentObject)) {
-                              var obj = {};
-                              obj[key] = {};
-                              currentObject.push(obj);
-                              currentObject = obj;
-                            } else {
-                              currentObject = currentObject[currentKey] = {};
+                        if (this.depth === 1) {
+                          onInstructionObject(rootObj);
+                          currentObject = rootObj = {
+                            ___meta: {
+                              line: this.line,
+                              column: this.column,
+                              pos: this.position
                             }
+                          };
+                        }
 
-                            previousKeyStack.push(currentKey);
-                          }
+                        currentKey = key;
+                      };
 
-                          currentKey = key;
-                        };
+                      parser.oncloseobject = function () {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:oncloseobject");
 
-                        parser.onvalue = function (value) {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onvalue", value);
-
-                          if (currentKey === null) {
-                            currentObject.push(value);
-                          } else {
-                            currentObject[currentKey] = value;
-                          }
-                        };
-
-                        parser.onkey = function (key) {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
-
-                          if (this.depth === 1) {
-                            onInstructionObject(rootObj);
-                            currentObject = rootObj = {
-                              ___meta: {
-                                line: this.line,
-                                column: this.column,
-                                pos: this.position
-                              }
-                            };
-                          }
-
-                          currentKey = key;
-                        };
-
-                        parser.oncloseobject = function () {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:oncloseobject");
-
-                          if (this.depth === 1) {
-                            onInstructionObject(rootObj);
-                          } else {
-                            currentKey = previousKeyStack.pop();
-                            currentObject = previousObjectStack.pop();
-                          }
-                        };
-
-                        parser.onopenarray = function () {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenarray");
-                          previousObjectStack.push(currentObject);
-                          currentObject = currentObject[currentKey] = [];
-                          previousKeyStack.push(currentKey);
-                          currentKey = null;
-                        };
-
-                        parser.onclosearray = function () {
-                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onclosearray");
+                        if (this.depth === 1) {
+                          onInstructionObject(rootObj);
+                        } else {
                           currentKey = previousKeyStack.pop();
                           currentObject = previousObjectStack.pop();
-                        };
-
-                        parser.onend = resolve;
-                        parser.write(instructions).close();
-                      });
-
-                    case 35:
-                      instructionObjects = instructionObjects.map(function (instructionObject) {
-                        if (Object.keys(instructionObject).length === 1 && typeof instructionObject.___meta !== "undefined") {
-                          return null;
                         }
+                      };
 
-                        var meta = instructionObject.___meta || null;
-                        delete instructionObject.___meta;
-                        var key = Object.keys(instructionObject)[0];
-                        return [key, JSON.stringify(instructionObject[key]), JSON.stringify(meta)].join("\t");
-                      }).filter(function (line) {
-                        return line !== null;
-                      });
+                      parser.onopenarray = function () {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenarray");
+                        previousObjectStack.push(currentObject);
+                        currentObject = currentObject[currentKey] = [];
+                        previousKeyStack.push(currentKey);
+                        currentKey = null;
+                      };
 
-                      if (!self.infiFilepath) {
-                        _context7.next = 39;
-                        break;
+                      parser.onclosearray = function () {
+                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onclosearray");
+                        currentKey = previousKeyStack.pop();
+                        currentObject = previousObjectStack.pop();
+                      };
+
+                      parser.onend = resolve;
+                      parser.write(instructions).close();
+                    }));
+
+                  case 35:
+                    instructionObjects = instructionObjects.map(function (instructionObject) {
+                      if (Object.keys(instructionObject).length === 1 && typeof instructionObject.___meta !== "undefined") {
+                        return null;
                       }
 
-                      _context7.next = 39;
-                      return FS.writeFileAsync(PATH.join(self.baseDir, self.infiFilepath), instructionObjects.join("\n"));
+                      var meta = instructionObject.___meta || null;
+                      delete instructionObject.___meta;
+                      var key = Object.keys(instructionObject)[0];
+                      return [key, JSON.stringify(instructionObject[key]), JSON.stringify(meta)].join("\t");
+                    }).filter(function (line) {
+                      return line !== null;
+                    });
 
-                    case 39:
-                      return _context7.abrupt("return", instructionObjects);
+                    if (!self.infiFilepath) {
+                      _context12.next = 39;
+                      break;
+                    }
 
-                    case 40:
-                    case "end":
-                      return _context7.stop();
-                  }
+                    _context12.next = 39;
+                    return _regenerator["default"].awrap(FS.writeFileAsync(PATH.join(self.baseDir, self.infiFilepath), instructionObjects.join("\n")));
+
+                  case 39:
+                    return _context12.abrupt("return", instructionObjects);
+
+                  case 40:
+                  case "end":
+                    return _context12.stop();
                 }
-              }, _callee7, this);
-            }));
-
-            function parseInstructions(_x9) {
-              return _parseInstructions.apply(this, arguments);
-            }
-
-            return parseInstructions;
-          }()
+              }
+            }, null, this);
+          }
         }]);
         return Parser;
-      }();
+      }(); // @source https://stackoverflow.com/a/40577337/330439
+
+
+      function getAllMethodNames(obj) {
+        var methods = new Set();
+
+        while (obj) {
+          var keys = Reflect.ownKeys(obj);
+          keys.forEach(function (k) {
+            return methods.add(k);
+          });
+          obj = Reflect.getPrototypeOf(obj);
+        }
+
+        return methods;
+      }
 
       var Component =
       /*#__PURE__*/
@@ -18904,314 +26760,390 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Component, [{
           key: "init",
-          value: function () {
-            var _init = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee12(namespace, options) {
-              var self, mod, instances;
-              return _regenerator["default"].wrap(function _callee12$(_context12) {
-                while (1) {
-                  switch (_context12.prev = _context12.next) {
-                    case 0:
-                      self = this;
-                      options = options || {}; // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
-                      // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
-                      //       based on the FIRST namespace and never changes.
+          value: function init(namespace, options) {
+            var self, mod, instances;
+            return _regenerator["default"].async(function init$(_context18) {
+              while (1) {
+                switch (_context18.prev = _context18.next) {
+                  case 0:
+                    self = this;
+                    options = options || {}; // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
+                    // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
+                    //       based on the FIRST namespace and never changes.
 
-                      self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
-                      mod = options.exports || null;
+                    self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
+                    mod = options.exports || null;
 
-                      if (!mod) {
-                        // Check if module contains a codeblock as we need to purify it first before it can be required.
-                        if (/>>>/.test(FS.readFileSync(self.path, "utf8"))) {
-                          mod = CODEBLOCK_REQUIRE(self.path);
-                        } else {
-                          mod = require(self.path);
-                        }
+                    if (!mod) {
+                      // Check if module contains a codeblock as we need to purify it first before it can be required.
+                      if (/>>>/.test(FS.readFileSync(self.path, "utf8"))) {
+                        mod = CODEBLOCK_REQUIRE(self.path);
+                      } else {
+                        mod = require(self.path);
                       }
 
-                      if (!(typeof mod.inf !== "function")) {
-                        _context12.next = 7;
-                        break;
+                      mod.INF = exports;
+                    }
+
+                    instances = {};
+
+                    self.getComponentAliases = function () {
+                      return Object.keys(instances.component || {});
+                    };
+
+                    self.getInstance = function (type, alias) {
+                      if (!instances[type][alias]) {
+                        console.error("instances", instances);
+                        throw new Error("Instance for type '".concat(type, "' and alias '").concat(alias, "' not initialized!"));
                       }
 
-                      throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
+                      return instances[type][alias];
+                    };
 
-                    case 7:
-                      instances = {};
+                    self.forAlias = function _callee9(type, alias, namespace, resolvedNamespace) {
+                      var makeMethodWrapper, plugins, componentInitContext, pluginOverrides, pluginInstance, instance, adapterId, adapter;
+                      return _regenerator["default"].async(function _callee9$(_context17) {
+                        while (1) {
+                          switch (_context17.prev = _context17.next) {
+                            case 0:
+                              if (namespace) {
+                                _context17.next = 2;
+                                break;
+                              }
 
-                      self.getComponentAliases = function () {
-                        return Object.keys(instances.component || {});
-                      };
+                              throw new Error("'namespace' not set!");
 
-                      self.forAlias =
-                      /*#__PURE__*/
-                      function () {
-                        var _ref5 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee11(type, alias, namespace) {
-                          var makeMethodWrapper, plugins, componentInitContext, pluginOverrides, pluginInstance, instance;
-                          return _regenerator["default"].wrap(function _callee11$(_context11) {
-                            while (1) {
-                              switch (_context11.prev = _context11.next) {
-                                case 0:
-                                  if (namespace) {
-                                    _context11.next = 2;
-                                    break;
-                                  }
+                            case 2:
+                              if (!instances[type]) {
+                                instances[type] = {};
+                              }
 
-                                  throw new Error("'namespace' not set!");
+                              if (instances[type][alias]) {
+                                _context17.next = 36;
+                                break;
+                              }
 
-                                case 2:
-                                  if (!instances[type]) {
-                                    instances[type] = {};
-                                  }
+                              makeMethodWrapper = function makeMethodWrapper(type, method) {
+                                return function _callee8(arg1, arg2, options) {
+                                  var self, methods, args1_parts, value, args, _result, result;
 
-                                  if (instances[type][alias]) {
-                                    _context11.next = 22;
-                                    break;
-                                  }
+                                  return _regenerator["default"].async(function _callee8$(_context16) {
+                                    while (1) {
+                                      switch (_context16.prev = _context16.next) {
+                                        case 0:
+                                          self = this;
+                                          options = options || {};
 
-                                  makeMethodWrapper = function makeMethodWrapper(type, method) {
-                                    return function (arg1, arg2) {
-                                      var self = this; // See if there is a component method instead of using generic 'invoke'.
+                                          if (self) {
+                                            self.getAPI = function (prefix) {
+                                              return namespace.apis;
+                                              ;
+                                            };
+                                          }
 
-                                      if (method === "invoke" && /^[a-zA-z0-9_]+\(\)/.test(arg1) && typeof pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")] === "function") {
-                                        var args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
+                                          methods = getAllMethodNames(pluginInstance.impl); // See if there is a component method instead of using generic 'invoke'.
 
-                                        if (args1_parts[2]) {
-                                          log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with arguments:"), args1_parts[2], (0, _typeof2["default"])(arg2.value));
-                                        } else {
-                                          log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with argument:"), (0, _typeof2["default"])(arg2.value));
-                                        }
+                                          if (!(method === "invoke" && /^[a-zA-z0-9_]+\(\)/.test(arg1) && methods.has(arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")))) {
+                                            _context16.next = 14;
+                                            break;
+                                          }
 
-                                        var value = arg2.value; // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
+                                          args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
 
-                                        if (arg2.wrapped) {
-                                          value =
-                                          /*#__PURE__*/
-                                          function () {
-                                            var _ref8 = (0, _asyncToGenerator2["default"])(
-                                            /*#__PURE__*/
-                                            _regenerator["default"].mark(function _callee10() {
+                                          if (args1_parts[2]) {
+                                            log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with arguments:"), args1_parts[2], (0, _typeof2["default"])(arg2.value));
+                                          } else {
+                                            log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with argument:"), (0, _typeof2["default"])(arg2.value));
+                                          }
+
+                                          value = arg2.value; // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
+
+                                          if (arg2.wrapped) {
+                                            value = function value() {
                                               var result,
-                                                  _args10 = arguments;
-                                              return _regenerator["default"].wrap(function _callee10$(_context10) {
+                                                  _args15 = arguments;
+                                              return _regenerator["default"].async(function value$(_context15) {
                                                 while (1) {
-                                                  switch (_context10.prev = _context10.next) {
+                                                  switch (_context15.prev = _context15.next) {
                                                     case 0:
-                                                      _context10.next = 2;
-                                                      return arg2.value.apply(this, _args10);
+                                                      _context15.next = 2;
+                                                      return _regenerator["default"].awrap(arg2.value.apply(this, _args15));
 
                                                     case 2:
-                                                      result = _context10.sent;
-                                                      return _context10.abrupt("return", result.value);
+                                                      result = _context15.sent;
+                                                      return _context15.abrupt("return", result.value);
 
                                                     case 4:
                                                     case "end":
-                                                      return _context10.stop();
+                                                      return _context15.stop();
                                                   }
                                                 }
-                                              }, _callee10, this);
-                                            }));
-
-                                            return function value() {
-                                              return _ref8.apply(this, arguments);
+                                              }, null, this);
                                             };
-                                          }();
-                                        }
+                                          }
 
-                                        var args = [value];
+                                          args = [value];
 
-                                        if (args1_parts[2]) {
-                                          args.unshift(args1_parts[2]);
-                                        } // NOTE: We only pass in the value (not the wrapper).
-                                        // TODO: Optionally pass in the wrapper?
+                                          if (args1_parts[2]) {
+                                            args.unshift(args1_parts[2]);
+                                          }
 
+                                          pluginInstance.impl._infComponent = self; // NOTE: We only pass in the value (not the wrapper).
+                                          // TODO: Optionally pass in the wrapper?
 
-                                        var _result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(self, args); // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
-                                        //       'invoke()' in contrast must always return something to ensure the invocation was handled.
+                                          _result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(pluginInstance.impl, args); // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
+                                          //       'invoke()' in contrast must always return something to ensure the invocation was handled.
 
+                                          return _context16.abrupt("return", _result);
 
-                                        return _result;
-                                      }
+                                        case 14:
+                                          log("Calling method '".concat(method, "' in component '").concat(pluginInstance.path, "' with args:"), arg1, (0, _typeof2["default"])(arg2));
 
-                                      log("Calling method '".concat(method, "' in component '").concat(pluginInstance.path, "' with args:"), arg1, (0, _typeof2["default"])(arg2));
+                                          if (methods.has(method)) {
+                                            _context16.next = 20;
+                                            break;
+                                          }
 
-                                      if (!pluginInstance.impl[method]) {
-                                        if (method === "invoke") {
+                                          if (!(method === "invoke")) {
+                                            _context16.next = 19;
+                                            break;
+                                          }
+
                                           console.error("pointer", arg1);
                                           throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(pointer, value)'!"));
-                                        }
 
-                                        throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(alias, node)'!"));
-                                      }
+                                        case 19:
+                                          throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(alias, node)'!"));
 
-                                      var result = pluginInstance.impl[method].call(self, arg1, arg2);
+                                        case 20:
+                                          pluginInstance.impl._infComponent = self;
+                                          _context16.next = 23;
+                                          return _regenerator["default"].awrap(pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2, options));
 
-                                      function checkResult(result) {
-                                        if (typeof result === "undefined") {
-                                          if (type === "invoke") {
-                                            badInvocation(arg1, arg2, self);
-                                          } else {
-                                            noFactory(method, arg1, arg2, self);
+                                        case 23:
+                                          result = _context16.sent;
+
+                                          if (typeof result === "undefined") {
+                                            if (type === "invoke") {
+                                              badInvocation(arg1, arg2, self);
+                                            } else {
+                                              noFactory(method, arg1, arg2, self);
+                                            }
                                           }
-
-                                          return false;
-                                        }
-
-                                        return true;
-                                      }
-
-                                      if (checkResult(result)) {
-                                        // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
-                                        if ((0, _typeof2["default"])(result) === "object" && typeof result.then === 'function') {
-                                          result.then(checkResult)["catch"](exitWithError);
-                                        }
-                                      }
-
-                                      return result;
-                                    };
-                                  };
-
-                                  plugins = namespace.getPluginsForAlias(alias);
-                                  componentInitContext = Object.create(namespace.componentInitContext);
-                                  pluginOverrides = [];
-                                  plugins.forEach(function (plugin) {
-                                    if (plugin.impl.ComponentInitContext && plugin.impl.ComponentInitContext.constructor) {
-                                      plugin.impl.ComponentInitContext.constructor.call(componentInitContext, namespace);
-                                    }
-                                  });
-                                  pluginInstance = Object.create(self);
-                                  componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
-                                  instance = pluginInstance;
-                                  _context11.next = 14;
-                                  return Promise.mapSeries(plugins,
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref6 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee9(plugin) {
-                                      var impl;
-                                      return _regenerator["default"].wrap(function _callee9$(_context9) {
-                                        while (1) {
-                                          switch (_context9.prev = _context9.next) {
-                                            case 0:
-                                              if (!plugin.impl.inf) {
-                                                _context9.next = 5;
-                                                break;
-                                              }
-
-                                              _context9.next = 3;
-                                              return plugin.impl.inf(componentInitContext, alias);
-
-                                            case 3:
-                                              impl = _context9.sent;
-
-                                              if (impl.Component) {
-                                                Object.keys(impl.Component).forEach(function (functionName) {
-                                                  var origInstance = instance;
-                                                  instance = Object.create(origInstance);
-
-                                                  if (/^async /.test(impl.Component[functionName].toString())) {
-                                                    instance[functionName] =
-                                                    /*#__PURE__*/
-                                                    (0, _asyncToGenerator2["default"])(
-                                                    /*#__PURE__*/
-                                                    _regenerator["default"].mark(function _callee8() {
-                                                      var _args8 = arguments;
-                                                      return _regenerator["default"].wrap(function _callee8$(_context8) {
-                                                        while (1) {
-                                                          switch (_context8.prev = _context8.next) {
-                                                            case 0:
-                                                              return _context8.abrupt("return", impl.Component[functionName].apply(origInstance, _args8));
-
-                                                            case 1:
-                                                            case "end":
-                                                              return _context8.stop();
-                                                          }
-                                                        }
-                                                      }, _callee8);
-                                                    }));
+                                          /*
+                                          function checkResult (result) {
+                                              if (typeof result === "undefined") {
+                                                  if (type === "invoke") {
+                                                      badInvocation(arg1, arg2, self);
                                                   } else {
-                                                    instance[functionName] = function () {
-                                                      return impl.Component[functionName].apply(origInstance, arguments);
-                                                    };
+                                                      noFactory(method, arg1, arg2, self);
+                                                  }
+                                                  return false;
+                                              }
+                                              return true;
+                                          }
+                                           if (checkResult(result)) {
+                                              // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
+                                              if (
+                                                  typeof result === "object" &&
+                                                  typeof result.then === 'function'
+                                              ) {
+                                                  result.then(checkResult).catch(exitWithError);
+                                              }
+                                          }
+                                          */
+
+
+                                          return _context16.abrupt("return", result);
+
+                                        case 26:
+                                        case "end":
+                                          return _context16.stop();
+                                      }
+                                    }
+                                  }, null, this);
+                                };
+                              };
+
+                              plugins = namespace.getPluginsForAlias(alias);
+                              componentInitContext = Object.create(namespace.componentInitContext);
+                              pluginOverrides = [];
+                              plugins.forEach(function (plugin) {
+                                if (plugin.impl.ComponentInitContext && plugin.impl.ComponentInitContext.constructor) {
+                                  plugin.impl.ComponentInitContext.constructor.call(componentInitContext, namespace);
+                                }
+                              });
+                              pluginInstance = Object.create(self);
+                              componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
+                              instance = pluginInstance;
+                              _context17.next = 14;
+                              return _regenerator["default"].awrap(Promise.mapSeries(plugins, function _callee7(plugin) {
+                                var impl;
+                                return _regenerator["default"].async(function _callee7$(_context14) {
+                                  while (1) {
+                                    switch (_context14.prev = _context14.next) {
+                                      case 0:
+                                        if (!plugin.impl.inf) {
+                                          _context14.next = 5;
+                                          break;
+                                        }
+
+                                        _context14.next = 3;
+                                        return _regenerator["default"].awrap(plugin.impl.inf(componentInitContext, alias));
+
+                                      case 3:
+                                        impl = _context14.sent;
+
+                                        if (impl.Component) {
+                                          Object.keys(impl.Component).forEach(function (functionName) {
+                                            var origInstance = instance;
+                                            instance = Object.create(origInstance);
+
+                                            if (/^async /.test(impl.Component[functionName].toString())) {
+                                              instance[functionName] = function _callee6() {
+                                                var _args13 = arguments;
+                                                return _regenerator["default"].async(function _callee6$(_context13) {
+                                                  while (1) {
+                                                    switch (_context13.prev = _context13.next) {
+                                                      case 0:
+                                                        return _context13.abrupt("return", impl.Component[functionName].apply(origInstance, _args13));
+
+                                                      case 1:
+                                                      case "end":
+                                                        return _context13.stop();
+                                                    }
                                                   }
                                                 });
-                                              }
-
-                                            case 5:
-                                            case "end":
-                                              return _context9.stop();
-                                          }
+                                              };
+                                            } else {
+                                              instance[functionName] = function () {
+                                                return impl.Component[functionName].apply(origInstance, arguments);
+                                              };
+                                            }
+                                          });
                                         }
-                                      }, _callee9);
-                                    }));
 
-                                    return function (_x15) {
-                                      return _ref6.apply(this, arguments);
-                                    };
-                                  }());
-
-                                case 14:
-                                  instances[type][alias] = instance;
-                                  pluginInstance.alias = alias;
-                                  _context11.next = 18;
-                                  return mod.inf(componentInitContext, alias);
-
-                                case 18:
-                                  pluginInstance.impl = _context11.sent;
-                                  ["invoke", "interface", "contract"].forEach(function (method) {
-                                    if (typeof pluginInstance.impl[method] === "function") {
-                                      pluginInstance[method] = makeMethodWrapper(method === "invoke" ? "invoke" : "factory", method);
+                                      case 5:
+                                      case "end":
+                                        return _context14.stop();
                                     }
-                                  });
-
-                                  if (type === "component" && !pluginInstance.invoke) {
-                                    pluginInstance.invoke = makeMethodWrapper("invoke", "invoke");
                                   }
+                                });
+                              }));
 
-                                  pluginInstance.invokeContractAliasMethod = function (method, args) {
-                                    var wrapper = makeMethodWrapper("invoke", method);
-                                    return wrapper.apply(this, args);
-                                  };
+                            case 14:
+                              instances[type][alias] = instance; //console.error("init", type, alias, namespace.baseDir);
 
-                                case 22:
-                                  return _context11.abrupt("return", instances[type][alias]);
+                              pluginInstance.resolvedNamespace = resolvedNamespace;
+                              pluginInstance.alias = alias;
 
-                                case 23:
-                                case "end":
-                                  return _context11.stop();
+                              if (!namespace.options.implementationAdapters) {
+                                _context17.next = 27;
+                                break;
                               }
-                            }
-                          }, _callee11);
-                        }));
 
-                        return function (_x12, _x13, _x14) {
-                          return _ref5.apply(this, arguments);
-                        };
-                      }();
+                              adapterId = null;
+                              Object.keys(mod).forEach(function (_adapterId) {
+                                if (adapterId) return;
 
-                    case 10:
-                    case "end":
-                      return _context12.stop();
-                  }
+                                if (namespace.options.implementationAdapters[_adapterId]) {
+                                  adapterId = _adapterId;
+                                }
+                              });
+
+                              if (!adapterId) {
+                                _context17.next = 27;
+                                break;
+                              }
+
+                              _context17.next = 23;
+                              return _regenerator["default"].awrap(namespace.getImplementationAdapterForId(adapterId));
+
+                            case 23:
+                              adapter = _context17.sent;
+                              _context17.next = 26;
+                              return _regenerator["default"].awrap(adapter.forInstance(namespace, mod[adapterId], {
+                                pluginInstance: pluginInstance,
+                                componentInitContext: componentInitContext,
+                                alias: alias
+                              }));
+
+                            case 26:
+                              pluginInstance.impl = _context17.sent;
+
+                            case 27:
+                              if (pluginInstance.impl) {
+                                _context17.next = 33;
+                                break;
+                              }
+
+                              if (!(typeof mod.inf !== "function")) {
+                                _context17.next = 30;
+                                break;
+                              }
+
+                              throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
+
+                            case 30:
+                              _context17.next = 32;
+                              return _regenerator["default"].awrap(mod.inf(componentInitContext, alias));
+
+                            case 32:
+                              pluginInstance.impl = _context17.sent;
+
+                            case 33:
+                              ["invoke", "interface", "contract"].forEach(function (method) {
+                                if (typeof pluginInstance.impl[method] === "function") {
+                                  pluginInstance[method] = makeMethodWrapper(method === "invoke" ? "invoke" : "factory", method);
+                                }
+                              });
+
+                              if (type === "component" && !pluginInstance.invoke) {
+                                pluginInstance.invoke = makeMethodWrapper("invoke", "invoke");
+                              }
+
+                              pluginInstance.invokeContractAliasMethod = function (method, args) {
+                                var wrapper = makeMethodWrapper("invoke", method);
+                                return wrapper.apply(this, args);
+                              };
+                              /*
+                              pluginInstance.getNamespaceMount = function () {
+                                  if (!this._callerNamespace) {
+                                      return null;
+                                  }
+                                  return this._callerNamespace.anchorPrefix || null;
+                              }
+                              pluginInstance.getAPI = function (prefix) {
+                                  return self._apis;
+                              }
+                              */
+
+
+                            case 36:
+                              return _context17.abrupt("return", instances[type][alias]);
+
+                            case 37:
+                            case "end":
+                              return _context17.stop();
+                          }
+                        }
+                      });
+                    };
+
+                  case 9:
+                  case "end":
+                    return _context18.stop();
                 }
-              }, _callee12, this);
-            }));
-
-            function init(_x10, _x11) {
-              return _init.apply(this, arguments);
-            }
-
-            return init;
-          }()
+              }
+            }, null, this);
+          }
         }]);
         return Component;
       }();
 
       var LIB = {
+        CONSOLE: CONSOLE,
+        EventEmitter: EventEmitter,
         Promise: Promise,
         ASSERT: ASSERT,
         PATH: PATH,
@@ -19222,7 +27154,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         CRYPTO: CRYPTO,
         INF: exports,
         MEMORYSTREAM: MEMORYSTREAM,
-        RESOLVE: RESOLVE
+        RESOLVE: RESOLVE,
+        MINIMIST: MINIMIST,
+        LIB_JSON: LIB_JSON
       };
 
       LIB.Promise.defer = function () {
@@ -19297,280 +27231,241 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
       exports.LIB = LIB;
 
-      function runCodeblock(_x16, _x17, _x18) {
-        return _runCodeblock.apply(this, arguments);
-      }
+      function runCodeblock(namespace, value, vars) {
+        var codeblock, code, RUNBASH, result, run, _code2;
 
-      function _runCodeblock() {
-        _runCodeblock = (0, _asyncToGenerator2["default"])(
-        /*#__PURE__*/
-        _regenerator["default"].mark(function _callee52(namespace, value, vars) {
-          var codeblock, code, RUNBASH, result, run, _code2;
+        return _regenerator["default"].async(function runCodeblock$(_context22) {
+          while (1) {
+            switch (_context22.prev = _context22.next) {
+              case 0:
+                vars = vars || {};
 
-          return _regenerator["default"].wrap(function _callee52$(_context52) {
-            while (1) {
-              switch (_context52.prev = _context52.next) {
-                case 0:
-                  vars = vars || {};
+                if (!(value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock')) {
+                  _context22.next = 3;
+                  break;
+                }
 
-                  if (!(value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock')) {
-                    _context52.next = 3;
-                    break;
-                  }
+                throw new Error("'value' is not a codeblock!");
 
-                  throw new Error("'value' is not a codeblock!");
+              case 3:
+                codeblock = CODEBLOCK.thawFromJSON(value);
 
-                case 3:
-                  codeblock = CODEBLOCK.thawFromJSON(value);
+                if (!(codeblock.getFormat() === 'run.bash' || codeblock.getFormat() === 'run.bash.progress' || codeblock.getFormat() === 'run.bash.method')) {
+                  _context22.next = 32;
+                  break;
+                }
 
-                  if (!(codeblock.getFormat() === 'run.bash' || codeblock.getFormat() === 'run.bash.progress' || codeblock.getFormat() === 'run.bash.method')) {
-                    _context52.next = 32;
-                    break;
-                  }
-
-                  _context52.next = 7;
-                  return Promise.map(codeblock._args,
-                  /*#__PURE__*/
-                  function () {
-                    var _ref31 = (0, _asyncToGenerator2["default"])(
-                    /*#__PURE__*/
-                    _regenerator["default"].mark(function _callee49(name) {
-                      return _regenerator["default"].wrap(function _callee49$(_context49) {
-                        while (1) {
-                          switch (_context49.prev = _context49.next) {
-                            case 0:
-                              if (!(typeof vars[name] === 'undefined')) {
-                                _context49.next = 4;
-                                break;
-                              }
-
-                              _context49.next = 3;
-                              return namespace.getValueForVariablePath([name]);
-
-                            case 3:
-                              vars[name] = _context49.sent;
-
-                            case 4:
-                            case "end":
-                              return _context49.stop();
+                _context22.next = 7;
+                return _regenerator["default"].awrap(Promise.map(codeblock._args, function _callee10(name) {
+                  return _regenerator["default"].async(function _callee10$(_context19) {
+                    while (1) {
+                      switch (_context19.prev = _context19.next) {
+                        case 0:
+                          if (!(typeof vars[name] === 'undefined')) {
+                            _context19.next = 4;
+                            break;
                           }
-                        }
-                      }, _callee49);
-                    }));
 
-                    return function (_x69) {
-                      return _ref31.apply(this, arguments);
-                    };
-                  }());
+                          _context19.next = 3;
+                          return _regenerator["default"].awrap(namespace.getValueForVariablePath([name]));
 
-                case 7:
-                  codeblock = codeblock.compile(vars);
-                  code = codeblock.getCode();
-                  RUNBASH = require("runbash");
-                  log("Running bash code from codeblock");
-                  result = null;
-                  _context52.prev = 12;
-                  _context52.next = 15;
-                  return RUNBASH(codeblock.getCode(), {
-                    progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.INF_DEBUG || !!process.env.DEBUG,
-                    wait: true
+                        case 3:
+                          vars[name] = _context19.sent;
+
+                        case 4:
+                        case "end":
+                          return _context19.stop();
+                      }
+                    }
                   });
+                }));
 
-                case 15:
-                  result = _context52.sent;
-                  _context52.next = 21;
+              case 7:
+                codeblock = codeblock.compile(vars);
+                code = codeblock.getCode();
+                RUNBASH = require("runbash");
+                log("Running bash code from codeblock");
+                result = null;
+                _context22.prev = 12;
+                _context22.next = 15;
+                return _regenerator["default"].awrap(RUNBASH(codeblock.getCode(), {
+                  progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.INF_DEBUG || !!process.env.DEBUG,
+                  wait: true
+                }));
+
+              case 15:
+                result = _context22.sent;
+                _context22.next = 21;
+                break;
+
+              case 18:
+                _context22.prev = 18;
+                _context22.t0 = _context22["catch"](12);
+                result = _context22.t0;
+
+              case 21:
+                if (result.stderr) {
+                  process.stderr.write(LIB.COLORS.red(result.stderr.toString())); //log('Discarding stderr:', result.stderr);
+                }
+
+                if (!(codeblock.getFormat() !== 'run.bash.progress')) {
+                  _context22.next = 28;
                   break;
+                }
 
-                case 18:
-                  _context52.prev = 18;
-                  _context52.t0 = _context52["catch"](12);
-                  result = _context52.t0;
+                if (!(result.code !== 0)) {
+                  _context22.next = 26;
+                  break;
+                }
 
-                case 21:
-                  if (result.stderr) {
-                    process.stderr.write(LIB.COLORS.red(result.stderr.toString())); //log('Discarding stderr:', result.stderr);
-                  }
+                console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
+                throw new Error("Bash codeblock exited with non 0 code of '".concat(result.code, "'!"));
 
-                  if (!(codeblock.getFormat() !== 'run.bash.progress')) {
-                    _context52.next = 28;
-                    break;
-                  }
+              case 26:
+                _context22.next = 29;
+                break;
 
-                  if (!(result.code !== 0)) {
-                    _context52.next = 26;
-                    break;
-                  }
-
+              case 28:
+                if (result.code !== 0) {
                   console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
-                  throw new Error("Bash codeblock exited with non 0 code of '".concat(result.code, "'!"));
+                  console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
+                  process.exit(1);
+                }
 
-                case 26:
-                  _context52.next = 29;
+              case 29:
+                return _context22.abrupt("return", result.stdout);
+
+              case 32:
+                if (!(codeblock.getFormat() === 'run.javascript' || codeblock.getFormat() === 'run.javascript.progress' || codeblock.getFormat() === 'run.javascript.method')) {
+                  _context22.next = 42;
                   break;
+                }
 
-                case 28:
-                  if (result.code !== 0) {
-                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
-                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
-                    process.exit(1);
-                  }
+                run = function run(process) {
+                  var data, origWrite, write, _console, ___VARS, ___run, _data;
 
-                case 29:
-                  return _context52.abrupt("return", result.stdout);
+                  return _regenerator["default"].async(function run$(_context21) {
+                    while (1) {
+                      switch (_context21.prev = _context21.next) {
+                        case 0:
+                          _context21.prev = 0;
+                          data = null;
+                          origWrite = process.stdout.write;
 
-                case 32:
-                  if (!(codeblock.getFormat() === 'run.javascript' || codeblock.getFormat() === 'run.javascript.progress' || codeblock.getFormat() === 'run.javascript.method')) {
-                    _context52.next = 42;
-                    break;
-                  }
-
-                  run =
-                  /*#__PURE__*/
-                  function () {
-                    var _ref33 = (0, _asyncToGenerator2["default"])(
-                    /*#__PURE__*/
-                    _regenerator["default"].mark(function _callee51(process) {
-                      var data, origWrite, write, _console, ___VARS, ___run, _data;
-
-                      return _regenerator["default"].wrap(function _callee51$(_context51) {
-                        while (1) {
-                          switch (_context51.prev = _context51.next) {
-                            case 0:
-                              _context51.prev = 0;
-                              data = null;
-                              origWrite = process.stdout.write;
-
-                              if (codeblock.getFormat() !== 'run.javascript.progress') {
-                                write = function write(chunk) {
-                                  if (typeof chunk === 'string') {
-                                    chunk = Buffer.from(chunk);
-                                  }
-
-                                  try {
-                                    if (data) {
-                                      data = Buffer.concat([data, chunk]);
-                                    } else {
-                                      data = chunk;
-                                    }
-                                  } catch (err) {
-                                    _console.error(err);
-                                  }
-                                };
-
-                                process.stdout.write = write;
+                          if (codeblock.getFormat() !== 'run.javascript.progress') {
+                            write = function write(chunk) {
+                              if (typeof chunk === 'string') {
+                                chunk = Buffer.from(chunk);
                               }
 
-                              _console = CONSOLE;
-                              ___VARS = vars;
-                              Object.keys(___VARS).map(function (name) {
-                                _code2 = ["const ".concat(name, " = ___VARS['").concat(name, "']"), _code2].join('\n');
-                              });
-                              _code2 = ['___run = async function () {', _code2, '}'].join('\n');
-                              ___run = null;
-                              eval(_code2);
-                              _context51.next = 12;
-                              return ___run();
-
-                            case 12:
-                              _data = _context51.sent;
-
-                              if (codeblock.getFormat() !== 'run.javascript.progress') {
-                                process.stdout.write = origWrite;
+                              try {
+                                if (data) {
+                                  data = Buffer.concat([data, chunk]);
+                                } else {
+                                  data = chunk;
+                                }
+                              } catch (err) {
+                                _console.error(err);
                               }
+                            };
 
-                              log("Done running javascript code from codeblock");
-
-                              if (!(typeof _data !== 'undefined')) {
-                                _context51.next = 20;
-                                break;
-                              }
-
-                              if (data) {
-                                process.stdout.write(data.toString());
-                              }
-
-                              return _context51.abrupt("return", _data);
-
-                            case 20:
-                              return _context51.abrupt("return", data);
-
-                            case 21:
-                              _context51.next = 28;
-                              break;
-
-                            case 23:
-                              _context51.prev = 23;
-                              _context51.t0 = _context51["catch"](0);
-                              console.error(LIB.COLORS.red("Code which contains error >>> " + _code2 + " <<<")); // TODO: Show proper stack trace for anonymous eval functon.
-
-                              console.error(LIB.COLORS.red('[inf][run.javascript] Ended with error: ' + _context51.t0.message));
-                              process.exit(1);
-
-                            case 28:
-                            case "end":
-                              return _context51.stop();
+                            process.stdout.write = write;
                           }
-                        }
-                      }, _callee51, null, [[0, 23]]);
-                    }));
 
-                    return function run(_x71) {
-                      return _ref33.apply(this, arguments);
-                    };
-                  }();
+                          _console = CONSOLE;
+                          ___VARS = vars;
+                          Object.keys(___VARS).map(function (name) {
+                            _code2 = ["const ".concat(name, " = ___VARS['").concat(name, "']"), _code2].join('\n');
+                          });
+                          _code2 = ['___run = async function () {', _code2, '}'].join('\n');
+                          ___run = null;
+                          eval(_code2);
+                          _context21.next = 12;
+                          return _regenerator["default"].awrap(___run());
 
-                  _context52.next = 36;
-                  return Promise.map(codeblock._args,
-                  /*#__PURE__*/
-                  function () {
-                    var _ref32 = (0, _asyncToGenerator2["default"])(
-                    /*#__PURE__*/
-                    _regenerator["default"].mark(function _callee50(name) {
-                      return _regenerator["default"].wrap(function _callee50$(_context50) {
-                        while (1) {
-                          switch (_context50.prev = _context50.next) {
-                            case 0:
-                              if (!(typeof vars[name] === 'undefined')) {
-                                _context50.next = 4;
-                                break;
-                              }
+                        case 12:
+                          _data = _context21.sent;
 
-                              _context50.next = 3;
-                              return namespace.getValueForVariablePath([name]);
-
-                            case 3:
-                              vars[name] = _context50.sent;
-
-                            case 4:
-                            case "end":
-                              return _context50.stop();
+                          if (codeblock.getFormat() !== 'run.javascript.progress') {
+                            process.stdout.write = origWrite;
                           }
-                        }
-                      }, _callee50);
-                    }));
 
-                    return function (_x70) {
-                      return _ref32.apply(this, arguments);
-                    };
-                  }());
+                          log("Done running javascript code from codeblock");
 
-                case 36:
-                  codeblock = codeblock.compile(vars);
-                  _code2 = codeblock.getCode();
-                  log("Running javascript code from codeblock");
-                  return _context52.abrupt("return", run(process));
+                          if (!(typeof _data !== 'undefined')) {
+                            _context21.next = 20;
+                            break;
+                          }
 
-                case 42:
-                  throw new Error("Unsupported codeblock format '".concat(codeblock.getFormat(), "'!"));
+                          if (data) {
+                            process.stdout.write(data.toString());
+                          }
 
-                case 43:
-                case "end":
-                  return _context52.stop();
-              }
+                          return _context21.abrupt("return", _data);
+
+                        case 20:
+                          return _context21.abrupt("return", data);
+
+                        case 21:
+                          _context21.next = 28;
+                          break;
+
+                        case 23:
+                          _context21.prev = 23;
+                          _context21.t0 = _context21["catch"](0);
+                          console.error(LIB.COLORS.red("Code which contains error >>> " + _code2 + " <<<")); // TODO: Show proper stack trace for anonymous eval functon.
+
+                          console.error(LIB.COLORS.red('[inf][run.javascript] Ended with error: ' + _context21.t0.message));
+                          process.exit(1);
+
+                        case 28:
+                        case "end":
+                          return _context21.stop();
+                      }
+                    }
+                  }, null, null, [[0, 23]]);
+                };
+
+                _context22.next = 36;
+                return _regenerator["default"].awrap(Promise.map(codeblock._args, function _callee11(name) {
+                  return _regenerator["default"].async(function _callee11$(_context20) {
+                    while (1) {
+                      switch (_context20.prev = _context20.next) {
+                        case 0:
+                          if (!(typeof vars[name] === 'undefined')) {
+                            _context20.next = 4;
+                            break;
+                          }
+
+                          _context20.next = 3;
+                          return _regenerator["default"].awrap(namespace.getValueForVariablePath([name]));
+
+                        case 3:
+                          vars[name] = _context20.sent;
+
+                        case 4:
+                        case "end":
+                          return _context20.stop();
+                      }
+                    }
+                  });
+                }));
+
+              case 36:
+                codeblock = codeblock.compile(vars);
+                _code2 = codeblock.getCode();
+                log("Running javascript code from codeblock");
+                return _context22.abrupt("return", run(process));
+
+              case 42:
+                throw new Error("Unsupported codeblock format '".concat(codeblock.getFormat(), "'!"));
+
+              case 43:
+              case "end":
+                return _context22.stop();
             }
-          }, _callee52, null, [[12, 18]]);
-        }));
-        return _runCodeblock.apply(this, arguments);
+          }
+        }, null, null, [[12, 18]]);
       }
 
       var ComponentInitContext =
@@ -19579,16 +27474,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _inherits2["default"])(ComponentInitContext, _EventEmitter);
 
         function ComponentInitContext(namespace) {
-          var _this;
+          var _this2;
 
           (0, _classCallCheck2["default"])(this, ComponentInitContext);
-          _this = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ComponentInitContext).call(this));
+          _this2 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ComponentInitContext).call(this));
 
           if (!namespace) {
             throw new Error("'namespace' not defined!");
           }
 
-          var self = (0, _assertThisInitialized2["default"])(_this);
+          var self = (0, _assertThisInitialized2["default"])(_this2);
           self.setMaxListeners(9999);
           self.LIB = LIB;
           self.options = namespace.options;
@@ -19603,153 +27498,123 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             }
           });
 
-          self.toPINFBundle =
-          /*#__PURE__*/
-          function () {
-            var _ref9 = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee13(aspectName, options) {
-              var self, memoizedComponents;
-              return _regenerator["default"].wrap(function _callee13$(_context13) {
-                while (1) {
-                  switch (_context13.prev = _context13.next) {
-                    case 0:
-                      options = options || {};
-                      self = this;
-                      memoizedComponents = {}; // --------------------------------------------------
+          self.toPINFBundle = function _callee12(aspectName, options) {
+            var self, memoizedComponents;
+            return _regenerator["default"].async(function _callee12$(_context23) {
+              while (1) {
+                switch (_context23.prev = _context23.next) {
+                  case 0:
+                    options = options || {};
+                    self = this;
+                    memoizedComponents = {}; // --------------------------------------------------
 
-                      _context13.t1 = "return new Promise(function (resolve, reject) { require.sandbox(function (require) {\n";
-                      _context13.next = 6;
-                      return namespace.gatherComponentAspect(aspectName);
+                    _context23.t1 = "return new Promise(function (resolve, reject) { require.sandbox(function (require) {\n";
+                    _context23.next = 6;
+                    return _regenerator["default"].awrap(namespace.gatherComponentAspect(aspectName));
 
-                    case 6:
-                      _context13.t2 = function (component) {
-                        return Object.keys(component.aspect).map(function (alias) {
-                          memoizedComponents[component.pathHash + ":" + alias] = true;
-                          return "require.memoize(\"/".concat(component.pathHash, "-").concat(alias).concat(options.ext || '.js', "\", function (require, exports, module) {\n").concat(component.aspect[alias], "\n});");
-                        }).join("\n");
-                      };
+                  case 6:
+                    _context23.t2 = function (component) {
+                      return Object.keys(component.aspect).map(function (alias) {
+                        memoizedComponents[component.pathHash + ":" + alias] = true;
+                        return "require.memoize(\"/".concat(component.pathHash, "-").concat(alias).concat(options.ext || '.js', "\", function (require, exports, module) {\n").concat(component.aspect[alias], "\n});");
+                      }).join("\n");
+                    };
 
-                      _context13.t3 = _context13.sent.map(_context13.t2).join("\n");
-                      _context13.t0 = _context13.t1.concat.call(_context13.t1, _context13.t3, "\nrequire.memoize(\"/main.js\", function (require, exports, module) {\n    let rtNamespace = {};\n    ");
-                      _context13.next = 11;
-                      return Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
-                        return !!memoizedComponents[namespace.aliases[alias].pathHash + ":" + alias];
-                      }), function (alias) {
-                        return "rtNamespace['".concat(alias, "'] = require('./").concat(namespace.aliases[alias].pathHash, "-").concat(alias).concat(options.ext || '.js', "')");
-                      });
+                    _context23.t3 = _context23.sent.map(_context23.t2).join("\n");
+                    _context23.t0 = _context23.t1.concat.call(_context23.t1, _context23.t3, "\nrequire.memoize(\"/main.js\", function (require, exports, module) {\n    let rtNamespace = {};\n    ");
+                    _context23.next = 11;
+                    return _regenerator["default"].awrap(Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
+                      return !!memoizedComponents[namespace.aliases[alias].pathHash + ":" + alias];
+                    }), function (alias) {
+                      return "rtNamespace['".concat(alias, "'] = require('./").concat(namespace.aliases[alias].pathHash, "-").concat(alias).concat(options.ext || '.js', "')");
+                    }));
 
-                    case 11:
-                      _context13.t4 = _context13.sent.join('\n');
-                      return _context13.abrupt("return", _context13.t0.concat.call(_context13.t0, _context13.t4, "\n    return rtNamespace;\n});\n}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });"));
+                  case 11:
+                    _context23.t4 = _context23.sent.join('\n');
+                    return _context23.abrupt("return", _context23.t0.concat.call(_context23.t0, _context23.t4, "\n    return rtNamespace;\n});\n}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });"));
 
-                    case 13:
-                    case "end":
-                      return _context13.stop();
-                  }
+                  case 13:
+                  case "end":
+                    return _context23.stop();
                 }
-              }, _callee13, this);
-            }));
-
-            return function (_x19, _x20) {
-              return _ref9.apply(this, arguments);
-            };
-          }();
+              }
+            }, null, this);
+          };
 
           self.stopProcessing = function () {
             // TODO: Indicate who called stop.
             namespace.stopProcessing();
           };
 
-          self.run =
-          /*#__PURE__*/
-          function () {
-            var _ref10 = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee14(filepath, options) {
-              var opts, _inf, path, inf;
+          self.run = function _callee13(filepath, options) {
+            var opts, _inf, path, inf;
 
-              return _regenerator["default"].wrap(function _callee14$(_context14) {
-                while (1) {
-                  switch (_context14.prev = _context14.next) {
-                    case 0:
-                      opts = LODASH_MERGE({}, namespace.options, options || {});
+            return _regenerator["default"].async(function _callee13$(_context24) {
+              while (1) {
+                switch (_context24.prev = _context24.next) {
+                  case 0:
+                    opts = LODASH_MERGE({}, namespace.options, options || {});
 
-                      if (!/\{/.test(filepath)) {
-                        _context14.next = 4;
-                        break;
-                      }
+                    if (!/\{/.test(filepath)) {
+                      _context24.next = 4;
+                      break;
+                    }
 
-                      _inf = new INF(self.baseDir, null, opts);
-                      return _context14.abrupt("return", _inf.runInstructions(filepath));
+                    _inf = new INF(self.baseDir, null, opts);
+                    return _context24.abrupt("return", _inf.runInstructions(filepath));
 
-                    case 4:
-                      path = PATH.resolve(namespace.baseDir || "", filepath);
-                      inf = new INF(PATH.dirname(path), null, opts);
-                      return _context14.abrupt("return", inf.runInstructionsFile(PATH.basename(path)));
+                  case 4:
+                    path = PATH.resolve(namespace.baseDir || "", filepath);
+                    inf = new INF(PATH.dirname(path), null, opts);
+                    return _context24.abrupt("return", inf.runInstructionsFile(PATH.basename(path)));
 
-                    case 7:
-                    case "end":
-                      return _context14.stop();
-                  }
+                  case 7:
+                  case "end":
+                    return _context24.stop();
                 }
-              }, _callee14);
-            }));
+              }
+            });
+          };
 
-            return function (_x21, _x22) {
-              return _ref10.apply(this, arguments);
-            };
-          }();
+          self.load = function _callee14(filepath) {
+            var baseDir, hash, path;
+            return _regenerator["default"].async(function _callee14$(_context25) {
+              while (1) {
+                switch (_context25.prev = _context25.next) {
+                  case 0:
+                    if (!(filepath instanceof InfNode && filepath.value instanceof CodeblockNode)) {
+                      _context25.next = 7;
+                      break;
+                    }
 
-          self.load =
-          /*#__PURE__*/
-          function () {
-            var _ref11 = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee15(filepath) {
-              var baseDir, hash, path;
-              return _regenerator["default"].wrap(function _callee15$(_context15) {
-                while (1) {
-                  switch (_context15.prev = _context15.next) {
-                    case 0:
-                      if (!(filepath instanceof InfNode && filepath.value instanceof CodeblockNode)) {
-                        _context15.next = 7;
-                        break;
-                      }
+                    baseDir = filepath.baseDir;
+                    _context25.next = 4;
+                    return _regenerator["default"].awrap(filepath.toInstructions());
 
-                      baseDir = filepath.baseDir;
-                      _context15.next = 4;
-                      return filepath.toInstructions();
+                  case 4:
+                    filepath = _context25.sent;
+                    hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
+                    return _context25.abrupt("return", namespace.inf.runInstructions(filepath, PATH.join(baseDir, "inline-".concat(hash, ".inf.json")), namespace));
 
-                    case 4:
-                      filepath = _context15.sent;
-                      hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
-                      return _context15.abrupt("return", namespace.inf.runInstructions(filepath, PATH.join(baseDir, "inline-".concat(hash, ".inf.json")), namespace));
+                  case 7:
+                    if (!/\{/.test(filepath)) {
+                      _context25.next = 9;
+                      break;
+                    }
 
-                    case 7:
-                      if (!/\{/.test(filepath)) {
-                        _context15.next = 9;
-                        break;
-                      }
+                    return _context25.abrupt("return", namespace.inf.runInstructions(filepath, null, namespace));
 
-                      return _context15.abrupt("return", namespace.inf.runInstructions(filepath, null, namespace));
+                  case 9:
+                    path = PATH.resolve(namespace.baseDir || "", filepath);
+                    return _context25.abrupt("return", namespace.inf.runInstructionsFile(path, namespace));
 
-                    case 9:
-                      path = PATH.resolve(namespace.baseDir || "", filepath);
-                      return _context15.abrupt("return", namespace.inf.runInstructionsFile(path, namespace));
-
-                    case 11:
-                    case "end":
-                      return _context15.stop();
-                  }
+                  case 11:
+                  case "end":
+                    return _context25.stop();
                 }
-              }, _callee15);
-            }));
-
-            return function (_x23) {
-              return _ref11.apply(this, arguments);
-            };
-          }();
+              }
+            });
+          };
 
           self.wrapValue = function (value) {
             return Node.WrapInstructionNode(namespace, value);
@@ -19761,30 +27626,20 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             return (0, _typeof2["default"])(value) === 'object' && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock';
           };
 
-          self.runCodeblock =
-          /*#__PURE__*/
-          function () {
-            var _ref12 = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee16(value, vars) {
-              return _regenerator["default"].wrap(function _callee16$(_context16) {
-                while (1) {
-                  switch (_context16.prev = _context16.next) {
-                    case 0:
-                      return _context16.abrupt("return", runCodeblock(namespace, value, vars));
+          self.runCodeblock = function _callee15(value, vars) {
+            return _regenerator["default"].async(function _callee15$(_context26) {
+              while (1) {
+                switch (_context26.prev = _context26.next) {
+                  case 0:
+                    return _context26.abrupt("return", runCodeblock(namespace, value, vars));
 
-                    case 1:
-                    case "end":
-                      return _context16.stop();
-                  }
+                  case 1:
+                  case "end":
+                    return _context26.stop();
                 }
-              }, _callee16);
-            }));
-
-            return function (_x24, _x25) {
-              return _ref12.apply(this, arguments);
-            };
-          }();
+              }
+            });
+          };
 
           self.forNode = function (node, nodeNamespace) {
             var context = new ComponentInitContext(nodeNamespace);
@@ -19840,11 +27695,119 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             return context;
           };
 
-          return _this;
+          return _this2;
         }
 
         return ComponentInitContext;
       }(EventEmitter);
+
+      var NamespacePointer =
+      /*#__PURE__*/
+      function (_String) {
+        (0, _inherits2["default"])(NamespacePointer, _String);
+
+        function NamespacePointer(namespace, parentPointer, value) {
+          var _this3;
+
+          (0, _classCallCheck2["default"])(this, NamespacePointer);
+          //console.log("   value:", value);        
+          //console.log("INITIAL parentPointer", parentPointer);
+          var segments = [];
+
+          if (parentPointer) {
+            if (parentPointer.getSuffix()) {
+              throw new Error('Cannot prepend pointer with suffix!');
+            }
+
+            segments = parentPointer.getSegments().slice();
+          }
+
+          var suffix = '';
+
+          if (value) {
+            if (typeof value.hasMultipleSegments === "function") {
+              segments = segments.concat(value.getSegments());
+              suffix = value.getSuffix();
+            } else {
+              var m;
+              var valueParts = value.split('#');
+
+              while (true) {
+                m = valueParts[0].match(/^([^@]+?)\s*@\s*(.+?)$/);
+
+                if (m) {
+                  if (typeof namespace.mappedNamespaceAliases[m[1]] === "undefined") {
+                    console.error("namespace", namespace);
+                    throw new Error("Namespace alias '".concat(m[1], "' is not mapped!"));
+                  }
+
+                  segments.push({
+                    alias: m[1],
+                    resolved: namespace.mappedNamespaceAliases[m[1]]
+                  });
+                  valueParts[0] = m[2];
+                } else {
+                  if (!/^\s*$/.test(valueParts[0])) {
+                    segments.push({
+                      literal: valueParts[0]
+                    });
+                  }
+
+                  valueParts[0] = '';
+                  break;
+                }
+              }
+
+              suffix = valueParts.join('#');
+            }
+          }
+
+          var resolvedStr = segments.map(function (segment) {
+            if (typeof segment.literal !== "undefined") {
+              return segment.literal;
+            } else {
+              return segment.resolved;
+            }
+          }).join('/').replace(/\/\.?\//g, '/') + suffix;
+          var segmentedStr = segments.map(function (segment) {
+            if (typeof segment.literal !== "undefined") {
+              return segment.literal;
+            } else {
+              return "".concat(segment.alias, "|").concat(segment.resolved);
+            }
+          }).join('|') + suffix;
+          _this3 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(NamespacePointer).call(this, resolvedStr));
+
+          _this3.hasMultipleSegments = function () {
+            return segments.length > 1;
+          };
+
+          _this3.toSegmentedString = function () {
+            return segmentedStr;
+          };
+
+          _this3.getFirstSegment = function () {
+            return segments[0];
+          };
+
+          _this3.getSegments = function () {
+            return segments;
+          };
+
+          _this3.getSuffix = function () {
+            return suffix;
+          };
+
+          _this3.prepend = function (pointer) {
+            var after = new NamespacePointer(namespace, pointer || null, this);
+            return after;
+          };
+
+          return _this3;
+        }
+
+        return NamespacePointer;
+      }((0, _wrapNativeSuper2["default"])(String));
 
       var Namespace =
       /*#__PURE__*/
@@ -19857,17 +27820,29 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           self.options = options || {};
           self.stopped = false;
           self.referringNamespace = referringNamespace;
+          self.forParent = {};
+          self.childInfByPath = self.referringNamespace && self.referringNamespace.childInfByPath || {};
           self.components = self.referringNamespace && self.referringNamespace.components || {};
           self.aliases = self.referringNamespace && self.referringNamespace.aliases || {};
           self.interfaces = self.referringNamespace && self.referringNamespace.interfaces || {};
           self.variables = self.referringNamespace && self.referringNamespace.variables || {};
           self.contracts = self.referringNamespace && self.referringNamespace.contracts || {};
-          self.plugins = self.referringNamespace && self.referringNamespace.plugins || []; // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
+          self.plugins = self.referringNamespace && self.referringNamespace.plugins || [];
+          self.apis = self.referringNamespace && self.referringNamespace.apis || {}; // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
           //       Not sure why it was ever passed by reference. We may need to map more variables
           //       above my copying instead of using same reference.
           //self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
 
-          self.pathStack = [].concat(self.referringNamespace && self.referringNamespace.pathStack || []); // Holds all paths including own and all children and parents to the extent loaded.
+          self.pathStack = [].concat(self.referringNamespace && self.referringNamespace.pathStack || []);
+          self.anchorPrefixStack = [].concat(self.referringNamespace && self.referringNamespace.anchorPrefixStack || []);
+          self.anchorPrefix = options.anchorPrefix || null;
+
+          if (self.anchorPrefix && options.skipAddToAnchorPrefixStack !== false) {
+            //console.log("NEW FOR ANCHOR PREFIX", options.anchorPrefix);
+            self.anchorPrefixStack.push(self.anchorPrefix);
+          }
+
+          self.implementationAdapters = self.referringNamespace && self.referringNamespace.implementationAdapters || {}; // Holds all paths including own and all children and parents to the extent loaded.
 
           self.allPaths = self.referringNamespace && self.referringNamespace.allPaths || [];
           self.componentInitContext = new ComponentInitContext(self);
@@ -19887,7 +27862,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             self.mappedNamespaceAliases = {};
           }
 
-          self.apis = {};
+          if (self.referringNamespace && self.referringNamespace.mappedAliases) {
+            self.mappedAliases = {};
+            Object.keys(self.referringNamespace.mappedAliases).forEach(function (key) {
+              self.mappedAliases[key] = self.referringNamespace.mappedAliases[key];
+            });
+          } else {
+            self.mappedAliases = {};
+          }
+
           self.lib = LIB_JSON.forBaseDir(self.baseDir, {
             throwOnNoConfigFileFound: false
           });
@@ -19926,830 +27909,836 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         }, {
           key: "findInParentTree",
-          value: function () {
-            var _findInParentTree = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee17(dir, filepath) {
-              var path, exits, newPath;
-              return _regenerator["default"].wrap(function _callee17$(_context17) {
-                while (1) {
-                  switch (_context17.prev = _context17.next) {
-                    case 0:
-                      path = PATH.join(dir, filepath);
-                      _context17.next = 3;
-                      return FS.existsAsync(path);
+          value: function findInParentTree(dir, filepath) {
+            var path, exits, newPath;
+            return _regenerator["default"].async(function findInParentTree$(_context27) {
+              while (1) {
+                switch (_context27.prev = _context27.next) {
+                  case 0:
+                    path = PATH.join(dir, filepath);
+                    _context27.next = 3;
+                    return _regenerator["default"].awrap(FS.existsAsync(path));
 
-                    case 3:
-                      exits = _context17.sent;
+                  case 3:
+                    exits = _context27.sent;
 
-                      if (!exits) {
-                        _context17.next = 6;
-                        break;
-                      }
+                    if (!exits) {
+                      _context27.next = 6;
+                      break;
+                    }
 
-                      return _context17.abrupt("return", path);
+                    return _context27.abrupt("return", path);
 
-                    case 6:
-                      newPath = PATH.dirname(dir);
+                  case 6:
+                    newPath = PATH.dirname(dir);
 
-                      if (!(newPath === dir)) {
-                        _context17.next = 9;
-                        break;
-                      }
+                    if (!(newPath === dir)) {
+                      _context27.next = 9;
+                      break;
+                    }
 
-                      return _context17.abrupt("return", null);
+                    return _context27.abrupt("return", null);
 
-                    case 9:
-                      return _context17.abrupt("return", this.findInParentTree(newPath, filepath));
+                  case 9:
+                    return _context27.abrupt("return", this.findInParentTree(newPath, filepath));
 
-                    case 10:
-                    case "end":
-                      return _context17.stop();
-                  }
+                  case 10:
+                  case "end":
+                    return _context27.stop();
                 }
-              }, _callee17, this);
-            }));
-
-            function findInParentTree(_x26, _x27) {
-              return _findInParentTree.apply(this, arguments);
-            }
-
-            return findInParentTree;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "resolveInfUri",
-          value: function () {
-            var _resolveInfUri = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee19(uri) {
-              var self, isOptional, resolveUri, _resolveUri;
+          value: function resolveInfUri(uri) {
+            var self, isOptional, resolveUri;
+            return _regenerator["default"].async(function resolveInfUri$(_context29) {
+              while (1) {
+                switch (_context29.prev = _context29.next) {
+                  case 0:
+                    resolveUri = function _ref(uri) {
+                      var filepath, cwdPaths, resolvedPath, vocabulariesPath, parentTreePath, defaultPaths;
+                      return _regenerator["default"].async(function resolveUri$(_context28) {
+                        while (1) {
+                          switch (_context28.prev = _context28.next) {
+                            case 0:
+                              //        uri = self.flipDomainInUri(uri);
+                              filepath = uri + "inf.json"; // 1. Relative paths
 
-              return _regenerator["default"].wrap(function _callee19$(_context19) {
-                while (1) {
-                  switch (_context19.prev = _context19.next) {
-                    case 0:
-                      _resolveUri = function _ref14() {
-                        _resolveUri = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee18(uri) {
-                          var filepath, cwdPaths, resolvedPath, vocabulariesPath, parentTreePath, defaultPaths;
-                          return _regenerator["default"].wrap(function _callee18$(_context18) {
-                            while (1) {
-                              switch (_context18.prev = _context18.next) {
-                                case 0:
-                                  //        uri = self.flipDomainInUri(uri);
-                                  filepath = uri + "inf.json"; // 1. Relative paths
-
-                                  if (!/^\./.test(uri)) {
-                                    _context18.next = 7;
-                                    break;
-                                  }
-
-                                  _context18.next = 4;
-                                  return GLOB.async(filepath, {
-                                    cwd: self.baseDir
-                                  });
-
-                                case 4:
-                                  cwdPaths = _context18.sent;
-
-                                  if (!cwdPaths.length) {
-                                    _context18.next = 7;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", cwdPaths.map(function (filepath) {
-                                    return PATH.join(self.baseDir, filepath);
-                                  }));
-
-                                case 7:
-                                  if (!self.lib.js) {
-                                    _context18.next = 19;
-                                    break;
-                                  }
-
-                                  _context18.prev = 8;
-                                  resolvedPath = self.lib.js.resolve(filepath);
-                                  log("resolveInfUri()", "resolvedPath", resolvedPath);
-                                  _context18.next = 13;
-                                  return FS.existsAsync(resolvedPath);
-
-                                case 13:
-                                  if (!_context18.sent) {
-                                    _context18.next = 15;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [resolvedPath]);
-
-                                case 15:
-                                  _context18.next = 19;
-                                  break;
-
-                                case 17:
-                                  _context18.prev = 17;
-                                  _context18.t0 = _context18["catch"](8);
-
-                                case 19:
-                                  // 2. Explicityly configured
-                                  vocabulariesPath = null;
-
-                                  if (!self.options.vocabularies) {
-                                    _context18.next = 33;
-                                    break;
-                                  }
-
-                                  vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
-                                  _context18.next = 24;
-                                  return FS.existsAsync(vocabulariesPath);
-
-                                case 24:
-                                  if (!_context18.sent) {
-                                    _context18.next = 26;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [vocabulariesPath]);
-
-                                case 26:
-                                  vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
-                                  _context18.next = 29;
-                                  return FS.existsAsync(vocabulariesPath);
-
-                                case 29:
-                                  if (!_context18.sent) {
-                                    _context18.next = 31;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [vocabulariesPath]);
-
-                                case 31:
-                                  _context18.next = 44;
-                                  break;
-
-                                case 33:
-                                  if (!process.env.INF_VOCABULARIES) {
-                                    _context18.next = 44;
-                                    break;
-                                  }
-
-                                  vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
-                                  _context18.next = 37;
-                                  return FS.existsAsync(vocabulariesPath);
-
-                                case 37:
-                                  if (!_context18.sent) {
-                                    _context18.next = 39;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [vocabulariesPath]);
-
-                                case 39:
-                                  vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
-                                  _context18.next = 42;
-                                  return FS.existsAsync(vocabulariesPath);
-
-                                case 42:
-                                  if (!_context18.sent) {
-                                    _context18.next = 44;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [vocabulariesPath]);
-
-                                case 44:
-                                  _context18.next = 46;
-                                  return self.findInParentTree(self.baseDir, filepath);
-
-                                case 46:
-                                  parentTreePath = _context18.sent;
-
-                                  if (!parentTreePath) {
-                                    _context18.next = 49;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", [parentTreePath]);
-
-                                case 49:
-                                  _context18.next = 51;
-                                  return GLOB.async(filepath, {
-                                    cwd: PATH.join(__dirname, "vocabularies")
-                                  });
-
-                                case 51:
-                                  defaultPaths = _context18.sent;
-
-                                  if (!defaultPaths.length) {
-                                    _context18.next = 54;
-                                    break;
-                                  }
-
-                                  return _context18.abrupt("return", defaultPaths.map(function (filepath) {
-                                    return PATH.join(__dirname, "vocabularies", filepath);
-                                  }));
-
-                                case 54:
-                                  // 6. Not found
-                                  if (!isOptional) {
-                                    CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
-                                    CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
-                                  }
-
-                                  throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
-
-                                case 56:
-                                case "end":
-                                  return _context18.stop();
+                              if (!/^\./.test(uri)) {
+                                _context28.next = 7;
+                                break;
                               }
-                            }
-                          }, _callee18, null, [[8, 17]]);
-                        }));
-                        return _resolveUri.apply(this, arguments);
-                      };
 
-                      resolveUri = function _ref13(_x29) {
-                        return _resolveUri.apply(this, arguments);
-                      };
+                              _context28.next = 4;
+                              return _regenerator["default"].awrap(GLOB.async(filepath, {
+                                cwd: self.baseDir
+                              }));
 
-                      self = this;
+                            case 4:
+                              cwdPaths = _context28.sent;
 
-                      if (/(\/|\.)$/.test(uri)) {
-                        _context19.next = 6;
-                        break;
-                      }
+                              if (!cwdPaths.length) {
+                                _context28.next = 7;
+                                break;
+                              }
 
-                      CONSOLE.error("uri", uri);
-                      throw new Error("Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
+                              return _context28.abrupt("return", cwdPaths.map(function (filepath) {
+                                return PATH.join(self.baseDir, filepath);
+                              }));
 
-                    case 6:
-                      isOptional = !!uri.match(/^!/);
+                            case 7:
+                              if (!self.lib.js) {
+                                _context28.next = 19;
+                                break;
+                              }
 
-                      if (isOptional) {
-                        uri = uri.replace(/^!/, '');
-                      }
+                              _context28.prev = 8;
+                              resolvedPath = self.lib.js.resolve(filepath);
+                              log("resolveInfUri()", "resolvedPath", resolvedPath);
+                              _context28.next = 13;
+                              return _regenerator["default"].awrap(FS.existsAsync(resolvedPath));
 
-                      _context19.prev = 8;
-                      _context19.next = 11;
-                      return resolveUri(uri);
+                            case 13:
+                              if (!_context28.sent) {
+                                _context28.next = 15;
+                                break;
+                              }
 
-                    case 11:
-                      uri = _context19.sent;
-                      _context19.next = 20;
+                              return _context28.abrupt("return", [resolvedPath]);
+
+                            case 15:
+                              _context28.next = 19;
+                              break;
+
+                            case 17:
+                              _context28.prev = 17;
+                              _context28.t0 = _context28["catch"](8);
+
+                            case 19:
+                              // 2. Explicityly configured
+                              vocabulariesPath = null;
+
+                              if (!self.options.vocabularies) {
+                                _context28.next = 33;
+                                break;
+                              }
+
+                              vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+                              _context28.next = 24;
+                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                            case 24:
+                              if (!_context28.sent) {
+                                _context28.next = 26;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", [vocabulariesPath]);
+
+                            case 26:
+                              vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
+                              _context28.next = 29;
+                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                            case 29:
+                              if (!_context28.sent) {
+                                _context28.next = 31;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", [vocabulariesPath]);
+
+                            case 31:
+                              _context28.next = 44;
+                              break;
+
+                            case 33:
+                              if (!process.env.INF_VOCABULARIES) {
+                                _context28.next = 44;
+                                break;
+                              }
+
+                              vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+                              _context28.next = 37;
+                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                            case 37:
+                              if (!_context28.sent) {
+                                _context28.next = 39;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", [vocabulariesPath]);
+
+                            case 39:
+                              vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+                              _context28.next = 42;
+                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                            case 42:
+                              if (!_context28.sent) {
+                                _context28.next = 44;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", [vocabulariesPath]);
+
+                            case 44:
+                              _context28.next = 46;
+                              return _regenerator["default"].awrap(self.findInParentTree(self.baseDir, filepath));
+
+                            case 46:
+                              parentTreePath = _context28.sent;
+
+                              if (!parentTreePath) {
+                                _context28.next = 49;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", [parentTreePath]);
+
+                            case 49:
+                              _context28.next = 51;
+                              return _regenerator["default"].awrap(GLOB.async(filepath, {
+                                cwd: PATH.join(__dirname, "vocabularies")
+                              }));
+
+                            case 51:
+                              defaultPaths = _context28.sent;
+
+                              if (!defaultPaths.length) {
+                                _context28.next = 54;
+                                break;
+                              }
+
+                              return _context28.abrupt("return", defaultPaths.map(function (filepath) {
+                                return PATH.join(__dirname, "vocabularies", filepath);
+                              }));
+
+                            case 54:
+                              // 6. Not found
+                              if (!isOptional) {
+                                CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
+                                CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
+                              }
+
+                              throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+
+                            case 56:
+                            case "end":
+                              return _context28.stop();
+                          }
+                        }
+                      }, null, null, [[8, 17]]);
+                    };
+
+                    self = this;
+
+                    if (!self.options.resolveInfUri) {
+                      _context29.next = 6;
                       break;
+                    }
 
-                    case 14:
-                      _context19.prev = 14;
-                      _context19.t0 = _context19["catch"](8);
-                      log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
+                    _context29.next = 5;
+                    return _regenerator["default"].awrap(self.options.resolveInfUri(uri, self));
 
-                      if (!isOptional) {
-                        _context19.next = 19;
-                        break;
-                      }
+                  case 5:
+                    uri = _context29.sent;
 
-                      return _context19.abrupt("return", null);
+                  case 6:
+                    if (/(\/|\.|!)$/.test(uri)) {
+                      _context29.next = 9;
+                      break;
+                    }
 
-                    case 19:
-                      throw _context19.t0;
+                    CONSOLE.error("uri", uri);
+                    throw new Error("Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
 
-                    case 20:
-                      return _context19.abrupt("return", uri);
+                  case 9:
+                    isOptional = !!uri.match(/^!/);
 
-                    case 21:
-                    case "end":
-                      return _context19.stop();
-                  }
+                    if (isOptional) {
+                      uri = uri.replace(/^!/, '');
+                    }
+
+                    _context29.prev = 11;
+                    _context29.next = 14;
+                    return _regenerator["default"].awrap(resolveUri(uri));
+
+                  case 14:
+                    uri = _context29.sent;
+                    _context29.next = 23;
+                    break;
+
+                  case 17:
+                    _context29.prev = 17;
+                    _context29.t0 = _context29["catch"](11);
+
+                    if (!isOptional) {
+                      _context29.next = 22;
+                      break;
+                    }
+
+                    log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
+                    return _context29.abrupt("return", null);
+
+                  case 22:
+                    throw _context29.t0;
+
+                  case 23:
+                    return _context29.abrupt("return", uri);
+
+                  case 24:
+                  case "end":
+                    return _context29.stop();
                 }
-              }, _callee19, this, [[8, 14]]);
-            }));
-
-            function resolveInfUri(_x28) {
-              return _resolveInfUri.apply(this, arguments);
-            }
-
-            return resolveInfUri;
-          }()
+              }
+            }, null, this, [[11, 17]]);
+          }
         }, {
           key: "resolveComponentUri",
-          value: function () {
-            var _resolveComponentUri = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee20(uri) {
-              var self, exactPath, filepath, cwdPath, libPath, vocabulariesPath, defaultVocabulariesPath;
-              return _regenerator["default"].wrap(function _callee20$(_context20) {
-                while (1) {
-                  switch (_context20.prev = _context20.next) {
-                    case 0:
-                      self = this; //        if (/\/$/.test(uri)) {
-                      //            throw new Error("Component uri '" + uri + "' may not end with '/'!");
-                      //        }
-                      //        uri = self.flipDomainInUri(uri);
+          value: function resolveComponentUri(uri) {
+            var self, exactPath, filepath, cwdPath, libPath, vocabulariesPath, defaultVocabulariesPath;
+            return _regenerator["default"].async(function resolveComponentUri$(_context30) {
+              while (1) {
+                switch (_context30.prev = _context30.next) {
+                  case 0:
+                    self = this; //        if (/\/$/.test(uri)) {
+                    //            throw new Error("Component uri '" + uri + "' may not end with '/'!");
+                    //        }
+                    //        uri = self.flipDomainInUri(uri);
 
-                      if (!/^\./.test(uri)) {
-                        _context20.next = 10;
-                        break;
-                      }
-
-                      exactPath = PATH.resolve(self.baseDir || "", uri);
-                      _context20.next = 5;
-                      return FS.existsAsync(exactPath);
-
-                    case 5:
-                      if (!_context20.sent) {
-                        _context20.next = 10;
-                        break;
-                      }
-
-                      _context20.next = 8;
-                      return FS.statAsync(exactPath);
-
-                    case 8:
-                      if (!_context20.sent.isFile()) {
-                        _context20.next = 10;
-                        break;
-                      }
-
-                      return _context20.abrupt("return", exactPath);
-
-                    case 10:
-                      if (/(\/|\.)$/.test(uri)) {
-                        _context20.next = 13;
-                        break;
-                      }
-
-                      CONSOLE.error("uri", uri);
-                      throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
-
-                    case 13:
-                      filepath = uri + "inf.js";
-
-                      if (!/^\./.test(uri)) {
-                        _context20.next = 20;
-                        break;
-                      }
-
-                      cwdPath = PATH.join(self.baseDir, filepath);
-                      _context20.next = 18;
-                      return FS.existsAsync(cwdPath);
-
-                    case 18:
-                      if (!_context20.sent) {
-                        _context20.next = 20;
-                        break;
-                      }
-
-                      return _context20.abrupt("return", cwdPath);
-
-                    case 20:
-                      _context20.prev = 20;
-                      libPath = self.lib.js.resolve(filepath);
-                      _context20.next = 24;
-                      return FS.existsAsync(libPath);
-
-                    case 24:
-                      if (!_context20.sent) {
-                        _context20.next = 26;
-                        break;
-                      }
-
-                      return _context20.abrupt("return", libPath);
-
-                    case 26:
-                      _context20.next = 30;
+                    if (!/^\./.test(uri)) {
+                      _context30.next = 10;
                       break;
+                    }
 
-                    case 28:
-                      _context20.prev = 28;
-                      _context20.t0 = _context20["catch"](20);
+                    exactPath = PATH.resolve(self.baseDir || "", uri);
+                    _context30.next = 5;
+                    return _regenerator["default"].awrap(FS.existsAsync(exactPath));
 
-                    case 30:
-                      if (!self.options.vocabularies) {
-                        _context20.next = 43;
-                        break;
-                      }
-
-                      vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
-                      _context20.next = 34;
-                      return FS.existsAsync(vocabulariesPath);
-
-                    case 34:
-                      if (!_context20.sent) {
-                        _context20.next = 36;
-                        break;
-                      }
-
-                      return _context20.abrupt("return", vocabulariesPath);
-
-                    case 36:
-                      vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, filepath);
-                      _context20.next = 39;
-                      return FS.existsAsync(vocabulariesPath);
-
-                    case 39:
-                      if (!_context20.sent) {
-                        _context20.next = 41;
-                        break;
-                      }
-
-                      return _context20.abrupt("return", vocabulariesPath);
-
-                    case 41:
-                      _context20.next = 54;
+                  case 5:
+                    if (!_context30.sent) {
+                      _context30.next = 10;
                       break;
+                    }
 
-                    case 43:
-                      if (!process.env.INF_VOCABULARIES) {
-                        _context20.next = 54;
-                        break;
-                      }
+                    _context30.next = 8;
+                    return _regenerator["default"].awrap(FS.statAsync(exactPath));
 
-                      vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
-                      _context20.next = 47;
-                      return FS.existsAsync(vocabulariesPath);
+                  case 8:
+                    if (!_context30.sent.isFile()) {
+                      _context30.next = 10;
+                      break;
+                    }
 
-                    case 47:
-                      if (!_context20.sent) {
-                        _context20.next = 49;
-                        break;
-                      }
+                    return _context30.abrupt("return", exactPath);
 
-                      return _context20.abrupt("return", vocabulariesPath);
+                  case 10:
+                    if (/(\/|\.|!)$/.test(uri)) {
+                      _context30.next = 13;
+                      break;
+                    }
 
-                    case 49:
-                      vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
-                      _context20.next = 52;
-                      return FS.existsAsync(vocabulariesPath);
+                    CONSOLE.error("uri", uri);
+                    throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
 
-                    case 52:
-                      if (!_context20.sent) {
-                        _context20.next = 54;
-                        break;
-                      }
+                  case 13:
+                    filepath = uri + "inf.js";
 
-                      return _context20.abrupt("return", vocabulariesPath);
+                    if (!/^\./.test(uri)) {
+                      _context30.next = 20;
+                      break;
+                    }
 
-                    case 54:
-                      defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
-                      _context20.next = 57;
-                      return FS.existsAsync(defaultVocabulariesPath);
+                    cwdPath = PATH.join(self.baseDir, filepath);
+                    _context30.next = 18;
+                    return _regenerator["default"].awrap(FS.existsAsync(cwdPath));
 
-                    case 57:
-                      if (!_context20.sent) {
-                        _context20.next = 59;
-                        break;
-                      }
+                  case 18:
+                    if (!_context30.sent) {
+                      _context30.next = 20;
+                      break;
+                    }
 
-                      return _context20.abrupt("return", defaultVocabulariesPath);
+                    return _context30.abrupt("return", cwdPath);
 
-                    case 59:
-                      defaultVocabulariesPath = PATH.join(__dirname, "vocabularies", filepath);
-                      _context20.next = 62;
-                      return FS.existsAsync(defaultVocabulariesPath);
+                  case 20:
+                    _context30.prev = 20;
+                    libPath = self.lib.js.resolve(filepath);
+                    _context30.next = 24;
+                    return _regenerator["default"].awrap(FS.existsAsync(libPath));
 
-                    case 62:
-                      if (!_context20.sent) {
-                        _context20.next = 64;
-                        break;
-                      }
+                  case 24:
+                    if (!_context30.sent) {
+                      _context30.next = 26;
+                      break;
+                    }
 
-                      return _context20.abrupt("return", defaultVocabulariesPath);
+                    return _context30.abrupt("return", libPath);
 
-                    case 64:
-                      throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+                  case 26:
+                    _context30.next = 30;
+                    break;
 
-                    case 65:
-                    case "end":
-                      return _context20.stop();
-                  }
+                  case 28:
+                    _context30.prev = 28;
+                    _context30.t0 = _context30["catch"](20);
+
+                  case 30:
+                    if (!self.options.vocabularies) {
+                      _context30.next = 43;
+                      break;
+                    }
+
+                    vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+                    _context30.next = 34;
+                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                  case 34:
+                    if (!_context30.sent) {
+                      _context30.next = 36;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", vocabulariesPath);
+
+                  case 36:
+                    vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, filepath);
+                    _context30.next = 39;
+                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                  case 39:
+                    if (!_context30.sent) {
+                      _context30.next = 41;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", vocabulariesPath);
+
+                  case 41:
+                    _context30.next = 54;
+                    break;
+
+                  case 43:
+                    if (!process.env.INF_VOCABULARIES) {
+                      _context30.next = 54;
+                      break;
+                    }
+
+                    vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+                    _context30.next = 47;
+                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                  case 47:
+                    if (!_context30.sent) {
+                      _context30.next = 49;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", vocabulariesPath);
+
+                  case 49:
+                    vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+                    _context30.next = 52;
+                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
+
+                  case 52:
+                    if (!_context30.sent) {
+                      _context30.next = 54;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", vocabulariesPath);
+
+                  case 54:
+                    defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
+                    _context30.next = 57;
+                    return _regenerator["default"].awrap(FS.existsAsync(defaultVocabulariesPath));
+
+                  case 57:
+                    if (!_context30.sent) {
+                      _context30.next = 59;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", defaultVocabulariesPath);
+
+                  case 59:
+                    defaultVocabulariesPath = PATH.join(__dirname, "vocabularies", filepath);
+                    _context30.next = 62;
+                    return _regenerator["default"].awrap(FS.existsAsync(defaultVocabulariesPath));
+
+                  case 62:
+                    if (!_context30.sent) {
+                      _context30.next = 64;
+                      break;
+                    }
+
+                    return _context30.abrupt("return", defaultVocabulariesPath);
+
+                  case 64:
+                    throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+
+                  case 65:
+                  case "end":
+                    return _context30.stop();
                 }
-              }, _callee20, this, [[20, 28]]);
-            }));
-
-            function resolveComponentUri(_x30) {
-              return _resolveComponentUri.apply(this, arguments);
-            }
-
-            return resolveComponentUri;
-          }()
+              }
+            }, null, this, [[20, 28]]);
+          }
         }, {
           key: "getComponentForUri",
-          value: function () {
-            var _getComponentForUri = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee21(uri) {
-              var self, key, codeblock, _exports, _component, path, _component2;
+          value: function getComponentForUri(uri, alias) {
+            var self, key, _codeblock, _exports, _component, path, _component2;
 
-              return _regenerator["default"].wrap(function _callee21$(_context21) {
-                while (1) {
-                  switch (_context21.prev = _context21.next) {
-                    case 0:
-                      self = this;
+            return _regenerator["default"].async(function getComponentForUri$(_context31) {
+              while (1) {
+                switch (_context31.prev = _context31.next) {
+                  case 0:
+                    self = this;
 
-                      if (!((0, _typeof2["default"])(uri) === "object" && uri['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock')) {
-                        _context21.next = 12;
-                        break;
-                      }
+                    if (!((0, _typeof2["default"])(uri) === "object" && uri['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock')) {
+                      _context31.next = 12;
+                      break;
+                    }
 
-                      key = CRYPTO.createHash('sha1').update(JSON.stringify(uri)).digest('hex');
+                    key = CRYPTO.createHash('sha1').update(JSON.stringify(uri)).digest('hex');
 
-                      if (self.components[key]) {
-                        _context21.next = 11;
-                        break;
-                      }
+                    if (self.components[key]) {
+                      _context31.next = 11;
+                      break;
+                    }
 
-                      codeblock = CODEBLOCK.thawFromJSON(uri);
-                      _exports = {};
-                      codeblock.run({
-                        process: process,
-                        exports: _exports
-                      }); // TODO: Get filepath from 'uri._filepath'
+                    _codeblock = CODEBLOCK.thawFromJSON(uri);
+                    _exports = {};
 
-                      _component = new Component(null);
-                      _context21.next = 10;
-                      return _component.init(self, {
-                        pathHash: key,
-                        exports: _exports
-                      });
+                    _codeblock.run({
+                      process: process,
+                      exports: _exports
+                    }); // TODO: Get filepath from 'uri._filepath'
 
-                    case 10:
-                      self.components[key] = _component;
 
-                    case 11:
-                      return _context21.abrupt("return", self.components[key]);
+                    _component = new Component(null);
+                    _context31.next = 10;
+                    return _regenerator["default"].awrap(_component.init(self, {
+                      pathHash: key,
+                      exports: _exports
+                    }));
 
-                    case 12:
-                      _context21.next = 14;
-                      return self.resolveComponentUri(uri);
+                  case 10:
+                    self.components[key] = _component;
 
-                    case 14:
-                      path = _context21.sent;
+                  case 11:
+                    return _context31.abrupt("return", self.components[key]);
 
-                      if (self.components[path]) {
-                        _context21.next = 21;
-                        break;
-                      }
+                  case 12:
+                    _context31.next = 14;
+                    return _regenerator["default"].awrap(self.resolveComponentUri(uri));
 
-                      log("Load component for uri '" + uri + "' from file:", path);
-                      _component2 = new Component(path);
-                      _context21.next = 20;
-                      return _component2.init(self);
+                  case 14:
+                    path = _context31.sent;
 
-                    case 20:
-                      self.components[path] = _component2;
+                    if (self.components[path]) {
+                      _context31.next = 21;
+                      break;
+                    }
 
-                    case 21:
-                      return _context21.abrupt("return", self.components[path]);
+                    log("Load component for uri '" + uri + "' from file:", path);
+                    _component2 = new Component(path);
+                    _context31.next = 20;
+                    return _regenerator["default"].awrap(_component2.init(self));
 
-                    case 22:
-                    case "end":
-                      return _context21.stop();
-                  }
+                  case 20:
+                    self.components[path] = _component2;
+
+                  case 21:
+                    return _context31.abrupt("return", self.components[path]);
+
+                  case 22:
+                  case "end":
+                    return _context31.stop();
                 }
-              }, _callee21, this);
-            }));
-
-            function getComponentForUri(_x31) {
-              return _getComponentForUri.apply(this, arguments);
-            }
-
-            return getComponentForUri;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "mapComponent",
-          value: function () {
-            var _mapComponent = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee22(alias, uri) {
-              var self, component;
-              return _regenerator["default"].wrap(function _callee22$(_context22) {
-                while (1) {
-                  switch (_context22.prev = _context22.next) {
-                    case 0:
-                      self = this;
-                      _context22.next = 3;
-                      return self.getComponentForUri(uri);
+          value: function mapComponent(anchor, uri) {
+            var self, alias, component, prefixedAlias, prefixedNamespace;
+            return _regenerator["default"].async(function mapComponent$(_context32) {
+              while (1) {
+                switch (_context32.prev = _context32.next) {
+                  case 0:
+                    self = this;
+                    alias = anchor.alias;
+                    _context32.next = 4;
+                    return _regenerator["default"].awrap(self.getComponentForUri(uri, alias));
 
-                    case 3:
-                      component = _context22.sent;
+                  case 4:
+                    component = _context32.sent;
 
-                      if (!self.aliases[alias]) {
-                        _context22.next = 6;
-                        break;
+                    if (!self.aliases[alias]) {
+                      _context32.next = 9;
+                      break;
+                    }
+
+                    if (!(component.path === self.aliases[alias].path)) {
+                      _context32.next = 8;
+                      break;
+                    }
+
+                    return _context32.abrupt("return", self.aliases[alias]);
+
+                  case 8:
+                    throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
+
+                  case 9:
+                    log("Map component for uri '" + uri + "' to alias '" + alias + "'");
+                    _context32.next = 12;
+                    return _regenerator["default"].awrap(component.forAlias('component', alias, self, anchor.namespacePointer));
+
+                  case 12:
+                    self.aliases[alias] = _context32.sent;
+
+                    if (self.anchorPrefix) {
+                      //console.error("anchor", anchor);
+                      // TODO: Map directly into 'self.aliases' as it is inherited anyway or use 'self.forParent.mappedAliases'?
+                      if (anchor.anchorNamespaceAlias) {
+                        prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
+                        prefixedNamespace = self.anchorPrefix.replace(/\/$/, '') + '/' + alias.replace(/^\//, '');
+                        log("Map component for uri '" + uri + "' for parent namespace to alias '" + prefixedAlias + "'");
+                        self.forParent.aliases = self.forParent.aliases || {};
+                        self.forParent.aliases[prefixedAlias] = self.aliases[alias]; //await component.forAlias('component', prefixedNamespace, self);
                       }
 
-                      throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
+                      self.forParent.mappedAliases = self.forParent.mappedAliases || {};
+                      self.forParent.mappedAliases[alias] = self.aliases[alias];
+                    }
 
-                    case 6:
-                      log("Map component for uri '" + uri + "' to alias '" + alias + "'");
-                      _context22.next = 9;
-                      return component.forAlias('component', alias, self);
+                    return _context32.abrupt("return", self.aliases[alias]);
 
-                    case 9:
-                      return _context22.abrupt("return", self.aliases[alias] = _context22.sent);
-
-                    case 10:
-                    case "end":
-                      return _context22.stop();
-                  }
+                  case 15:
+                  case "end":
+                    return _context32.stop();
                 }
-              }, _callee22, this);
-            }));
-
-            function mapComponent(_x32, _x33) {
-              return _mapComponent.apply(this, arguments);
-            }
-
-            return mapComponent;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "mapInterface",
-          value: function () {
-            var _mapInterface = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee23(alias, uri) {
-              var self, component;
-              return _regenerator["default"].wrap(function _callee23$(_context23) {
-                while (1) {
-                  switch (_context23.prev = _context23.next) {
-                    case 0:
-                      self = this;
-                      _context23.next = 3;
-                      return self.getComponentForUri(uri);
+          value: function mapInterface(alias, uri) {
+            var self, instanceUri, component, interfaceComp;
+            return _regenerator["default"].async(function mapInterface$(_context33) {
+              while (1) {
+                switch (_context33.prev = _context33.next) {
+                  case 0:
+                    self = this;
+                    instanceUri = uri;
+                    component = null;
 
-                    case 3:
-                      component = _context23.sent;
+                    if (!self.mappedAliases[uri]) {
+                      _context33.next = 8;
+                      break;
+                    }
 
-                      if (!self.interfaces[alias]) {
-                        _context23.next = 6;
-                        break;
-                      }
+                    component = self.mappedAliases[uri][0];
+                    instanceUri = self.mappedAliases[uri][1];
+                    _context33.next = 12;
+                    break;
 
-                      throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+                  case 8:
+                    if (/(\/|\.)$/.test(uri)) {
+                      _context33.next = 12;
+                      break;
+                    }
 
-                    case 6:
-                      log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
-                      _context23.next = 9;
-                      return component.forAlias('interface', alias, self);
+                    if (self.aliases[uri]) {
+                      _context33.next = 11;
+                      break;
+                    }
 
-                    case 9:
-                      return _context23.abrupt("return", self.interfaces[alias] = _context23.sent);
+                    throw new Error("Cannot find component '" + uri + "' to map to interface alias '" + alias + "' as it does not seem to be already declared!");
 
-                    case 10:
-                    case "end":
-                      return _context23.stop();
-                  }
+                  case 11:
+                    component = self.aliases[uri];
+
+                  case 12:
+                    if (!component) {
+                      _context33.next = 21;
+                      break;
+                    }
+
+                    if (!self.interfaces[alias]) {
+                      _context33.next = 17;
+                      break;
+                    }
+
+                    if (!(self.interfaces[alias].path === component.path)) {
+                      _context33.next = 16;
+                      break;
+                    }
+
+                    return _context33.abrupt("return", self.interfaces[alias]);
+
+                  case 16:
+                    throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+
+                  case 17:
+                    log("Map interface for component '" + uri + "' to alias '" + alias + "'");
+                    interfaceComp = Object.create(component.getInstance('component', instanceUri)); // Cause interface to be re-initialized for the new alias.
+
+                    interfaceComp.$instance = null;
+                    return _context33.abrupt("return", self.interfaces[alias] = interfaceComp);
+
+                  case 21:
+                    _context33.next = 23;
+                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
+
+                  case 23:
+                    component = _context33.sent;
+
+                    if (!self.interfaces[alias]) {
+                      _context33.next = 28;
+                      break;
+                    }
+
+                    if (!(self.interfaces[alias].path === component.path)) {
+                      _context33.next = 27;
+                      break;
+                    }
+
+                    return _context33.abrupt("return", self.interfaces[alias]);
+
+                  case 27:
+                    throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+
+                  case 28:
+                    log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+                    _context33.next = 31;
+                    return _regenerator["default"].awrap(component.forAlias('interface', alias, self));
+
+                  case 31:
+                    return _context33.abrupt("return", self.interfaces[alias] = _context33.sent);
+
+                  case 32:
+                  case "end":
+                    return _context33.stop();
                 }
-              }, _callee23, this);
-            }));
-
-            function mapInterface(_x34, _x35) {
-              return _mapInterface.apply(this, arguments);
-            }
-
-            return mapInterface;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "mapContract",
-          value: function () {
-            var _mapContract = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee24(anchor, uri) {
-              var self, alias, component;
-              return _regenerator["default"].wrap(function _callee24$(_context24) {
-                while (1) {
-                  switch (_context24.prev = _context24.next) {
-                    case 0:
-                      self = this;
-                      alias = anchor.alias;
-                      _context24.next = 4;
-                      return self.getComponentForUri(uri);
+          value: function mapContract(anchor, uri) {
+            var self, alias, component;
+            return _regenerator["default"].async(function mapContract$(_context34) {
+              while (1) {
+                switch (_context34.prev = _context34.next) {
+                  case 0:
+                    self = this;
+                    alias = anchor.alias;
+                    _context34.next = 4;
+                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
 
-                    case 4:
-                      component = _context24.sent;
+                  case 4:
+                    component = _context34.sent;
 
-                      if (!self.contracts[alias]) {
-                        _context24.next = 7;
-                        break;
-                      }
+                    if (!self.contracts[alias]) {
+                      _context34.next = 7;
+                      break;
+                    }
 
-                      throw new Error("Cannot map contract '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.contracts[alias].path + "'!");
+                    throw new Error("Cannot map contract '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.contracts[alias].path + "'!");
 
-                    case 7:
-                      log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
-                      _context24.next = 10;
-                      return component.forAlias('contract', alias, self);
+                  case 7:
+                    log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+                    _context34.next = 10;
+                    return _regenerator["default"].awrap(component.forAlias('contract', alias, self));
 
-                    case 10:
-                      self.contracts[alias] = _context24.sent;
-                      self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
-                      return _context24.abrupt("return", self.contracts[alias]);
+                  case 10:
+                    self.contracts[alias] = _context34.sent;
+                    self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
+                    return _context34.abrupt("return", self.contracts[alias]);
 
-                    case 13:
-                    case "end":
-                      return _context24.stop();
-                  }
+                  case 13:
+                  case "end":
+                    return _context34.stop();
                 }
-              }, _callee24, this);
-            }));
-
-            function mapContract(_x36, _x37) {
-              return _mapContract.apply(this, arguments);
-            }
-
-            return mapContract;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "mapPlugin",
-          value: function () {
-            var _mapPlugin = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee25(match, uri) {
-              var self, component;
-              return _regenerator["default"].wrap(function _callee25$(_context25) {
-                while (1) {
-                  switch (_context25.prev = _context25.next) {
-                    case 0:
-                      self = this;
-                      _context25.next = 3;
-                      return self.getComponentForUri(uri);
+          value: function mapPlugin(match, uri) {
+            var self, component;
+            return _regenerator["default"].async(function mapPlugin$(_context35) {
+              while (1) {
+                switch (_context35.prev = _context35.next) {
+                  case 0:
+                    self = this;
+                    _context35.next = 3;
+                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
 
-                    case 3:
-                      component = _context25.sent;
-                      log("Map plugin for uri '" + uri + "' to match '" + match + "'");
-                      _context25.t0 = self.plugins;
-                      _context25.t1 = match;
-                      _context25.t2 = new RegExp(match);
-                      _context25.next = 10;
-                      return component.forAlias('plugin', match, self);
+                  case 3:
+                    component = _context35.sent;
+                    log("Map plugin for uri '" + uri + "' to match '" + match + "'");
+                    _context35.t0 = self.plugins;
+                    _context35.t1 = match;
+                    _context35.t2 = new RegExp(match);
+                    _context35.next = 10;
+                    return _regenerator["default"].awrap(component.forAlias('plugin', match, self));
 
-                    case 10:
-                      _context25.t3 = _context25.sent;
-                      _context25.t4 = {
-                        match: _context25.t1,
-                        re: _context25.t2,
-                        component: _context25.t3
-                      };
+                  case 10:
+                    _context35.t3 = _context35.sent;
+                    _context35.t4 = {
+                      match: _context35.t1,
+                      re: _context35.t2,
+                      component: _context35.t3
+                    };
 
-                      _context25.t0.push.call(_context25.t0, _context25.t4);
+                    _context35.t0.push.call(_context35.t0, _context35.t4);
 
-                      return _context25.abrupt("return", component);
+                    return _context35.abrupt("return", component);
 
-                    case 14:
-                    case "end":
-                      return _context25.stop();
-                  }
+                  case 14:
+                  case "end":
+                    return _context35.stop();
                 }
-              }, _callee25, this);
-            }));
-
-            function mapPlugin(_x38, _x39) {
-              return _mapPlugin.apply(this, arguments);
-            }
-
-            return mapPlugin;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "mapVariables",
-          value: function () {
-            var _mapVariables = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee26(alias, value) {
-              var self;
-              return _regenerator["default"].wrap(function _callee26$(_context26) {
-                while (1) {
-                  switch (_context26.prev = _context26.next) {
-                    case 0:
-                      self = this;
+          value: function mapVariables(alias, value) {
+            var self;
+            return _regenerator["default"].async(function mapVariables$(_context36) {
+              while (1) {
+                switch (_context36.prev = _context36.next) {
+                  case 0:
+                    self = this;
 
-                      if (!self.variables[alias]) {
-                        _context26.next = 3;
-                        break;
-                      }
+                    if (!self.variables[alias]) {
+                      _context36.next = 3;
+                      break;
+                    }
 
-                      throw new Error("Cannot map variables '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.variables[alias].path + "'!");
+                    throw new Error("Cannot map variables '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.variables[alias].path + "'!");
 
-                    case 3:
-                      log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
-                      self.variables[alias] = value;
-                      return _context26.abrupt("return", value);
+                  case 3:
+                    log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
+                    self.variables[alias] = value;
+                    return _context36.abrupt("return", value);
 
-                    case 6:
-                    case "end":
-                      return _context26.stop();
-                  }
+                  case 6:
+                  case "end":
+                    return _context36.stop();
                 }
-              }, _callee26, this);
-            }));
-
-            function mapVariables(_x40, _x41) {
-              return _mapVariables.apply(this, arguments);
-            }
-
-            return mapVariables;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "getPluginsForMatch",
           value: function getPluginsForMatch(match) {
@@ -20858,364 +28847,363 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         }, {
           key: "getValueForVariablePath",
-          value: function () {
-            var _getValueForVariablePath = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee27(path) {
-              var parts;
-              return _regenerator["default"].wrap(function _callee27$(_context27) {
-                while (1) {
-                  switch (_context27.prev = _context27.next) {
-                    case 0:
-                      parts = LODASH_TO_PATH(path);
+          value: function getValueForVariablePath(path) {
+            var parts;
+            return _regenerator["default"].async(function getValueForVariablePath$(_context37) {
+              while (1) {
+                switch (_context37.prev = _context37.next) {
+                  case 0:
+                    parts = LODASH_TO_PATH(path);
 
-                      if (this.variables[parts[0]]) {
-                        _context27.next = 4;
-                        break;
-                      }
+                    if (this.variables[parts[0]]) {
+                      _context37.next = 4;
+                      break;
+                    }
 
-                      console.error("this.variables", this.variables);
-                      throw new Error("Variables for alias '".concat(parts[0], "' not mapped! Needed for resolving '").concat(path, "'."));
+                    console.error("this.variables", this.variables);
+                    throw new Error("Variables for alias '".concat(parts[0], "' not mapped! Needed for resolving '").concat(path, "'."));
 
-                    case 4:
-                      if (this.variables[parts[0]].$instance) {
-                        _context27.next = 11;
-                        break;
-                      }
+                  case 4:
+                    if (this.variables[parts[0]].$instance) {
+                      _context37.next = 13;
+                      break;
+                    }
 
-                      _context27.next = 7;
-                      return this.variables[parts[0]];
+                    _context37.t0 = _regenerator["default"];
+                    _context37.next = 8;
+                    return _regenerator["default"].awrap(this.variables[parts[0]]);
 
-                    case 7:
-                      _context27.t0 = {
-                        // TODO: Provide full calling context?
-                        value: parts
-                      };
-                      _context27.next = 10;
-                      return _context27.sent.value(_context27.t0);
+                  case 8:
+                    _context37.t1 = {
+                      // TODO: Provide full calling context?
+                      value: parts
+                    };
+                    _context37.t2 = _context37.sent.value(_context37.t1);
+                    _context37.next = 12;
+                    return _context37.t0.awrap.call(_context37.t0, _context37.t2);
 
-                    case 10:
-                      this.variables[parts[0]].$instance = _context27.sent.value;
+                  case 12:
+                    this.variables[parts[0]].$instance = _context37.sent.value;
 
-                    case 11:
-                      return _context27.abrupt("return", this.variables[parts[0]].$instance(parts.slice(1)));
+                  case 13:
+                    return _context37.abrupt("return", this.variables[parts[0]].$instance(parts.slice(1)));
 
-                    case 12:
-                    case "end":
-                      return _context27.stop();
-                  }
+                  case 14:
+                  case "end":
+                    return _context37.stop();
                 }
-              }, _callee27, this);
-            }));
-
-            function getValueForVariablePath(_x42) {
-              return _getValueForVariablePath.apply(this, arguments);
-            }
-
-            return getValueForVariablePath;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "replaceVariablesInString",
-          value: function () {
-            var _replaceVariablesInString = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee29(value) {
-              var self, replaceVariable, done, vars, re, m, keys;
-              return _regenerator["default"].wrap(function _callee29$(_context29) {
-                while (1) {
-                  switch (_context29.prev = _context29.next) {
-                    case 0:
-                      self = this;
+          value: function replaceVariablesInString(value) {
+            var self, re, m, vars, replaceVariable, done;
+            return _regenerator["default"].async(function replaceVariablesInString$(_context39) {
+              while (1) {
+                switch (_context39.prev = _context39.next) {
+                  case 0:
+                    self = this;
 
-                      if (!(typeof value === "string" && /\$\{([^\}]+)\}/.test(value))) {
-                        _context29.next = 11;
-                        break;
-                      }
+                    if (!(typeof value === "string" && /\$\{([^\}]+)\}/.test(value))) {
+                      _context39.next = 10;
+                      break;
+                    }
 
-                      replaceVariable = function replaceVariable(m) {
-                        if (m[1] === '\\') {
-                          // This variable is escaped so we do not replace it.
-                          vars[m[0]] = '${' + m[2] + '}';
-                        } else if (/^__(.+)__$/.test(m[2])) {
-                          vars[m[0]] = self.getSelfVariable(m[2]);
-                        } else {
-                          done = done.then(
-                          /*#__PURE__*/
-                          (0, _asyncToGenerator2["default"])(
-                          /*#__PURE__*/
-                          _regenerator["default"].mark(function _callee28() {
-                            return _regenerator["default"].wrap(function _callee28$(_context28) {
-                              while (1) {
-                                switch (_context28.prev = _context28.next) {
-                                  case 0:
-                                    _context28.next = 2;
-                                    return self.getValueForVariablePath(m[2]);
+                    replaceVariable = function replaceVariable(m) {
+                      if (m[1] === '\\') {
+                        // This variable is escaped so we do not replace it.
+                        vars[m[0]] = '${' + m[2] + '}';
+                      } else if (/^__(.+)__$/.test(m[2])) {
+                        vars[m[0]] = self.getSelfVariable(m[2]);
+                      } else if (/^@\s*.+$/.test(m[2])) {
+                        var key = m[2].replace(/^@\s*/, '');
 
-                                  case 2:
-                                    vars[m[0]] = _context28.sent;
-
-                                    if (!(typeof vars[m[0]] === "undefined")) {
-                                      _context28.next = 5;
-                                      break;
-                                    }
-
-                                    throw new Error("Value for variable '".concat(m[2], "' came back as undefined!"));
-
-                                  case 5:
-                                  case "end":
-                                    return _context28.stop();
-                                }
-                              }
-                            }, _callee28);
-                          })));
+                        if (typeof self.mappedNamespaceAliases[key] === "undefined") {
+                          throw new Error("Value for namespace prefix '".concat(key, "' came back as undefined!"));
                         }
-                      };
 
-                      done = Promise.resolve();
-                      vars = {};
-                      re = /(\\)?\$\{([^\}]+)\}/g;
-
-                      while (m = re.exec(value)) {
-                        replaceVariable(m);
-                      }
-
-                      _context29.next = 9;
-                      return done;
-
-                    case 9:
-                      keys = Object.keys(vars);
-
-                      if (keys.length) {
-                        keys.forEach(function (key) {
-                          value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
-                        });
-                      }
-
-                    case 11:
-                      return _context29.abrupt("return", value);
-
-                    case 12:
-                    case "end":
-                      return _context29.stop();
-                  }
-                }
-              }, _callee29, this);
-            }));
-
-            function replaceVariablesInString(_x43) {
-              return _replaceVariablesInString.apply(this, arguments);
-            }
-
-            return replaceVariablesInString;
-          }()
-        }, {
-          key: "getComponentForAlias",
-          value: function () {
-            var _getComponentForAlias = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee30(alias) {
-              var self;
-              return _regenerator["default"].wrap(function _callee30$(_context30) {
-                while (1) {
-                  switch (_context30.prev = _context30.next) {
-                    case 0:
-                      self = this;
-
-                      if (!(alias === '')) {
-                        _context30.next = 6;
-                        break;
-                      }
-
-                      _context30.next = 4;
-                      return self.getComponentForUri("inf.");
-
-                    case 4:
-                      _context30.t0 = self;
-                      return _context30.abrupt("return", _context30.sent.forAlias('component', '', _context30.t0));
-
-                    case 6:
-                      if (self.aliases[alias]) {
-                        _context30.next = 8;
-                        break;
-                      }
-
-                      throw new Error("No component mapped to alias '" + alias + "'!");
-
-                    case 8:
-                      return _context30.abrupt("return", self.aliases[alias]);
-
-                    case 9:
-                    case "end":
-                      return _context30.stop();
-                  }
-                }
-              }, _callee30, this);
-            }));
-
-            function getComponentForAlias(_x44) {
-              return _getComponentForAlias.apply(this, arguments);
-            }
-
-            return getComponentForAlias;
-          }()
-        }, {
-          key: "gatherComponentAspect",
-          value: function () {
-            var _gatherComponentAspect = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee33(aspectName) {
-              var self;
-              return _regenerator["default"].wrap(function _callee33$(_context33) {
-                while (1) {
-                  switch (_context33.prev = _context33.next) {
-                    case 0:
-                      self = this;
-                      return _context33.abrupt("return", Promise.map(Object.keys(self.components),
-                      /*#__PURE__*/
-                      function () {
-                        var _ref16 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee32(uri) {
-                          var aliases, aspectsCode;
-                          return _regenerator["default"].wrap(function _callee32$(_context32) {
+                        vars[m[0]] = self.mappedNamespaceAliases[key];
+                      } else {
+                        done = done.then(function _callee16() {
+                          return _regenerator["default"].async(function _callee16$(_context38) {
                             while (1) {
-                              switch (_context32.prev = _context32.next) {
+                              switch (_context38.prev = _context38.next) {
                                 case 0:
-                                  aliases = self.components[uri].getComponentAliases();
-                                  aspectsCode = {};
-                                  _context32.next = 4;
-                                  return Promise.map(aliases,
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref17 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee31(alias) {
-                                      var aspectCode, args, argsByName;
-                                      return _regenerator["default"].wrap(function _callee31$(_context31) {
-                                        while (1) {
-                                          switch (_context31.prev = _context31.next) {
-                                            case 0:
-                                              _context31.next = 2;
-                                              return self.components[uri].forAlias('component', alias, self);
+                                  _context38.next = 2;
+                                  return _regenerator["default"].awrap(self.getValueForVariablePath(m[2]));
 
-                                            case 2:
-                                              _context31.t0 = 'to' + aspectName;
-                                              aspectCode = _context31.sent.impl[_context31.t0];
+                                case 2:
+                                  vars[m[0]] = _context38.sent;
 
-                                              if (aspectCode) {
-                                                _context31.next = 6;
-                                                break;
-                                              }
+                                  if (!(typeof vars[m[0]] === "undefined")) {
+                                    _context38.next = 5;
+                                    break;
+                                  }
 
-                                              return _context31.abrupt("return");
-
-                                            case 6:
-                                              if (!(typeof aspectCode === "function")) {
-                                                _context31.next = 10;
-                                                break;
-                                              }
-
-                                              _context31.next = 9;
-                                              return aspectCode();
-
-                                            case 9:
-                                              aspectCode = _context31.sent;
-
-                                            case 10:
-                                              if (typeof aspectCode === "string") {
-                                                // Purify codeblocks in a string payload which is assumed to be JavaScript so that
-                                                // the payload becomes valid javascript and can be combined with other JS code without
-                                                // further processing by the consuming component.
-                                                aspectCode = CODEBLOCK.purifyCode(aspectCode, {
-                                                  freezeToJavaScript: true
-                                                }).toString();
-                                              } else if ((0, _typeof2["default"])(aspectCode) === "object" && aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
-                                                // Compile codeblock with no args so that consuming component does not need to deal
-                                                // with codeblock processing and is able to use payload as-is.
-                                                aspectCode = aspectCode.compile().getCode();
-                                              } else if ((0, _typeof2["default"])(aspectCode) === "object" && typeof aspectCode.codeblock === "function") {
-                                                // Compile codeblock using provided args so that consuming component does not need to deal
-                                                // with codeblock processing and is able to use payload as-is.
-                                                args = aspectCode.args || [];
-                                                aspectCode = aspectCode.codeblock();
-                                                argsByName = {};
-
-                                                if (Array.isArray(args)) {
-                                                  /*
-                                                  return {
-                                                      args: [ arg1 ],
-                                                      codeblock: (javascript (arg1) >>>
-                                                      <<<)
-                                                  };                    
-                                                  */
-                                                  aspectCode._args.forEach(function (name, i) {
-                                                    argsByName[name] = args[i];
-                                                  });
-                                                } else if ((0, _typeof2["default"])(args) === "object") {
-                                                  /*
-                                                  return {
-                                                      args: {
-                                                          arg1: arg1
-                                                      },
-                                                      codeblock: (javascript (arg1) >>>
-                                                      <<<)
-                                                  };                    
-                                                  */
-                                                  argsByName = args;
-                                                }
-
-                                                aspectCode = aspectCode.compile(argsByName).getCode();
-                                              }
-
-                                              aspectsCode[alias] = aspectCode;
-
-                                            case 12:
-                                            case "end":
-                                              return _context31.stop();
-                                          }
-                                        }
-                                      }, _callee31);
-                                    }));
-
-                                    return function (_x47) {
-                                      return _ref17.apply(this, arguments);
-                                    };
-                                  }());
-
-                                case 4:
-                                  return _context32.abrupt("return", {
-                                    uri: uri,
-                                    pathHash: self.components[uri].pathHash,
-                                    aspect: aspectsCode
-                                  });
+                                  throw new Error("Value for variable '".concat(m[2], "' came back as undefined!"));
 
                                 case 5:
                                 case "end":
-                                  return _context32.stop();
+                                  return _context38.stop();
                               }
                             }
-                          }, _callee32);
-                        }));
+                          });
+                        });
+                      }
+                    };
 
-                        return function (_x46) {
-                          return _ref16.apply(this, arguments);
-                        };
-                      }()));
+                    done = Promise.resolve();
+                    vars = {};
+                    re = /(\\)?\$\{([^\}]+)\}/g;
 
-                    case 2:
-                    case "end":
-                      return _context33.stop();
-                  }
+                    while (m = re.exec(value)) {
+                      replaceVariable(m);
+                    }
+
+                    _context39.next = 9;
+                    return _regenerator["default"].awrap(done);
+
+                  case 9:
+                    Object.keys(vars).forEach(function (key) {
+                      value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
+                    });
+
+                  case 10:
+                    return _context39.abrupt("return", value);
+
+                  case 11:
+                  case "end":
+                    return _context39.stop();
                 }
-              }, _callee33, this);
-            }));
+              }
+            }, null, this);
+          }
+        }, {
+          key: "makeNamespacePointerForString",
+          value: function makeNamespacePointerForString(parentPointer, value) {
+            return new NamespacePointer(this, parentPointer, value);
+          }
+        }, {
+          key: "getImplementationAdapterForId",
+          value: function getImplementationAdapterForId(adapterId) {
+            var self, adapterPath, adapter;
+            return _regenerator["default"].async(function getImplementationAdapterForId$(_context40) {
+              while (1) {
+                switch (_context40.prev = _context40.next) {
+                  case 0:
+                    self = this;
 
-            function gatherComponentAspect(_x45) {
-              return _gatherComponentAspect.apply(this, arguments);
-            }
+                    if (self.implementationAdapters[adapterId]) {
+                      _context40.next = 5;
+                      break;
+                    }
 
-            return gatherComponentAspect;
-          }()
+                    if (self.options.implementationAdapters[adapterId]) {
+                      _context40.next = 4;
+                      break;
+                    }
+
+                    return _context40.abrupt("return", null);
+
+                  case 4:
+                    if (typeof self.options.implementationAdapters[adapterId] === 'string') {
+                      adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
+                      adapter = require(adapterPath);
+                      self.implementationAdapters[adapterId] = adapter;
+                    } else {
+                      self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
+                    }
+
+                  case 5:
+                    return _context40.abrupt("return", self.implementationAdapters[adapterId]);
+
+                  case 6:
+                  case "end":
+                    return _context40.stop();
+                }
+              }
+            }, null, this);
+          }
+        }, {
+          key: "getComponentForAlias",
+          value: function getComponentForAlias(alias, resolvedNamespace) {
+            var self;
+            return _regenerator["default"].async(function getComponentForAlias$(_context41) {
+              while (1) {
+                switch (_context41.prev = _context41.next) {
+                  case 0:
+                    self = this;
+
+                    if (!(alias === '')) {
+                      _context41.next = 7;
+                      break;
+                    }
+
+                    _context41.next = 4;
+                    return _regenerator["default"].awrap(self.getComponentForUri("inf."));
+
+                  case 4:
+                    _context41.t0 = self;
+                    _context41.t1 = resolvedNamespace;
+                    return _context41.abrupt("return", _context41.sent.forAlias('component', '', _context41.t0, _context41.t1));
+
+                  case 7:
+                    if (!self.aliases[alias]) {
+                      _context41.next = 9;
+                      break;
+                    }
+
+                    return _context41.abrupt("return", self.aliases[alias]);
+
+                  case 9:
+                    if (!self.mappedAliases[alias]) {
+                      _context41.next = 11;
+                      break;
+                    }
+
+                    return _context41.abrupt("return", self.mappedAliases[alias][0]);
+
+                  case 11:
+                    console.error("self.aliases", self.aliases);
+                    console.error("self.mappedAliases", self.mappedAliases);
+                    throw new Error("No component mapped to alias '" + alias + "'!");
+
+                  case 14:
+                  case "end":
+                    return _context41.stop();
+                }
+              }
+            }, null, this);
+          }
+        }, {
+          key: "gatherComponentAspect",
+          value: function gatherComponentAspect(aspectName) {
+            var self;
+            return _regenerator["default"].async(function gatherComponentAspect$(_context44) {
+              while (1) {
+                switch (_context44.prev = _context44.next) {
+                  case 0:
+                    self = this;
+                    return _context44.abrupt("return", Promise.map(Object.keys(self.components), function _callee18(uri) {
+                      var aliases, aspectsCode;
+                      return _regenerator["default"].async(function _callee18$(_context43) {
+                        while (1) {
+                          switch (_context43.prev = _context43.next) {
+                            case 0:
+                              aliases = self.components[uri].getComponentAliases();
+                              aspectsCode = {};
+                              _context43.next = 4;
+                              return _regenerator["default"].awrap(Promise.map(aliases, function _callee17(alias) {
+                                var aspectCode, args, argsByName;
+                                return _regenerator["default"].async(function _callee17$(_context42) {
+                                  while (1) {
+                                    switch (_context42.prev = _context42.next) {
+                                      case 0:
+                                        _context42.next = 2;
+                                        return _regenerator["default"].awrap(self.components[uri].forAlias('component', alias, self));
+
+                                      case 2:
+                                        _context42.t0 = 'to' + aspectName;
+                                        aspectCode = _context42.sent.impl[_context42.t0];
+
+                                        if (aspectCode) {
+                                          _context42.next = 6;
+                                          break;
+                                        }
+
+                                        return _context42.abrupt("return");
+
+                                      case 6:
+                                        if (!(typeof aspectCode === "function")) {
+                                          _context42.next = 10;
+                                          break;
+                                        }
+
+                                        _context42.next = 9;
+                                        return _regenerator["default"].awrap(aspectCode());
+
+                                      case 9:
+                                        aspectCode = _context42.sent;
+
+                                      case 10:
+                                        if (typeof aspectCode === "string") {
+                                          // Purify codeblocks in a string payload which is assumed to be JavaScript so that
+                                          // the payload becomes valid javascript and can be combined with other JS code without
+                                          // further processing by the consuming component.
+                                          aspectCode = CODEBLOCK.purifyCode(aspectCode, {
+                                            freezeToJavaScript: true
+                                          }).toString();
+                                        } else if ((0, _typeof2["default"])(aspectCode) === "object" && aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+                                          // Compile codeblock with no args so that consuming component does not need to deal
+                                          // with codeblock processing and is able to use payload as-is.
+                                          aspectCode = aspectCode.compile().getCode();
+                                        } else if ((0, _typeof2["default"])(aspectCode) === "object" && typeof aspectCode.codeblock === "function") {
+                                          // Compile codeblock using provided args so that consuming component does not need to deal
+                                          // with codeblock processing and is able to use payload as-is.
+                                          args = aspectCode.args || [];
+                                          aspectCode = aspectCode.codeblock();
+                                          argsByName = {};
+
+                                          if (Array.isArray(args)) {
+                                            /*
+                                            return {
+                                                args: [ arg1 ],
+                                                codeblock: (javascript (arg1) >>>
+                                                <<<)
+                                            };                    
+                                            */
+                                            aspectCode._args.forEach(function (name, i) {
+                                              argsByName[name] = args[i];
+                                            });
+                                          } else if ((0, _typeof2["default"])(args) === "object") {
+                                            /*
+                                            return {
+                                                args: {
+                                                    arg1: arg1
+                                                },
+                                                codeblock: (javascript (arg1) >>>
+                                                <<<)
+                                            };                    
+                                            */
+                                            argsByName = args;
+                                          }
+
+                                          aspectCode = aspectCode.compile(argsByName).getCode();
+                                        }
+
+                                        aspectsCode[alias] = aspectCode;
+
+                                      case 12:
+                                      case "end":
+                                        return _context42.stop();
+                                    }
+                                  }
+                                });
+                              }));
+
+                            case 4:
+                              return _context43.abrupt("return", {
+                                uri: uri,
+                                pathHash: self.components[uri].pathHash,
+                                aspect: aspectsCode
+                              });
+
+                            case 5:
+                            case "end":
+                              return _context43.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 2:
+                  case "end":
+                    return _context44.stop();
+                }
+              }
+            }, null, this);
+          }
         }]);
         return Namespace;
       }();
@@ -21231,13 +29219,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             } else if (!value) {
               return new Node(namespace, value);
             } else if (CodeblockNode.handlesValue(value)) {
-              var codeblock = new CodeblockNode(namespace, value);
+              var _codeblock2 = new CodeblockNode(namespace, value);
 
-              if (codeblock.getFormat() === 'inf') {
-                return new InfNode(namespace, codeblock);
+              if (_codeblock2.getFormat() === 'inf') {
+                return new InfNode(namespace, _codeblock2);
               }
 
-              return codeblock;
+              return _codeblock2;
             } else if (InterfaceReferenceNode.handlesValue(value)) {
               log("new InterfaceReferenceNode for value:", value);
               return new InterfaceReferenceNode(namespace, value);
@@ -21327,13 +29315,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       exports.Node = Node;
 
       function badInvocation(pointer, value, component) {
-        console.error("value", value);
+        log("value", value);
         throw new Error("Invocation for pointer '".concat(pointer, "' is not supported").concat(component ? " in component '".concat(component.path, "'") : ''));
       }
 
       function noFactory(method, alias, node, component) {
-        console.error("ERROR alias", alias);
-        console.error("ERROR node", node);
+        log("ERROR alias", alias);
+        log("ERROR node", node);
         throw new Error("Call to factory '".concat(method, "' did not retrurn a function").concat(component ? " for component '".concat(component.path, "'") : ''));
       }
 
@@ -21388,30 +29376,20 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(InfNode, [{
           key: "toInstructions",
-          value: function () {
-            var _toInstructions = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee34(vars) {
-              return _regenerator["default"].wrap(function _callee34$(_context34) {
-                while (1) {
-                  switch (_context34.prev = _context34.next) {
-                    case 0:
-                      return _context34.abrupt("return", this.value.toString(vars));
+          value: function toInstructions(vars) {
+            return _regenerator["default"].async(function toInstructions$(_context45) {
+              while (1) {
+                switch (_context45.prev = _context45.next) {
+                  case 0:
+                    return _context45.abrupt("return", this.value.toString(vars));
 
-                    case 1:
-                    case "end":
-                      return _context34.stop();
-                  }
+                  case 1:
+                  case "end":
+                    return _context45.stop();
                 }
-              }, _callee34, this);
-            }));
-
-            function toInstructions(_x48) {
-              return _toInstructions.apply(this, arguments);
-            }
-
-            return toInstructions;
-          }()
+              }
+            }, null, this);
+          }
         }]);
         return InfNode;
       }(Node);
@@ -21423,26 +29401,33 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(ReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
-            return typeof value === "string" && value.match(/^([^#]*?)\s*(##?)\s*(.*?)(\s+\+([^\+]+))?$/);
+            return (//typeof value === "string" &&
+              value.toString && value.toString().match(/^([^#]*?)\s*(##?)\s*(.*?)(\s+\+([^\+]+))?$/)
+            );
           }
         }]);
 
         function ReferenceNode(namespace, value) {
-          var _this2;
+          var _this4;
 
           (0, _classCallCheck2["default"])(this, ReferenceNode);
-          _this2 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ReferenceNode).call(this, namespace, value));
+          _this4 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ReferenceNode).call(this, namespace, value));
+
+          if (value instanceof NamespacePointer) {
+            _this4.namespacePointer = value;
+          }
+
           var keyMatch = ReferenceNode.handlesValue(value);
 
           if (keyMatch) {
-            _this2.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
-            _this2.type = keyMatch[2] === '##' ? 'plugin' : 'component';
-            _this2.pointer = keyMatch[3];
+            _this4.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
+            _this4.type = keyMatch[2] === '##' ? 'plugin' : 'component';
+            _this4.pointer = keyMatch[3];
 
-            _this2._finalizeProperty("pointer");
+            _this4._finalizeProperty("pointer");
           }
 
-          return _this2;
+          return _this4;
         }
 
         (0, _createClass2["default"])(ReferenceNode, [{
@@ -21461,26 +29446,33 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(InterfaceReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
-            return typeof value === "string" && value.match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/) //            value.match(/^:\s*([^:]+)\s*:$/)
-            ;
+            return (//typeof value === "string" &&
+              value.toString && value.toString().match(/^:\s*([^:]+)\s*:(\s*<([^<>]+)>)?$/) //            value.match(/^:\s*([^:]+)\s*:$/)
+
+            );
           }
         }]);
 
         function InterfaceReferenceNode(namespace, value) {
-          var _this3;
+          var _this5;
 
           (0, _classCallCheck2["default"])(this, InterfaceReferenceNode);
-          _this3 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(InterfaceReferenceNode).call(this, namespace, ''));
-          var keyMatch = InterfaceReferenceNode.handlesValue(value);
-          _this3.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
-          _this3.type = 'interface';
-          _this3.pointer = '';
+          _this5 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(InterfaceReferenceNode).call(this, namespace, ''));
 
-          if (keyMatch[2]) {
-            _this3.contract = keyMatch[3];
+          if (value instanceof NamespacePointer) {
+            _this5.namespacePointer = value;
           }
 
-          return _this3;
+          var keyMatch = InterfaceReferenceNode.handlesValue(value);
+          _this5.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
+          _this5.type = 'interface';
+          _this5.pointer = '';
+
+          if (keyMatch[2]) {
+            _this5.contract = keyMatch[3];
+          }
+
+          return _this5;
         }
 
         (0, _createClass2["default"])(InterfaceReferenceNode, [{
@@ -21499,20 +29491,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(ContractReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
-            return typeof value === "string" && value.match(/^<\s*([^<>]+)\s*>$/);
+            return (//typeof value === "string" &&
+              value.toString && value.toString().match(/^<\s*([^<>]+)\s*>$/)
+            );
           }
         }]);
 
         function ContractReferenceNode(namespace, value) {
-          var _this4;
+          var _this6;
 
           (0, _classCallCheck2["default"])(this, ContractReferenceNode);
-          _this4 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ContractReferenceNode).call(this, namespace, ''));
+          _this6 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ContractReferenceNode).call(this, namespace, ''));
+
+          if (value instanceof NamespacePointer) {
+            _this6.namespacePointer = value;
+          }
+
           var keyMatch = ContractReferenceNode.handlesValue(value);
-          _this4.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
-          _this4.type = 'contract';
-          _this4.pointer = '';
-          return _this4;
+          _this6.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
+          _this6.type = 'contract';
+          _this6.pointer = '';
+          return _this6;
         }
 
         (0, _createClass2["default"])(ContractReferenceNode, [{
@@ -21531,20 +29530,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         (0, _createClass2["default"])(VariablesReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
-            return typeof value === "string" && value.match(/^(.+?)\s*\$$/);
+            return (//typeof value === "string" &&
+              value.toString && value.toString().match(/^(.+?)\s*\$$/)
+            );
           }
         }]);
 
         function VariablesReferenceNode(namespace, value) {
-          var _this5;
+          var _this7;
 
           (0, _classCallCheck2["default"])(this, VariablesReferenceNode);
-          _this5 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(VariablesReferenceNode).call(this, namespace, ''));
+          _this7 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(VariablesReferenceNode).call(this, namespace, ''));
+
+          if (value instanceof NamespacePointer) {
+            _this7.namespacePointer = value;
+          }
+
           var keyMatch = VariablesReferenceNode.handlesValue(value);
-          _this5.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
-          _this5.type = 'variables';
-          _this5.pointer = '';
-          return _this5;
+          _this7.alias = keyMatch[1].replace(/^:[^:]+:\s*/, "").replace(/^<[^<>]+>\s*/, "");
+          _this7.type = 'variables';
+          _this7.pointer = '';
+          return _this7;
         }
 
         (0, _createClass2["default"])(VariablesReferenceNode, [{
@@ -21567,1337 +29573,1542 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Processor, [{
           key: "closureForValueIfReference",
-          value: function () {
-            var _closureForValueIfReference = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee38(value, valueProcessor) {
-              var self, wrapValue, _wrapValue, wrappedValues, wrappedValuesIndex;
+          value: function closureForValueIfReference(value, valueProcessor) {
+            var self, wrapValue, wrappedValues, wrappedValuesIndex;
+            return _regenerator["default"].async(function closureForValueIfReference$(_context49) {
+              while (1) {
+                switch (_context49.prev = _context49.next) {
+                  case 0:
+                    wrapValue = function _ref2(_value, topLevel) {
+                      var referenceMatch, referenceValue, referencedComponent, wrappedValue;
+                      return _regenerator["default"].async(function wrapValue$(_context47) {
+                        while (1) {
+                          switch (_context47.prev = _context47.next) {
+                            case 0:
+                              // See if we are referencing an aliased component. If we are we resolve the reference
+                              // and pass it along with the component invocation.
+                              referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
 
-              return _regenerator["default"].wrap(function _callee38$(_context38) {
-                while (1) {
-                  switch (_context38.prev = _context38.next) {
-                    case 0:
-                      _wrapValue = function _ref21() {
-                        _wrapValue = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee37(_value, topLevel) {
-                          var referenceMatch, referenceValue, referencedComponent, wrappedValue;
-                          return _regenerator["default"].wrap(function _callee37$(_context37) {
-                            while (1) {
-                              switch (_context37.prev = _context37.next) {
-                                case 0:
-                                  // See if we are referencing an aliased component. If we are we resolve the reference
-                                  // and pass it along with the component invocation.
-                                  referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
+                              if (!(referenceMatch && !/_#_/.test(referenceMatch[0]))) {
+                                _context47.next = 18;
+                                break;
+                              }
 
-                                  if (!(referenceMatch && !/_#_/.test(referenceMatch[0]))) {
-                                    _context37.next = 18;
-                                    break;
-                                  }
+                              referenceValue = value;
 
-                                  referenceValue = value;
+                              if (!topLevel) {
+                                referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
+                              }
 
-                                  if (!topLevel) {
-                                    referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
-                                  }
+                              referenceValue.propertyPathMount = _value.propertyPathMount || [];
+                              _context47.next = 7;
+                              return _regenerator["default"].awrap(self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace));
 
-                                  referenceValue.propertyPathMount = _value.propertyPathMount || [];
-                                  _context37.next = 7;
-                                  return self.namespace.getComponentForAlias(referenceValue.alias);
+                            case 7:
+                              referencedComponent = _context47.sent;
+                              // We create an invocation wrapper to avoid leaking references.
+                              _value = Node.WrapInstructionNode(self.namespace, function _callee19(instruction) {
+                                var wrappedValue;
+                                return _regenerator["default"].async(function _callee19$(_context46) {
+                                  while (1) {
+                                    switch (_context46.prev = _context46.next) {
+                                      case 0:
+                                        wrappedValue = Node.WrapInstructionNode(self.namespace, instruction);
+                                        _context46.next = 3;
+                                        return _regenerator["default"].awrap(referencedComponent.invoke(referenceValue.pointer, wrappedValue));
 
-                                case 7:
-                                  referencedComponent = _context37.sent;
-                                  // We create an invocation wrapper to avoid leaking references.
-                                  _value = Node.WrapInstructionNode(self.namespace,
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref19 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee36(instruction) {
-                                      var wrappedValue;
-                                      return _regenerator["default"].wrap(function _callee36$(_context36) {
-                                        while (1) {
-                                          switch (_context36.prev = _context36.next) {
-                                            case 0:
-                                              wrappedValue = Node.WrapInstructionNode(self.namespace, instruction);
-                                              _context36.next = 3;
-                                              return referencedComponent.invoke(referenceValue.pointer, wrappedValue);
+                                      case 3:
+                                        wrappedValue = _context46.sent;
+                                        wrappedValue = Node.WrapInstructionNode(self.namespace, wrappedValue);
 
-                                            case 3:
-                                              wrappedValue = _context36.sent;
-                                              wrappedValue = Node.WrapInstructionNode(self.namespace, wrappedValue);
-
-                                              if (!valueProcessor) {
-                                                _context36.next = 9;
-                                                break;
-                                              }
-
-                                              _context36.next = 8;
-                                              return valueProcessor(referenceValue, wrappedValue);
-
-                                            case 8:
-                                              wrappedValue = _context36.sent;
-
-                                            case 9:
-                                              return _context36.abrupt("return", wrappedValue);
-
-                                            case 10:
-                                            case "end":
-                                              return _context36.stop();
-                                          }
+                                        if (!valueProcessor) {
+                                          _context46.next = 9;
+                                          break;
                                         }
-                                      }, _callee36);
-                                    }));
 
-                                    return function (_x54) {
-                                      return _ref19.apply(this, arguments);
-                                    };
-                                  }());
-                                  _value["interface"] = value["interface"] || null;
-                                  _value.contract = value.contract || null;
-                                  _value.wrapped = true;
-                                  _value.alias = referenceValue.alias;
-                                  _value.pointer = referenceValue.pointer;
-                                  _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
-                                  _value.meta = referenceValue.meta;
-                                  _context37.next = 26;
-                                  break;
+                                        _context46.next = 8;
+                                        return _regenerator["default"].awrap(valueProcessor(referenceValue, wrappedValue));
 
-                                case 18:
-                                  if (!(!referenceMatch && !topLevel)) {
-                                    _context37.next = 26;
-                                    break;
+                                      case 8:
+                                        wrappedValue = _context46.sent;
+
+                                      case 9:
+                                        return _context46.abrupt("return", wrappedValue);
+
+                                      case 10:
+                                      case "end":
+                                        return _context46.stop();
+                                    }
                                   }
+                                });
+                              });
+                              _value["interface"] = value["interface"] || null;
+                              _value.contract = value.contract || null;
+                              _value.wrapped = true;
+                              _value.alias = referenceValue.alias;
+                              _value.pointer = referenceValue.pointer;
+                              _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
+                              _value.meta = referenceValue.meta;
+                              _context47.next = 26;
+                              break;
 
-                                  wrappedValue = Node.WrapInstructionNode(self.namespace, _value.value);
-                                  wrappedValue.propertyPathMount = _value.propertyPathMount || [];
-
-                                  if (!valueProcessor) {
-                                    _context37.next = 25;
-                                    break;
-                                  }
-
-                                  _context37.next = 24;
-                                  return valueProcessor(_value, wrappedValue);
-
-                                case 24:
-                                  wrappedValue = _context37.sent;
-
-                                case 25:
-                                  _value = wrappedValue;
-
-                                case 26:
-                                  return _context37.abrupt("return", _value);
-
-                                case 27:
-                                case "end":
-                                  return _context37.stop();
+                            case 18:
+                              if (!(!referenceMatch && !topLevel)) {
+                                _context47.next = 26;
+                                break;
                               }
-                            }
-                          }, _callee37);
-                        }));
-                        return _wrapValue.apply(this, arguments);
-                      };
 
-                      wrapValue = function _ref20(_x51, _x52) {
-                        return _wrapValue.apply(this, arguments);
-                      };
+                              wrappedValue = Node.WrapInstructionNode(self.namespace, _value.value);
+                              wrappedValue.propertyPathMount = _value.propertyPathMount || [];
 
-                      self = this;
+                              if (!valueProcessor) {
+                                _context47.next = 25;
+                                break;
+                              }
 
-                      if (!(value instanceof InfNode)) {
-                        _context38.next = 7;
-                        break;
-                      }
+                              _context47.next = 24;
+                              return _regenerator["default"].awrap(valueProcessor(_value, wrappedValue));
 
-                      return _context38.abrupt("return", value);
+                            case 24:
+                              wrappedValue = _context47.sent;
 
-                    case 7:
-                      if (!(value instanceof CodeblockNode)) {
-                        _context38.next = 11;
-                        break;
-                      }
+                            case 25:
+                              _value = wrappedValue;
 
-                      return _context38.abrupt("return", value);
+                            case 26:
+                              return _context47.abrupt("return", _value);
 
-                    case 11:
-                      if (!(typeof value.value === "string")) {
-                        _context38.next = 17;
-                        break;
-                      }
+                            case 27:
+                            case "end":
+                              return _context47.stop();
+                          }
+                        }
+                      });
+                    };
 
-                      _context38.next = 14;
-                      return wrapValue(value, true);
+                    self = this;
 
-                    case 14:
-                      value = _context38.sent;
-                      _context38.next = 24;
+                    if (!(value instanceof InfNode)) {
+                      _context49.next = 6;
                       break;
+                    }
 
-                    case 17:
-                      if (!((0, _typeof2["default"])(value.value) === "object")) {
-                        _context38.next = 24;
-                        break;
+                    return _context49.abrupt("return", value);
+
+                  case 6:
+                    if (!(value instanceof CodeblockNode)) {
+                      _context49.next = 10;
+                      break;
+                    }
+
+                    return _context49.abrupt("return", value);
+
+                  case 10:
+                    if (!(typeof value.value === "string")) {
+                      _context49.next = 16;
+                      break;
+                    }
+
+                    _context49.next = 13;
+                    return _regenerator["default"].awrap(wrapValue(value, true));
+
+                  case 13:
+                    value = _context49.sent;
+                    _context49.next = 23;
+                    break;
+
+                  case 16:
+                    if (!((0, _typeof2["default"])(value.value) === "object")) {
+                      _context49.next = 23;
+                      break;
+                    }
+
+                    wrappedValues = {};
+                    wrappedValuesIndex = 0;
+                    TRAVERSE(value.value).forEach(function (obj) {
+                      if (this.parent && this.parent.node && this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+                        // A CodeblockNode never contains sub-references.
+                        return;
                       }
 
-                      wrappedValues = {};
-                      wrappedValuesIndex = 0;
-                      TRAVERSE(value.value).forEach(function (obj) {
-                        if (this.parent && this.parent.node && this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
-                          // A CodeblockNode never contains sub-references.
-                          return;
-                        }
+                      if (typeof obj === "string" && (/^([^#]*?)\s*#\s*(.+?)$/.test(obj) || /^:[^:]+:\s*/.test(obj))) {
+                        wrappedValuesIndex++;
+                        wrappedValues[wrappedValuesIndex] = wrapValue({
+                          value: obj,
+                          propertyPathMount: this.path
+                        });
+                        this.update("___WRAPPED_VALUE_".concat(wrappedValuesIndex, "___"), true);
+                      }
+                    });
+                    _context49.next = 22;
+                    return _regenerator["default"].awrap(Promise.mapSeries(Object.keys(wrappedValues), function _callee20(key) {
+                      return _regenerator["default"].async(function _callee20$(_context48) {
+                        while (1) {
+                          switch (_context48.prev = _context48.next) {
+                            case 0:
+                              _context48.next = 2;
+                              return _regenerator["default"].awrap(wrappedValues[key]);
 
-                        if (typeof obj === "string" && (/^([^#]*?)\s*#\s*(.+?)$/.test(obj) || /^:[^:]+:\s*/.test(obj))) {
-                          wrappedValuesIndex++;
-                          wrappedValues[wrappedValuesIndex] = wrapValue({
-                            value: obj,
-                            propertyPathMount: this.path
-                          });
-                          this.update("___WRAPPED_VALUE_".concat(wrappedValuesIndex, "___"), true);
-                        }
-                      });
-                      _context38.next = 23;
-                      return Promise.mapSeries(Object.keys(wrappedValues),
-                      /*#__PURE__*/
-                      function () {
-                        var _ref18 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee35(key) {
-                          return _regenerator["default"].wrap(function _callee35$(_context35) {
-                            while (1) {
-                              switch (_context35.prev = _context35.next) {
-                                case 0:
-                                  _context35.next = 2;
-                                  return wrappedValues[key];
+                            case 2:
+                              wrappedValues[key] = _context48.sent;
 
-                                case 2:
-                                  wrappedValues[key] = _context35.sent;
-
-                                case 3:
-                                case "end":
-                                  return _context35.stop();
-                              }
-                            }
-                          }, _callee35);
-                        }));
-
-                        return function (_x53) {
-                          return _ref18.apply(this, arguments);
-                        };
-                      }());
-
-                    case 23:
-                      TRAVERSE(value.value).forEach(function (obj) {
-                        if (typeof obj === "string" && /^___WRAPPED_VALUE_/.test(obj)) {
-                          this.update(wrappedValues[parseInt(obj.replace(/^.+_(\d+)_.+$/, "$1"))], true);
+                            case 3:
+                            case "end":
+                              return _context48.stop();
+                          }
                         }
                       });
+                    }));
 
-                    case 24:
-                      return _context38.abrupt("return", value);
+                  case 22:
+                    TRAVERSE(value.value).forEach(function (obj) {
+                      if (typeof obj === "string" && /^___WRAPPED_VALUE_/.test(obj)) {
+                        this.update(wrappedValues[parseInt(obj.replace(/^.+_(\d+)_.+$/, "$1"))], true);
+                      }
+                    });
 
-                    case 25:
-                    case "end":
-                      return _context38.stop();
-                  }
+                  case 23:
+                    return _context49.abrupt("return", value);
+
+                  case 24:
+                  case "end":
+                    return _context49.stop();
                 }
-              }, _callee38, this);
-            }));
-
-            function closureForValueIfReference(_x49, _x50) {
-              return _closureForValueIfReference.apply(this, arguments);
-            }
-
-            return closureForValueIfReference;
-          }()
+              }
+            }, null, this);
+          }
         }, {
           key: "processInstruction",
-          value: function () {
-            var _processInstruction = (0, _asyncToGenerator2["default"])(
-            /*#__PURE__*/
-            _regenerator["default"].mark(function _callee48(anchor, value, meta) {
-              var self, anchorNamespacePrefix, alias, m, valueAlias, valuePointer, _m, _alias, pointer, _m2, _alias2, _pointer, valueM, _valueAlias, _valuePointer, uris, interfaceComponent, interfaces, _interfaces, _component3, response, plugins;
+          value: function processInstruction(anchor, value, meta) {
+            var self, nsPointerAnchor, anchorNamespaceAlias, anchorNamespacePrefix, alias, m, valueAlias, valuePointer, _m, _alias, pointer, valueM, _valueAlias, _valuePointer, uris, key, interfaceComponent, interfaces, _interfaces, getResolvedAlias, _component3, response, apiKey, plugins;
 
-              return _regenerator["default"].wrap(function _callee48$(_context48) {
-                while (1) {
-                  switch (_context48.prev = _context48.next) {
-                    case 0:
-                      self = this;
-                      log("");
-                      log(" ", anchor, ":", value); // Detect comment
+            return _regenerator["default"].async(function processInstruction$(_context59) {
+              while (1) {
+                switch (_context59.prev = _context59.next) {
+                  case 0:
+                    self = this;
+                    log("");
+                    log(" ", anchor, ":", value); // Detect comment
 
-                      if (!(anchor === '//')) {
-                        _context48.next = 5;
-                        break;
-                      }
-
-                      return _context48.abrupt("return");
-
-                    case 5:
-                      // Handle namespaces
-                      anchorNamespacePrefix = null;
-
-                      if (!/^[^@]+?\s*@$/.test(anchor)) {
-                        _context48.next = 26;
-                        break;
-                      }
-
-                      // Namespace mapping
-                      alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
-                      _context48.next = 10;
-                      return self.namespace.replaceVariablesInString(alias);
-
-                    case 10:
-                      alias = _context48.sent;
-                      _context48.next = 13;
-                      return self.namespace.replaceVariablesInString(value);
-
-                    case 13:
-                      value = _context48.sent;
-                      m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
-
-                      if (!m) {
-                        _context48.next = 23;
-                        break;
-                      }
-
-                      valueAlias = m[1];
-                      valuePointer = m[2];
-
-                      if (!(typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined")) {
-                        _context48.next = 21;
-                        break;
-                      }
-
-                      console.error("self.namespace", self.namespace);
-                      throw new Error("Namespace alias '".concat(valueAlias, "' is not mapped!"));
-
-                    case 21:
-                      log("Replace namespace alias '".concat(valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[valueAlias]);
-                      value = [self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""), valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, "");
-
-                    case 23:
-                      log("Map namespace alias '".concat(alias, "' to:"), value);
-                      self.namespace.mappedNamespaceAliases[alias] = value;
-                      return _context48.abrupt("return");
-
-                    case 26:
-                      if (!/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
-                        _context48.next = 36;
-                        break;
-                      }
-
-                      // Namespace usage for contracts
-                      _m = anchor.match(/^.*?<\s*([^@]+?)\s*@\s*([\S]+)\s*>.*?$/);
-                      _alias = _m[1];
-                      pointer = _m[2];
-
-                      if (!(typeof self.namespace.mappedNamespaceAliases[_alias] === "undefined")) {
-                        _context48.next = 33;
-                        break;
-                      }
-
-                      console.error("self.namespace", self.namespace);
-                      throw new Error("Namespace alias '".concat(_alias, "' is not mapped!"));
-
-                    case 33:
-                      log("Replace namespace alias '".concat(_alias, "' with:"), self.namespace.mappedNamespaceAliases[_alias]);
-                      anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, "");
-                      anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, "$1".concat([self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, ""), pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$2"));
-
-                    case 36:
-                      if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
-                        _context48.next = 49;
-                        break;
-                      }
-
-                      // Namespace usage for anchors
-                      //            const alias = anchor.replace(/^([^@]+?)\s*@.+$/, "$1");
-                      _m2 = anchor.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-                      _alias2 = _m2[1];
-                      _context48.next = 41;
-                      return self.namespace.replaceVariablesInString(_alias2);
-
-                    case 41:
-                      _alias2 = _context48.sent;
-                      _pointer = _m2[2];
-
-                      if (!(typeof self.namespace.mappedNamespaceAliases[_alias2] === "undefined")) {
-                        _context48.next = 46;
-                        break;
-                      }
-
-                      console.error("self.namespace", self.namespace);
-                      throw new Error("Namespace alias '".concat(_alias2, "' is not mapped!"));
-
-                    case 46:
-                      log("Replace namespace alias '".concat(_alias2, "' with:"), self.namespace.mappedNamespaceAliases[_alias2]);
-                      anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias2].replace(/\/$/, "");
-                      anchor = anchor.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_alias2].replace(/\/$/, ""), _pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
-
-                    case 49:
-                      if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
-                        _context48.next = 61;
-                        break;
-                      }
-
-                      // Namespace usage for value
-                      valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-                      _valueAlias = valueM[1];
-                      _context48.next = 54;
-                      return self.namespace.replaceVariablesInString(_valueAlias);
-
-                    case 54:
-                      _valueAlias = _context48.sent;
-                      _valuePointer = valueM[2];
-
-                      if (!(typeof self.namespace.mappedNamespaceAliases[_valueAlias] === "undefined")) {
-                        _context48.next = 59;
-                        break;
-                      }
-
-                      console.error("self.namespace", self.namespace);
-                      throw new Error("Namespace alias '".concat(_valueAlias, "' is not mapped!"));
-
-                    case 59:
-                      log("Replace namespace alias '".concat(_valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[_valueAlias]);
-                      value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_valueAlias].replace(/\/$/, ""), _valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
-
-                    case 61:
-                      meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1]; // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
-
-                      anchor = Node.WrapInstructionNode(self.namespace, anchor);
-                      anchor.meta = meta;
-                      value = Node.WrapInstructionNode(self.namespace, value);
-                      value.meta = meta;
-
-                      if (anchorNamespacePrefix) {
-                        anchor.namespacePrefix = anchorNamespacePrefix; //            value.anchorNamespacePrefix = anchor.namespacePrefix;
-                      }
-
-                      if (!(!anchor instanceof ReferenceNode)) {
-                        _context48.next = 70;
-                        break;
-                      }
-
-                      CONSOLE.error("anchor", anchor);
-                      throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
-
-                    case 70:
-                      log("anchor.type:", anchor.type); // Run various codeblocks if applicable.
-
-                      if (!(value instanceof CodeblockNode)) {
-                        _context48.next = 94;
-                        break;
-                      }
-
-                      if (!(value.getFormat() === 'run.bash')) {
-                        _context48.next = 78;
-                        break;
-                      }
-
-                      _context48.next = 75;
-                      return runCodeblock(self.namespace, value.value);
-
-                    case 75:
-                      value.value = _context48.sent;
-                      _context48.next = 94;
+                    if (!(anchor === '//')) {
+                      _context59.next = 5;
                       break;
+                    }
 
-                    case 78:
-                      if (!(value.getFormat() === 'run.bash.progress')) {
-                        _context48.next = 84;
-                        break;
-                      }
+                    return _context59.abrupt("return");
 
-                      _context48.next = 81;
-                      return runCodeblock(self.namespace, value.value);
+                  case 5:
+                    nsPointerAnchor = null; // Handle namespaces
 
-                    case 81:
-                      value.value = _context48.sent;
-                      _context48.next = 94;
+                    anchorNamespaceAlias = null;
+                    anchorNamespacePrefix = null;
+
+                    if (!/^[^@]+?\s*@$/.test(anchor)) {
+                      _context59.next = 29;
                       break;
+                    }
 
-                    case 84:
-                      if (!(value.getFormat() === 'run.javascript')) {
-                        _context48.next = 90;
-                        break;
-                      }
+                    // Namespace mapping
+                    alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
+                    _context59.next = 12;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(alias));
 
-                      _context48.next = 87;
-                      return runCodeblock(self.namespace, value.value);
+                  case 12:
+                    alias = _context59.sent;
+                    _context59.next = 15;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value));
 
-                    case 87:
-                      value.value = _context48.sent;
-                      _context48.next = 94;
+                  case 15:
+                    value = _context59.sent;
+                    m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
+
+                    if (!m) {
+                      _context59.next = 25;
                       break;
+                    }
 
-                    case 90:
-                      if (!(value.getFormat() === 'run.javascript.progress')) {
-                        _context48.next = 94;
-                        break;
-                      }
+                    valueAlias = m[1];
+                    valuePointer = m[2];
 
-                      _context48.next = 93;
-                      return runCodeblock(self.namespace, value.value);
+                    if (!(typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined")) {
+                      _context59.next = 23;
+                      break;
+                    }
 
-                    case 93:
-                      value.value = _context48.sent;
+                    console.error("self.namespace", self.namespace);
+                    throw new Error("Namespace alias '".concat(valueAlias, "' is not mapped!"));
 
-                    case 94:
-                      if (!(anchor.value === "#")) {
-                        _context48.next = 100;
-                        break;
-                      }
+                  case 23:
+                    log("Replace namespace alias '".concat(valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[valueAlias]);
+                    value = [self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""), valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, "");
 
-                      uris = Array.isArray(value.value) ? value.value : [value.value];
-                      _context48.next = 98;
-                      return Promise.mapSeries(uris,
-                      /*#__PURE__*/
-                      function () {
-                        var _ref22 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee40(uri) {
-                          var paths;
-                          return _regenerator["default"].wrap(function _callee40$(_context40) {
-                            while (1) {
-                              switch (_context40.prev = _context40.next) {
-                                case 0:
-                                  _context40.next = 2;
-                                  return self.namespace.replaceVariablesInString(uri);
+                  case 25:
+                    log("Map namespace alias '".concat(alias, "' to:"), value);
+                    self.namespace.mappedNamespaceAliases[alias] = value;
 
-                                case 2:
-                                  uri = _context40.sent;
-                                  log('processInstruction() uri', uri);
-                                  _context40.next = 6;
-                                  return self.namespace.resolveInfUri(uri);
+                    if (self.namespace.anchorPrefix && self.namespace.referringNamespace) {
+                      // const parentAnchorPrefix = PATH.join(
+                      //     self.namespace.anchorPrefix.toString(),
+                      //     alias
+                      // );
+                      //self.namespace.referringNamespace.mappedNamespaceAliases[parentAnchorPrefix] = value;
+                      self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                      self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+                        if (anchorPrefix) {
+                          var parentAnchorPrefix = PATH.join(anchorPrefix.toString(), alias);
+                          return [parentAnchorPrefix, value];
+                        }
 
-                                case 6:
-                                  paths = _context40.sent;
-                                  log('processInstruction() paths', paths);
+                        return [alias, value];
+                      }); //console.error("ANCHOR PREFIX", parentAnchorPrefix,  value);                
+                    }
 
-                                  if (!paths) {
-                                    _context40.next = 11;
-                                    break;
-                                  }
+                    return _context59.abrupt("return");
 
-                                  _context40.next = 11;
-                                  return Promise.mapSeries(paths,
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref23 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee39(path) {
-                                      var inf;
-                                      return _regenerator["default"].wrap(function _callee39$(_context39) {
-                                        while (1) {
-                                          switch (_context39.prev = _context39.next) {
-                                            case 0:
-                                              log('processInstruction() path', path);
+                  case 29:
+                    if (!/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
+                      _context59.next = 40;
+                      break;
+                    }
 
-                                              if (self.namespace.isInheritingFrom(path)) {
-                                                _context39.next = 6;
-                                                break;
-                                              }
+                    // Namespace usage for contracts
+                    _m = anchor.match(/^.*?<\s*([^@]+?)\s*@\s*([\S]+)\s*>.*?$/);
+                    _alias = _m[1];
+                    pointer = _m[2];
 
-                                              log("Inherit from inf file:", path);
-                                              inf = new INF(PATH.dirname(path), self.namespace, self.namespace.options);
-                                              _context39.next = 6;
-                                              return inf.runInstructionsFile(PATH.basename(path));
+                    if (!(typeof self.namespace.mappedNamespaceAliases[_alias] === "undefined")) {
+                      _context59.next = 36;
+                      break;
+                    }
 
-                                            case 6:
-                                            case "end":
-                                              return _context39.stop();
-                                          }
-                                        }
-                                      }, _callee39);
-                                    }));
+                    console.error("self.namespace", self.namespace);
+                    throw new Error("Namespace alias '".concat(_alias, "' is not mapped!"));
 
-                                    return function (_x59) {
-                                      return _ref23.apply(this, arguments);
-                                    };
-                                  }());
+                  case 36:
+                    log("Replace namespace alias '".concat(_alias, "' with:"), self.namespace.mappedNamespaceAliases[_alias]);
+                    anchorNamespaceAlias = _alias;
+                    anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, "");
+                    anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, "$1".concat([anchorNamespacePrefix, pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$2"));
 
-                                case 11:
-                                case "end":
-                                  return _context40.stop();
-                              }
-                            }
-                          }, _callee40);
-                        }));
+                  case 40:
+                    if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
+                      _context59.next = 49;
+                      break;
+                    }
 
-                        return function (_x58) {
-                          return _ref22.apply(this, arguments);
+                    _context59.next = 43;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor));
+
+                  case 43:
+                    anchor = _context59.sent;
+                    anchor = self.namespace.makeNamespacePointerForString(null, anchor); // TODO: just keep and use 'anchor' NamespacePointer' object instead of these extra vars.
+
+                    anchorNamespaceAlias = anchor.getFirstSegment().alias;
+                    anchorNamespacePrefix = anchor.getFirstSegment().resolved; //.replace(/\/$/, "");
+
+                    log("Replace namespace alias '".concat(anchorNamespaceAlias, "' with:"), anchorNamespacePrefix);
+                    nsPointerAnchor = anchor;
+
+                  case 49:
+                    if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
+                      _context59.next = 61;
+                      break;
+                    }
+
+                    // Namespace usage for value
+                    valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
+                    _valueAlias = valueM[1];
+                    _context59.next = 54;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(_valueAlias));
+
+                  case 54:
+                    _valueAlias = _context59.sent;
+                    _valuePointer = valueM[2];
+
+                    if (!(typeof self.namespace.mappedNamespaceAliases[_valueAlias] === "undefined")) {
+                      _context59.next = 59;
+                      break;
+                    }
+
+                    console.error("self.namespace", self.namespace);
+                    throw new Error("Namespace alias '".concat(_valueAlias, "' is not mapped!"));
+
+                  case 59:
+                    log("Replace namespace alias '".concat(_valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[_valueAlias]);
+                    value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_valueAlias].replace(/\/$/, ""), _valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
+
+                  case 61:
+                    meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1]; // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
+
+                    anchor = Node.WrapInstructionNode(self.namespace, anchor);
+                    anchor.meta = meta;
+                    anchor.value = anchor.value.replace(/\s*\+([^\+]+)$/, '');
+                    anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
+                    value = Node.WrapInstructionNode(self.namespace, value);
+                    value.meta = meta;
+
+                    if (anchorNamespacePrefix) {
+                      anchor.anchorNamespaceAlias = anchorNamespaceAlias;
+                      anchor.namespacePrefix = anchorNamespacePrefix; //            value.anchorNamespacePrefix = anchor.namespacePrefix;
+                    }
+
+                    if (!(!anchor instanceof ReferenceNode)) {
+                      _context59.next = 72;
+                      break;
+                    }
+
+                    CONSOLE.error("anchor", anchor);
+                    throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
+
+                  case 72:
+                    log("anchor.type:", anchor.type); // Run various codeblocks if applicable.
+
+                    if (!(value instanceof CodeblockNode)) {
+                      _context59.next = 96;
+                      break;
+                    }
+
+                    if (!(value.getFormat() === 'run.bash')) {
+                      _context59.next = 80;
+                      break;
+                    }
+
+                    _context59.next = 77;
+                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
+
+                  case 77:
+                    value.value = _context59.sent;
+                    _context59.next = 96;
+                    break;
+
+                  case 80:
+                    if (!(value.getFormat() === 'run.bash.progress')) {
+                      _context59.next = 86;
+                      break;
+                    }
+
+                    _context59.next = 83;
+                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
+
+                  case 83:
+                    value.value = _context59.sent;
+                    _context59.next = 96;
+                    break;
+
+                  case 86:
+                    if (!(value.getFormat() === 'run.javascript')) {
+                      _context59.next = 92;
+                      break;
+                    }
+
+                    _context59.next = 89;
+                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
+
+                  case 89:
+                    value.value = _context59.sent;
+                    _context59.next = 96;
+                    break;
+
+                  case 92:
+                    if (!(value.getFormat() === 'run.javascript.progress')) {
+                      _context59.next = 96;
+                      break;
+                    }
+
+                    _context59.next = 95;
+                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
+
+                  case 95:
+                    value.value = _context59.sent;
+
+                  case 96:
+                    if (!(anchor.value === "#")) {
+                      _context59.next = 103;
+                      break;
+                    }
+
+                    uris = [];
+
+                    if (typeof value.value === "string") {
+                      uris = [{
+                        reference: value.value
+                      }];
+                    } else if (Array.isArray(value.value)) {
+                      uris = value.value.map(function (reference) {
+                        return {
+                          reference: reference
                         };
-                      }());
-
-                    case 98:
-                      _context48.next = 223;
-                      break;
-
-                    case 100:
-                      if (!(anchor.pointer === '')) {
-                        _context48.next = 134;
-                        break;
-                      }
-
-                      if (!(anchor.type === 'component')) {
-                        _context48.next = 106;
-                        break;
-                      }
-
-                      _context48.next = 104;
-                      return self.namespace.mapComponent(anchor.alias, value.value);
-
-                    case 104:
-                      _context48.next = 132;
-                      break;
-
-                    case 106:
-                      if (!(anchor.type === 'interface')) {
-                        _context48.next = 113;
-                        break;
-                      }
-
-                      _context48.next = 109;
-                      return self.namespace.mapInterface(anchor.alias, value.value);
-
-                    case 109:
-                      interfaceComponent = _context48.sent;
-
-                      if (anchor.contract) {
-                        interfaceComponent.contract = [anchor.contract, self.namespace.getContractForAlias(anchor.contract)];
-                      }
-
-                      _context48.next = 132;
-                      break;
-
-                    case 113:
-                      if (!(anchor.type === 'contract')) {
-                        _context48.next = 118;
-                        break;
-                      }
-
-                      _context48.next = 116;
-                      return self.namespace.mapContract(anchor, value.value);
-
-                    case 116:
-                      _context48.next = 132;
-                      break;
-
-                    case 118:
-                      if (!(anchor.type === 'plugin')) {
-                        _context48.next = 123;
-                        break;
-                      }
-
-                      _context48.next = 121;
-                      return self.namespace.mapPlugin(anchor.alias, value.value);
-
-                    case 121:
-                      _context48.next = 132;
-                      break;
-
-                    case 123:
-                      if (!(anchor.type === 'variables')) {
-                        _context48.next = 131;
-                        break;
-                      }
-
-                      _context48.next = 126;
-                      return self.namespace.replaceVariablesInString(anchor.alias);
-
-                    case 126:
-                      anchor.alias = _context48.sent;
-                      _context48.next = 129;
-                      return self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value));
-
-                    case 129:
-                      _context48.next = 132;
-                      break;
-
-                    case 131:
-                      throw new Error("Anchor of type '".concat(anchor.type, "' not supported!"));
-
-                    case 132:
-                      _context48.next = 223;
-                      break;
-
-                    case 134:
-                      if (!(anchor.pointer != '')) {
-                        _context48.next = 219;
-                        break;
-                      }
-
-                      _context48.next = 137;
-                      return self.namespace.replaceVariablesInString(anchor.pointer);
-
-                    case 137:
-                      anchor.pointer = _context48.sent;
-                      _context48.next = 140;
-                      return self.namespace.replaceVariablesInString(value.value);
-
-                    case 140:
-                      value.value = _context48.sent;
-                      _context48.next = 143;
-                      return self.closureForValueIfReference(value,
-                      /*#__PURE__*/
-                      function () {
-                        var _ref24 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee44(value, _value) {
-                          return _regenerator["default"].wrap(function _callee44$(_context44) {
-                            while (1) {
-                              switch (_context44.prev = _context44.next) {
-                                case 0:
-                                  if (!value["interface"]) {
-                                    _context44.next = 10;
-                                    break;
-                                  }
-
-                                  _context44.next = 3;
-                                  return Promise.mapSeries(value["interface"],
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref25 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee41(_interface) {
-                                      return _regenerator["default"].wrap(function _callee41$(_context41) {
-                                        while (1) {
-                                          switch (_context41.prev = _context41.next) {
-                                            case 0:
-                                              if (!_value.contract) {
-                                                _context41.next = 5;
-                                                break;
-                                              }
-
-                                              if (!(_interface[1].contract !== _value.contract)) {
-                                                _context41.next = 3;
-                                                break;
-                                              }
-
-                                              throw new Error('Contract mis-match!');
-
-                                            case 3:
-                                              _context41.next = 6;
-                                              break;
-
-                                            case 5:
-                                              _value.contract = _interface[1].contract || null;
-
-                                            case 6:
-                                              _context41.next = 8;
-                                              return _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                            case 8:
-                                              _value = _context41.sent;
-
-                                              if (!(typeof _value === "undefined")) {
-                                                _context41.next = 11;
-                                                break;
-                                              }
-
-                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                            case 11:
-                                            case "end":
-                                              return _context41.stop();
-                                          }
-                                        }
-                                      }, _callee41);
-                                    }));
-
-                                    return function (_x62) {
-                                      return _ref25.apply(this, arguments);
-                                    };
-                                  }());
-
-                                case 3:
-                                  if (!_value.contract) {
-                                    _context44.next = 8;
-                                    break;
-                                  }
-
-                                  // Verify output of interface via contract
-                                  log("Verify local interface output from '".concat(value["interface"].map(function (_interface) {
-                                    return _interface[0];
-                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                                  _context44.next = 7;
-                                  return _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                case 7:
-                                  _value = _context44.sent;
-
-                                case 8:
-                                  _context44.next = 18;
-                                  break;
-
-                                case 10:
-                                  if (!_value["interface"]) {
-                                    _context44.next = 18;
-                                    break;
-                                  }
-
-                                  _context44.next = 13;
-                                  return Promise.mapSeries(_value["interface"],
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref26 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee42(_interface) {
-                                      return _regenerator["default"].wrap(function _callee42$(_context42) {
-                                        while (1) {
-                                          switch (_context42.prev = _context42.next) {
-                                            case 0:
-                                              if (!_value.contract) {
-                                                _context42.next = 5;
-                                                break;
-                                              }
-
-                                              if (!(_interface[1].contract !== _value.contract)) {
-                                                _context42.next = 3;
-                                                break;
-                                              }
-
-                                              throw new Error('Contract mis-match!');
-
-                                            case 3:
-                                              _context42.next = 6;
-                                              break;
-
-                                            case 5:
-                                              _value.contract = _interface[1].contract || null;
-
-                                            case 6:
-                                              _context42.next = 8;
-                                              return _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                            case 8:
-                                              _value = _context42.sent;
-
-                                              if (!(typeof _value === "undefined")) {
-                                                _context42.next = 11;
-                                                break;
-                                              }
-
-                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                            case 11:
-                                            case "end":
-                                              return _context42.stop();
-                                          }
-                                        }
-                                      }, _callee42);
-                                    }));
-
-                                    return function (_x63) {
-                                      return _ref26.apply(this, arguments);
-                                    };
-                                  }());
-
-                                case 13:
-                                  if (!_value.contract) {
-                                    _context44.next = 18;
-                                    break;
-                                  }
-
-                                  // Verify output of interface via contract
-                                  log("Verify local interface output from '".concat(_value["interface"].map(function (_interface) {
-                                    return _interface[0];
-                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                                  _context44.next = 17;
-                                  return _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                case 17:
-                                  _value = _context44.sent;
-
-                                case 18:
-                                  if (!anchor["interface"]) {
-                                    _context44.next = 26;
-                                    break;
-                                  }
-
-                                  _context44.next = 21;
-                                  return Promise.mapSeries(anchor["interface"],
-                                  /*#__PURE__*/
-                                  function () {
-                                    var _ref27 = (0, _asyncToGenerator2["default"])(
-                                    /*#__PURE__*/
-                                    _regenerator["default"].mark(function _callee43(_interface) {
-                                      return _regenerator["default"].wrap(function _callee43$(_context43) {
-                                        while (1) {
-                                          switch (_context43.prev = _context43.next) {
-                                            case 0:
-                                              if (!_value.contract) {
-                                                _context43.next = 5;
-                                                break;
-                                              }
-
-                                              if (!(_interface[1].contract !== _value.contract)) {
-                                                _context43.next = 3;
-                                                break;
-                                              }
-
-                                              throw new Error('Contract mis-match!');
-
-                                            case 3:
-                                              _context43.next = 6;
-                                              break;
-
-                                            case 5:
-                                              _value.contract = _interface[1].contract || null;
-
-                                            case 6:
-                                              _context43.next = 8;
-                                              return _interface[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                            case 8:
-                                              _value = _context43.sent;
-
-                                              if (!(typeof _value === "undefined")) {
-                                                _context43.next = 11;
-                                                break;
-                                              }
-
-                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                            case 11:
-                                            case "end":
-                                              return _context43.stop();
-                                          }
-                                        }
-                                      }, _callee43);
-                                    }));
-
-                                    return function (_x64) {
-                                      return _ref27.apply(this, arguments);
-                                    };
-                                  }());
-
-                                case 21:
-                                  if (!_value.contract) {
-                                    _context44.next = 26;
-                                    break;
-                                  }
-
-                                  // Verify output of interface via contract
-                                  log("Verify local interface output from '".concat(anchor["interface"].map(function (_interface) {
-                                    return _interface[0];
-                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                                  _context44.next = 25;
-                                  return _value.contract[1].$instance(_value, anchor.pointer, value.propertyPathMount);
-
-                                case 25:
-                                  _value = _context44.sent;
-
-                                case 26:
-                                  return _context44.abrupt("return", _value);
-
-                                case 27:
-                                case "end":
-                                  return _context44.stop();
-                              }
-                            }
-                          }, _callee44);
-                        }));
-
-                        return function (_x60, _x61) {
-                          return _ref24.apply(this, arguments);
-                        };
-                      }());
-
-                    case 143:
-                      value = _context48.sent;
-
-                      if (value.wrapped) {
-                        _context48.next = 182;
-                        break;
-                      }
-
-                      if (!value["interface"]) {
-                        _context48.next = 157;
-                        break;
-                      }
-
-                      interfaces = value["interface"];
-                      delete value["interface"];
-                      _context48.next = 150;
-                      return Promise.mapSeries(interfaces,
-                      /*#__PURE__*/
-                      function () {
-                        var _ref28 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee45(_interface) {
-                          return _regenerator["default"].wrap(function _callee45$(_context45) {
-                            while (1) {
-                              switch (_context45.prev = _context45.next) {
-                                case 0:
-                                  if (!value.contract) {
-                                    _context45.next = 5;
-                                    break;
-                                  }
-
-                                  if (!(_interface[1].contract !== value.contract)) {
-                                    _context45.next = 3;
-                                    break;
-                                  }
-
-                                  throw new Error('Contract mis-match!');
-
-                                case 3:
-                                  _context45.next = 6;
-                                  break;
-
-                                case 5:
-                                  value.contract = _interface[1].contract || null;
-
-                                case 6:
-                                  _context45.next = 8;
-                                  return _interface[1].$instance(value, anchor.pointer);
-
-                                case 8:
-                                  value = _context45.sent;
-
-                                  if (!(typeof value === "undefined")) {
-                                    _context45.next = 11;
-                                    break;
-                                  }
-
-                                  throw new Error("Value is undefined after processing by remote interface '".concat(_interface[0], "'!"));
-
-                                case 11:
-                                case "end":
-                                  return _context45.stop();
-                              }
-                            }
-                          }, _callee45);
-                        }));
-
-                        return function (_x65) {
-                          return _ref28.apply(this, arguments);
-                        };
-                      }());
-
-                    case 150:
-                      if (!value.contract) {
-                        _context48.next = 155;
-                        break;
-                      }
-
-                      // Verify output of interface via contract
-                      log("Verify remote interface output from '".concat(interfaces.map(function (_interface) {
-                        return _interface[0];
-                      }), "' using contract '").concat(value.contract[1].alias, "'"));
-                      _context48.next = 154;
-                      return value.contract[1].$instance(value, anchor.pointer);
-
-                    case 154:
-                      value = _context48.sent;
-
-                    case 155:
-                      _context48.next = 162;
-                      break;
-
-                    case 157:
-                      if (!value.contract) {
-                        _context48.next = 162;
-                        break;
-                      }
-
-                      log("Verify inline value using contract '".concat(value.contract[1].alias, "'"));
-                      _context48.next = 161;
-                      return value.contract[1].$instance(value, anchor.pointer);
-
-                    case 161:
-                      value = _context48.sent;
-
-                    case 162:
-                      if (!anchor["interface"]) {
-                        _context48.next = 174;
-                        break;
-                      }
-
-                      // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-                      _interfaces = anchor["interface"];
-                      delete anchor["interface"];
-                      _context48.next = 167;
-                      return Promise.mapSeries(_interfaces,
-                      /*#__PURE__*/
-                      function () {
-                        var _ref29 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee46(_interface) {
-                          return _regenerator["default"].wrap(function _callee46$(_context46) {
-                            while (1) {
-                              switch (_context46.prev = _context46.next) {
-                                case 0:
-                                  if (!value.contract) {
-                                    _context46.next = 6;
-                                    break;
-                                  }
-
-                                  if (!(_interface[1].contract !== value.contract)) {
-                                    _context46.next = 4;
-                                    break;
-                                  }
-
-                                  if (!(_interface[1].contract[1].impl.id != value.contract[1].impl.id)) {
-                                    _context46.next = 4;
-                                    break;
-                                  }
-
-                                  throw new Error('Contract mis-match!');
-
-                                case 4:
-                                  _context46.next = 7;
-                                  break;
-
-                                case 6:
-                                  value.contract = _interface[1].contract || null;
-
-                                case 7:
-                                  _context46.next = 9;
-                                  return _interface[1].$instance(value, anchor.pointer);
-
-                                case 9:
-                                  value = _context46.sent;
-
-                                  if (!(typeof value === "undefined")) {
-                                    _context46.next = 12;
-                                    break;
-                                  }
-
-                                  throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                case 12:
-                                case "end":
-                                  return _context46.stop();
-                              }
-                            }
-                          }, _callee46);
-                        }));
-
-                        return function (_x66) {
-                          return _ref29.apply(this, arguments);
-                        };
-                      }());
-
-                    case 167:
-                      if (!value.contract) {
-                        _context48.next = 172;
-                        break;
-                      }
-
-                      // Verify output of interface via contract
-                      log("Verify local interface output from '".concat(_interfaces.map(function (_interface) {
-                        return _interface[0];
-                      }), "' using contract '").concat(value.contract[1].alias, "'"));
-                      _context48.next = 171;
-                      return value.contract[1].$instance(value, anchor.pointer);
-
-                    case 171:
-                      value = _context48.sent;
-
-                    case 172:
-                      _context48.next = 179;
-                      break;
-
-                    case 174:
-                      if (!anchor.contract) {
-                        _context48.next = 179;
-                        break;
-                      }
-
-                      // Verify value via contract
-                      log("Verify value using contract '".concat(anchor.contract[1].alias, "'"));
-                      _context48.next = 178;
-                      return anchor.contract[1].$instance(value, anchor.pointer);
-
-                    case 178:
-                      value = _context48.sent;
-
-                    case 179:
-                      if (anchor.contract) {
-                        value.contract = anchor.contract || null;
-                      }
-
-                      _context48.next = 183;
-                      break;
-
-                    case 182:
-                      if (anchor["interface"]) {
-                        anchor["interface"].forEach(function (_interface) {
-                          if (value.contract) {
-                            if (_interface[1].contract !== value.contract) {
-                              throw new Error('Contract mis-match!');
-                            }
-                          } else {
-                            value.contract = _interface[1].contract || null;
-                          }
-                        });
-                      }
-
-                    case 183:
-                      if (!(anchor.type === 'component')) {
-                        _context48.next = 213;
-                        break;
-                      }
-
-                      _context48.next = 186;
-                      return self.namespace.getComponentForAlias(anchor.alias);
-
-                    case 186:
-                      _component3 = _context48.sent;
-                      log("Invoke component '".concat(_component3.path, "' for alias '").concat(anchor.alias, "'"));
-
-                      if (!(anchor.contract && anchor.contract[1].impl.invokeWrapper)) {
-                        _context48.next = 198;
-                        break;
-                      }
-
-                      if (_component3.$wrappedInvoke) {
-                        _context48.next = 193;
-                        break;
-                      }
-
-                      _context48.next = 192;
-                      return anchor.contract[1].impl.invokeWrapper(_component3).call(null, anchor.contract[0]);
-
-                    case 192:
-                      _component3.$wrappedInvoke = _context48.sent;
-
-                    case 193:
-                      _context48.next = 195;
-                      return _component3.$wrappedInvoke(anchor.pointer, value);
-
-                    case 195:
-                      response = _context48.sent;
-                      _context48.next = 201;
-                      break;
-
-                    case 198:
-                      if (!anchor["interface"]) {
-                        _context48.next = 201;
-                        break;
-                      }
-
-                      _context48.next = 201;
-                      return Promise.mapSeries(anchor["interface"],
-                      /*#__PURE__*/
-                      function () {
-                        var _ref30 = (0, _asyncToGenerator2["default"])(
-                        /*#__PURE__*/
-                        _regenerator["default"].mark(function _callee47(_interface, i) {
-                          return _regenerator["default"].wrap(function _callee47$(_context47) {
-                            while (1) {
-                              switch (_context47.prev = _context47.next) {
-                                case 0:
-                                  _component3.$wrappedInvoke = _component3.$wrappedInvoke || [];
-
-                                  if (!(_interface[1].contract && _interface[1].contract[1].impl.invokeWrapper)) {
-                                    _context47.next = 9;
-                                    break;
-                                  }
-
-                                  if (_component3.$wrappedInvoke[i]) {
-                                    _context47.next = 6;
-                                    break;
-                                  }
-
-                                  _context47.next = 5;
-                                  return _interface[1].contract[1].impl.invokeWrapper(_component3).call(null, _interface[1].contract[0]);
-
-                                case 5:
-                                  _component3.$wrappedInvoke[i] = _context47.sent;
-
-                                case 6:
-                                  _context47.next = 8;
-                                  return _component3.$wrappedInvoke[i](anchor.pointer, response || value);
-
-                                case 8:
-                                  response = _context47.sent;
-
-                                case 9:
-                                case "end":
-                                  return _context47.stop();
-                              }
-                            }
-                          }, _callee47);
-                        }));
-
-                        return function (_x67, _x68) {
-                          return _ref30.apply(this, arguments);
-                        };
-                      }());
-
-                    case 201:
-                      if (!(typeof response === "undefined")) {
-                        _context48.next = 209;
-                        break;
-                      }
-
-                      if (_component3.invoke) {
-                        _context48.next = 206;
-                        break;
-                      }
-
-                      console.error("anchor", anchor);
-                      console.error("component", _component3);
-                      throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
-
-                    case 206:
-                      _context48.next = 208;
-                      return _component3.invoke(anchor.pointer, value);
-
-                    case 208:
-                      response = _context48.sent;
-
-                    case 209:
-                      if ((0, _typeof2["default"])(response) === "object") {
-                        self.namespace.apis[anchor.alias] = LODASH_MERGE(self.namespace.apis[anchor.alias] || {}, response);
-                      } else {
-                        self.namespace.apis[anchor.alias] = response;
-                      }
-
-                      return _context48.abrupt("return", response);
-
-                    case 213:
-                      if (!(anchor.type === 'plugin')) {
-                        _context48.next = 217;
-                        break;
-                      }
-
-                      plugins = self.namespace.getPluginsForMatch(anchor.alias);
-                      _context48.next = 217;
-                      return Promise.mapSeries(plugins, function (plugin) {
-                        return plugin.invoke(anchor.pointer, value);
                       });
+                    } else if ((0, _typeof2["default"])(value.value) === "object") {
+                      uris = Object.keys(value.value).map(function (alias) {
+                        return {
+                          alias: alias,
+                          reference: value.value[alias]
+                        };
+                      });
+                    }
 
-                    case 217:
-                      _context48.next = 223;
+                    _context59.next = 101;
+                    return _regenerator["default"].awrap(Promise.mapSeries(uris, function _callee22(uri) {
+                      var alias, reference, paths;
+                      return _regenerator["default"].async(function _callee22$(_context51) {
+                        while (1) {
+                          switch (_context51.prev = _context51.next) {
+                            case 0:
+                              alias = uri.alias, reference = uri.reference;
+                              _context51.next = 3;
+                              return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(reference));
+
+                            case 3:
+                              reference = _context51.sent;
+                              log('processInstruction() alias, reference', alias, reference);
+                              _context51.next = 7;
+                              return _regenerator["default"].awrap(self.namespace.resolveInfUri(reference));
+
+                            case 7:
+                              paths = _context51.sent;
+                              log("Load inf.json file into '".concat(alias, "' from paths:"), paths);
+
+                              if (!alias) {
+                                _context51.next = 14;
+                                break;
+                              }
+
+                              _context51.next = 12;
+                              return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(alias));
+
+                            case 12:
+                              alias = _context51.sent;
+                              alias = self.namespace.makeNamespacePointerForString(null, alias);
+
+                            case 14:
+                              log('processInstruction() paths', paths);
+
+                              if (!paths) {
+                                _context51.next = 18;
+                                break;
+                              }
+
+                              _context51.next = 18;
+                              return _regenerator["default"].awrap(Promise.mapSeries(paths, function _callee21(path) {
+                                var inf, _inf2;
+
+                                return _regenerator["default"].async(function _callee21$(_context50) {
+                                  while (1) {
+                                    switch (_context50.prev = _context50.next) {
+                                      case 0:
+                                        log('processInstruction() path', path);
+
+                                        if (!(!self.namespace.isInheritingFrom(path) && self.namespace.pathStack.indexOf(path) === -1)) {
+                                          _context50.next = 15;
+                                          break;
+                                        }
+
+                                        log("Inherit from inf file:", path);
+
+                                        if (alias) {
+                                          self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString(); // NOTE: Each namespace layer needs to export its own data so that
+                                          //       aliased data can be applied to multiple namespaces.
+                                        }
+
+                                        inf = new INF(PATH.dirname(path), self.namespace, LODASH_MERGE({}, self.namespace.options, {
+                                          anchorPrefix: alias || self.namespace.anchorPrefix || null,
+                                          mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
+                                          skipAddToAnchorPrefixStack: !!alias
+                                        }));
+                                        self.namespace.childInfByPath[path] = inf;
+                                        _context50.next = 8;
+                                        return _regenerator["default"].awrap(inf.runInstructionsFile(PATH.basename(path)));
+
+                                      case 8:
+                                        if (!alias) {
+                                          if (inf.namespace.forParent.allPaths) {
+                                            self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
+                                            inf.namespace.forParent.allPaths.forEach(function (path) {
+                                              self.namespace.forParent.allPaths.push(path);
+                                            });
+                                          }
+
+                                          if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                                            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases.concat(inf.namespace.forParent.mappedNamespaceAliases);
+                                          }
+
+                                          if (inf.namespace.forParent.aliases) {
+                                            self.namespace.forParent.aliases = self.namespace.forParent.aliases || {};
+                                            Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                              self.namespace.forParent.aliases[name] = inf.namespace.forParent.aliases[name];
+                                            });
+                                          }
+
+                                          if (inf.namespace.forParent.mappedAliases) {
+                                            self.namespace.forParent.mappedAliases = self.namespace.forParent.mappedAliases || {};
+                                            Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                              self.namespace.forParent.mappedAliases[name] = inf.namespace.forParent.mappedAliases[name];
+                                            });
+                                          }
+                                        }
+
+                                        if (inf.namespace.forParent.allPaths) {
+                                          inf.namespace.forParent.allPaths.forEach(function (path) {
+                                            self.namespace.allPaths.push(path);
+                                          });
+                                        }
+
+                                        if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                          inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                            var val = getter(alias);
+                                            self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                          });
+                                        }
+
+                                        if (inf.namespace.forParent.aliases) {
+                                          Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                            self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
+                                          });
+                                        }
+
+                                        if (alias) {
+                                          if (inf.namespace.forParent.mappedAliases) {
+                                            Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                              self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [inf.namespace.forParent.mappedAliases[name], name];
+                                            });
+                                          }
+                                        }
+
+                                        _context50.next = 16;
+                                        break;
+
+                                      case 15:
+                                        // 'inf.json' file is already loaded so we need to map it to the new alias if applicable.
+                                        if (alias) {
+                                          log("Mounting already inherited file '".concat(path, "' for alias '").concat(alias, "'."));
+                                          self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
+                                          _inf2 = self.namespace.childInfByPath[path];
+
+                                          if (_inf2.namespace.forParent.allPaths) {
+                                            _inf2.namespace.forParent.allPaths.forEach(function (path) {
+                                              self.namespace.allPaths.push(path);
+                                            });
+                                          }
+
+                                          if (_inf2.namespace.forParent.mappedNamespaceAliases) {
+                                            _inf2.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                              var val = getter(alias);
+                                              self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                            });
+                                          }
+
+                                          if (_inf2.namespace.forParent.aliases) {
+                                            Object.keys(_inf2.namespace.forParent.aliases).forEach(function (name) {
+                                              self.namespace.aliases[name] = _inf2.namespace.forParent.aliases[name];
+                                            });
+                                          }
+
+                                          if (_inf2.namespace.forParent.mappedAliases) {
+                                            Object.keys(_inf2.namespace.forParent.mappedAliases).forEach(function (name) {
+                                              self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [_inf2.namespace.forParent.mappedAliases[name], name];
+                                            });
+                                          }
+                                        }
+
+                                      case 16:
+                                      case "end":
+                                        return _context50.stop();
+                                    }
+                                  }
+                                });
+                              }));
+
+                            case 18:
+                            case "end":
+                              return _context51.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 101:
+                    _context59.next = 277;
+                    break;
+
+                  case 103:
+                    if (!(anchor.pointer === '')) {
+                      _context59.next = 159;
                       break;
+                    }
 
-                    case 219:
-                      CONSOLE.error("instruction:", anchor, ":", value);
-                      CONSOLE.error("anchor.alias:", anchor.alias);
-                      CONSOLE.error("anchor.pointer:", anchor.pointer);
-                      throw new Error("Unknown instruction!");
+                    if (!(anchor.type === 'component')) {
+                      _context59.next = 112;
+                      break;
+                    }
 
-                    case 223:
-                    case "end":
-                      return _context48.stop();
-                  }
+                    _context59.next = 107;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
+
+                  case 107:
+                    value.value = _context59.sent;
+                    _context59.next = 110;
+                    return _regenerator["default"].awrap(self.namespace.mapComponent(anchor, value.value));
+
+                  case 110:
+                    _context59.next = 157;
+                    break;
+
+                  case 112:
+                    if (!(anchor.type === 'interface')) {
+                      _context59.next = 138;
+                      break;
+                    }
+
+                    _context59.next = 115;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
+
+                  case 115:
+                    value.value = _context59.sent;
+                    value.value = self.namespace.makeNamespacePointerForString(null, value.value);
+
+                    if (!(value.value.getSegments().length > 1)) {
+                      _context59.next = 131;
+                      break;
+                    }
+
+                    key = value.value.toString();
+
+                    if (!self.namespace.mappedAliases[key]) {
+                      _context59.next = 123;
+                      break;
+                    }
+
+                    value.value = key;
+                    _context59.next = 129;
+                    break;
+
+                  case 123:
+                    if (!(typeof self.namespace.mappedNamespaceAliases[key] !== "undefined")) {
+                      _context59.next = 127;
+                      break;
+                    }
+
+                    value.value = self.namespace.mappedNamespaceAliases[key];
+                    _context59.next = 129;
+                    break;
+
+                  case 127:
+                    console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
+                    throw new Error("Alias '".concat(key, "' is not mapped in 'self.namespace.mappedAliases' nor 'self.namespace.mappedNamespaceAliases'!"));
+
+                  case 129:
+                    _context59.next = 132;
+                    break;
+
+                  case 131:
+                    value.value = value.value.toString();
+
+                  case 132:
+                    _context59.next = 134;
+                    return _regenerator["default"].awrap(self.namespace.mapInterface(anchor.alias, value.value));
+
+                  case 134:
+                    interfaceComponent = _context59.sent;
+
+                    if (anchor.contract) {
+                      interfaceComponent.contract = [anchor.contract, self.namespace.getContractForAlias(anchor.contract)];
+                    }
+
+                    _context59.next = 157;
+                    break;
+
+                  case 138:
+                    if (!(anchor.type === 'contract')) {
+                      _context59.next = 143;
+                      break;
+                    }
+
+                    _context59.next = 141;
+                    return _regenerator["default"].awrap(self.namespace.mapContract(anchor, value.value));
+
+                  case 141:
+                    _context59.next = 157;
+                    break;
+
+                  case 143:
+                    if (!(anchor.type === 'plugin')) {
+                      _context59.next = 148;
+                      break;
+                    }
+
+                    _context59.next = 146;
+                    return _regenerator["default"].awrap(self.namespace.mapPlugin(anchor.alias, value.value));
+
+                  case 146:
+                    _context59.next = 157;
+                    break;
+
+                  case 148:
+                    if (!(anchor.type === 'variables')) {
+                      _context59.next = 156;
+                      break;
+                    }
+
+                    _context59.next = 151;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor.alias));
+
+                  case 151:
+                    anchor.alias = _context59.sent;
+                    _context59.next = 154;
+                    return _regenerator["default"].awrap(self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value)));
+
+                  case 154:
+                    _context59.next = 157;
+                    break;
+
+                  case 156:
+                    throw new Error("Anchor of type '".concat(anchor.type, "' not supported!"));
+
+                  case 157:
+                    _context59.next = 277;
+                    break;
+
+                  case 159:
+                    if (!(anchor.pointer != '')) {
+                      _context59.next = 273;
+                      break;
+                    }
+
+                    _context59.next = 162;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor.pointer));
+
+                  case 162:
+                    anchor.pointer = _context59.sent;
+                    _context59.next = 165;
+                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
+
+                  case 165:
+                    value.value = _context59.sent;
+                    _context59.next = 168;
+                    return _regenerator["default"].awrap(self.closureForValueIfReference(value, function _callee26(value, _value) {
+                      return _regenerator["default"].async(function _callee26$(_context55) {
+                        while (1) {
+                          switch (_context55.prev = _context55.next) {
+                            case 0:
+                              if (!value["interface"]) {
+                                _context55.next = 18;
+                                break;
+                              }
+
+                              _context55.next = 3;
+                              return _regenerator["default"].awrap(Promise.mapSeries(value["interface"], function _callee23(_interface) {
+                                return _regenerator["default"].async(function _callee23$(_context52) {
+                                  while (1) {
+                                    switch (_context52.prev = _context52.next) {
+                                      case 0:
+                                        if (!_value.contract) {
+                                          _context52.next = 5;
+                                          break;
+                                        }
+
+                                        if (!(_interface[1].contract !== _value.contract)) {
+                                          _context52.next = 3;
+                                          break;
+                                        }
+
+                                        throw new Error('Contract mis-match!');
+
+                                      case 3:
+                                        _context52.next = 6;
+                                        break;
+
+                                      case 5:
+                                        _value.contract = _interface[1].contract || null;
+
+                                      case 6:
+                                        _context52.t0 = _regenerator["default"];
+                                        _context52.next = 9;
+                                        return _regenerator["default"].awrap(_interface[1].$instance);
+
+                                      case 9:
+                                        _context52.t1 = _context52.sent;
+                                        _context52.t2 = _value;
+                                        _context52.t3 = anchor.pointer;
+                                        _context52.t4 = value.propertyPathMount;
+                                        _context52.t5 = (0, _context52.t1)(_context52.t2, _context52.t3, _context52.t4);
+                                        _context52.next = 16;
+                                        return _context52.t0.awrap.call(_context52.t0, _context52.t5);
+
+                                      case 16:
+                                        _value = _context52.sent;
+
+                                        if (!(typeof _value === "undefined")) {
+                                          _context52.next = 19;
+                                          break;
+                                        }
+
+                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                      case 19:
+                                      case "end":
+                                        return _context52.stop();
+                                    }
+                                  }
+                                });
+                              }));
+
+                            case 3:
+                              if (!_value.contract) {
+                                _context55.next = 16;
+                                break;
+                              }
+
+                              // Verify output of interface via contract
+                              log("Verify local interface output from '".concat(value["interface"].map(function (_interface) {
+                                return _interface[0];
+                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                              _context55.t0 = _regenerator["default"];
+                              _context55.next = 8;
+                              return _regenerator["default"].awrap(_value.contract[1].$instance);
+
+                            case 8:
+                              _context55.t1 = _context55.sent;
+                              _context55.t2 = _value;
+                              _context55.t3 = anchor.pointer;
+                              _context55.t4 = value.propertyPathMount;
+                              _context55.t5 = (0, _context55.t1)(_context55.t2, _context55.t3, _context55.t4);
+                              _context55.next = 15;
+                              return _context55.t0.awrap.call(_context55.t0, _context55.t5);
+
+                            case 15:
+                              _value = _context55.sent;
+
+                            case 16:
+                              _context55.next = 34;
+                              break;
+
+                            case 18:
+                              if (!_value["interface"]) {
+                                _context55.next = 34;
+                                break;
+                              }
+
+                              _context55.next = 21;
+                              return _regenerator["default"].awrap(Promise.mapSeries(_value["interface"], function _callee24(_interface) {
+                                return _regenerator["default"].async(function _callee24$(_context53) {
+                                  while (1) {
+                                    switch (_context53.prev = _context53.next) {
+                                      case 0:
+                                        if (!_value.contract) {
+                                          _context53.next = 5;
+                                          break;
+                                        }
+
+                                        if (!(_interface[1].contract !== _value.contract)) {
+                                          _context53.next = 3;
+                                          break;
+                                        }
+
+                                        throw new Error('Contract mis-match!');
+
+                                      case 3:
+                                        _context53.next = 6;
+                                        break;
+
+                                      case 5:
+                                        _value.contract = _interface[1].contract || null;
+
+                                      case 6:
+                                        _context53.t0 = _regenerator["default"];
+                                        _context53.next = 9;
+                                        return _regenerator["default"].awrap(_interface[1].$instance);
+
+                                      case 9:
+                                        _context53.t1 = _context53.sent;
+                                        _context53.t2 = _value;
+                                        _context53.t3 = anchor.pointer;
+                                        _context53.t4 = value.propertyPathMount;
+                                        _context53.t5 = (0, _context53.t1)(_context53.t2, _context53.t3, _context53.t4);
+                                        _context53.next = 16;
+                                        return _context53.t0.awrap.call(_context53.t0, _context53.t5);
+
+                                      case 16:
+                                        _value = _context53.sent;
+
+                                        if (!(typeof _value === "undefined")) {
+                                          _context53.next = 19;
+                                          break;
+                                        }
+
+                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                      case 19:
+                                      case "end":
+                                        return _context53.stop();
+                                    }
+                                  }
+                                });
+                              }));
+
+                            case 21:
+                              if (!_value.contract) {
+                                _context55.next = 34;
+                                break;
+                              }
+
+                              // Verify output of interface via contract
+                              log("Verify local interface output from '".concat(_value["interface"].map(function (_interface) {
+                                return _interface[0];
+                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                              _context55.t6 = _regenerator["default"];
+                              _context55.next = 26;
+                              return _regenerator["default"].awrap(_value.contract[1].$instance);
+
+                            case 26:
+                              _context55.t7 = _context55.sent;
+                              _context55.t8 = _value;
+                              _context55.t9 = anchor.pointer;
+                              _context55.t10 = value.propertyPathMount;
+                              _context55.t11 = (0, _context55.t7)(_context55.t8, _context55.t9, _context55.t10);
+                              _context55.next = 33;
+                              return _context55.t6.awrap.call(_context55.t6, _context55.t11);
+
+                            case 33:
+                              _value = _context55.sent;
+
+                            case 34:
+                              if (!anchor["interface"]) {
+                                _context55.next = 50;
+                                break;
+                              }
+
+                              _context55.next = 37;
+                              return _regenerator["default"].awrap(Promise.mapSeries(anchor["interface"], function _callee25(_interface) {
+                                return _regenerator["default"].async(function _callee25$(_context54) {
+                                  while (1) {
+                                    switch (_context54.prev = _context54.next) {
+                                      case 0:
+                                        if (!_value.contract) {
+                                          _context54.next = 5;
+                                          break;
+                                        }
+
+                                        if (!(_interface[1].contract !== _value.contract)) {
+                                          _context54.next = 3;
+                                          break;
+                                        }
+
+                                        throw new Error('Contract mis-match!');
+
+                                      case 3:
+                                        _context54.next = 6;
+                                        break;
+
+                                      case 5:
+                                        _value.contract = _interface[1].contract || null;
+
+                                      case 6:
+                                        _context54.t0 = _regenerator["default"];
+                                        _context54.next = 9;
+                                        return _regenerator["default"].awrap(_interface[1].$instance);
+
+                                      case 9:
+                                        _context54.t1 = _context54.sent;
+                                        _context54.t2 = _value;
+                                        _context54.t3 = anchor.pointer;
+                                        _context54.t4 = value.propertyPathMount;
+                                        _context54.t5 = (0, _context54.t1)(_context54.t2, _context54.t3, _context54.t4);
+                                        _context54.next = 16;
+                                        return _context54.t0.awrap.call(_context54.t0, _context54.t5);
+
+                                      case 16:
+                                        _value = _context54.sent;
+
+                                        if (!(typeof _value === "undefined")) {
+                                          _context54.next = 19;
+                                          break;
+                                        }
+
+                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                      case 19:
+                                      case "end":
+                                        return _context54.stop();
+                                    }
+                                  }
+                                });
+                              }));
+
+                            case 37:
+                              if (!_value.contract) {
+                                _context55.next = 50;
+                                break;
+                              }
+
+                              // Verify output of interface via contract
+                              log("Verify local interface output from '".concat(anchor["interface"].map(function (_interface) {
+                                return _interface[0];
+                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                              _context55.t12 = _regenerator["default"];
+                              _context55.next = 42;
+                              return _regenerator["default"].awrap(_value.contract[1].$instance);
+
+                            case 42:
+                              _context55.t13 = _context55.sent;
+                              _context55.t14 = _value;
+                              _context55.t15 = anchor.pointer;
+                              _context55.t16 = value.propertyPathMount;
+                              _context55.t17 = (0, _context55.t13)(_context55.t14, _context55.t15, _context55.t16);
+                              _context55.next = 49;
+                              return _context55.t12.awrap.call(_context55.t12, _context55.t17);
+
+                            case 49:
+                              _value = _context55.sent;
+
+                            case 50:
+                              return _context55.abrupt("return", _value);
+
+                            case 51:
+                            case "end":
+                              return _context55.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 168:
+                    value = _context59.sent;
+
+                    if (value.wrapped) {
+                      _context59.next = 235;
+                      break;
+                    }
+
+                    if (!value["interface"]) {
+                      _context59.next = 189;
+                      break;
+                    }
+
+                    interfaces = value["interface"];
+                    delete value["interface"];
+                    _context59.next = 175;
+                    return _regenerator["default"].awrap(Promise.mapSeries(interfaces, function _callee27(_interface) {
+                      return _regenerator["default"].async(function _callee27$(_context56) {
+                        while (1) {
+                          switch (_context56.prev = _context56.next) {
+                            case 0:
+                              if (!value.contract) {
+                                _context56.next = 5;
+                                break;
+                              }
+
+                              if (!(_interface[1].contract !== value.contract)) {
+                                _context56.next = 3;
+                                break;
+                              }
+
+                              throw new Error('Contract mis-match!');
+
+                            case 3:
+                              _context56.next = 6;
+                              break;
+
+                            case 5:
+                              value.contract = _interface[1].contract || null;
+
+                            case 6:
+                              _context56.t0 = _regenerator["default"];
+                              _context56.next = 9;
+                              return _regenerator["default"].awrap(_interface[1].$instance);
+
+                            case 9:
+                              _context56.t1 = _context56.sent;
+                              _context56.t2 = value;
+                              _context56.t3 = anchor.pointer;
+                              _context56.t4 = (0, _context56.t1)(_context56.t2, _context56.t3);
+                              _context56.next = 15;
+                              return _context56.t0.awrap.call(_context56.t0, _context56.t4);
+
+                            case 15:
+                              value = _context56.sent;
+
+                              if (!(typeof value === "undefined")) {
+                                _context56.next = 18;
+                                break;
+                              }
+
+                              throw new Error("Value is undefined after processing by remote interface '".concat(_interface[0], "'!"));
+
+                            case 18:
+                            case "end":
+                              return _context56.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 175:
+                    if (!value.contract) {
+                      _context59.next = 187;
+                      break;
+                    }
+
+                    // Verify output of interface via contract
+                    log("Verify remote interface output from '".concat(interfaces.map(function (_interface) {
+                      return _interface[0];
+                    }), "' using contract '").concat(value.contract[1].alias, "'"));
+                    _context59.t0 = _regenerator["default"];
+                    _context59.next = 180;
+                    return _regenerator["default"].awrap(value.contract[1].$instance);
+
+                  case 180:
+                    _context59.t1 = _context59.sent;
+                    _context59.t2 = value;
+                    _context59.t3 = anchor.pointer;
+                    _context59.t4 = (0, _context59.t1)(_context59.t2, _context59.t3);
+                    _context59.next = 186;
+                    return _context59.t0.awrap.call(_context59.t0, _context59.t4);
+
+                  case 186:
+                    value = _context59.sent;
+
+                  case 187:
+                    _context59.next = 201;
+                    break;
+
+                  case 189:
+                    if (!value.contract) {
+                      _context59.next = 201;
+                      break;
+                    }
+
+                    log("Verify inline value using contract '".concat(value.contract[1].alias, "'"));
+                    _context59.t5 = _regenerator["default"];
+                    _context59.next = 194;
+                    return _regenerator["default"].awrap(value.contract[1].$instance);
+
+                  case 194:
+                    _context59.t6 = _context59.sent;
+                    _context59.t7 = value;
+                    _context59.t8 = anchor.pointer;
+                    _context59.t9 = (0, _context59.t6)(_context59.t7, _context59.t8);
+                    _context59.next = 200;
+                    return _context59.t5.awrap.call(_context59.t5, _context59.t9);
+
+                  case 200:
+                    value = _context59.sent;
+
+                  case 201:
+                    if (!anchor["interface"]) {
+                      _context59.next = 220;
+                      break;
+                    }
+
+                    // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
+                    _interfaces = anchor["interface"];
+                    delete anchor["interface"];
+                    _context59.next = 206;
+                    return _regenerator["default"].awrap(Promise.mapSeries(_interfaces, function _callee28(_interface) {
+                      return _regenerator["default"].async(function _callee28$(_context57) {
+                        while (1) {
+                          switch (_context57.prev = _context57.next) {
+                            case 0:
+                              if (!value.contract) {
+                                _context57.next = 6;
+                                break;
+                              }
+
+                              if (!(_interface[1].contract !== value.contract)) {
+                                _context57.next = 4;
+                                break;
+                              }
+
+                              if (!(_interface[1].contract[1].impl.id != value.contract[1].impl.id)) {
+                                _context57.next = 4;
+                                break;
+                              }
+
+                              throw new Error('Contract mis-match!');
+
+                            case 4:
+                              _context57.next = 7;
+                              break;
+
+                            case 6:
+                              value.contract = _interface[1].contract || null;
+
+                            case 7:
+                              _context57.t0 = _regenerator["default"];
+                              _context57.next = 10;
+                              return _regenerator["default"].awrap(_interface[1].$instance);
+
+                            case 10:
+                              _context57.t1 = _context57.sent;
+                              _context57.t2 = value;
+                              _context57.t3 = anchor.pointer;
+                              _context57.t4 = (0, _context57.t1)(_context57.t2, _context57.t3);
+                              _context57.next = 16;
+                              return _context57.t0.awrap.call(_context57.t0, _context57.t4);
+
+                            case 16:
+                              value = _context57.sent;
+
+                              if (!(typeof value === "undefined")) {
+                                _context57.next = 19;
+                                break;
+                              }
+
+                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                            case 19:
+                            case "end":
+                              return _context57.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 206:
+                    if (!value.contract) {
+                      _context59.next = 218;
+                      break;
+                    }
+
+                    // Verify output of interface via contract
+                    log("Verify local interface output from '".concat(_interfaces.map(function (_interface) {
+                      return _interface[0];
+                    }), "' using contract '").concat(value.contract[1].alias, "'"));
+                    _context59.t10 = _regenerator["default"];
+                    _context59.next = 211;
+                    return _regenerator["default"].awrap(value.contract[1].$instance);
+
+                  case 211:
+                    _context59.t11 = _context59.sent;
+                    _context59.t12 = value;
+                    _context59.t13 = anchor.pointer;
+                    _context59.t14 = (0, _context59.t11)(_context59.t12, _context59.t13);
+                    _context59.next = 217;
+                    return _context59.t10.awrap.call(_context59.t10, _context59.t14);
+
+                  case 217:
+                    value = _context59.sent;
+
+                  case 218:
+                    _context59.next = 232;
+                    break;
+
+                  case 220:
+                    if (!anchor.contract) {
+                      _context59.next = 232;
+                      break;
+                    }
+
+                    // Verify value via contract
+                    log("Verify value using contract '".concat(anchor.contract[1].alias, "'"));
+                    _context59.t15 = _regenerator["default"];
+                    _context59.next = 225;
+                    return _regenerator["default"].awrap(anchor.contract[1].$instance);
+
+                  case 225:
+                    _context59.t16 = _context59.sent;
+                    _context59.t17 = value;
+                    _context59.t18 = anchor.pointer;
+                    _context59.t19 = (0, _context59.t16)(_context59.t17, _context59.t18);
+                    _context59.next = 231;
+                    return _context59.t15.awrap.call(_context59.t15, _context59.t19);
+
+                  case 231:
+                    value = _context59.sent;
+
+                  case 232:
+                    if (anchor.contract) {
+                      value.contract = anchor.contract || null;
+                    }
+
+                    _context59.next = 236;
+                    break;
+
+                  case 235:
+                    if (anchor["interface"]) {
+                      anchor["interface"].forEach(function (_interface) {
+                        if (value.contract) {
+                          if (_interface[1].contract !== value.contract) {
+                            throw new Error('Contract mis-match!');
+                          }
+                        } else {
+                          value.contract = _interface[1].contract || null;
+                        }
+                      });
+                    }
+
+                  case 236:
+                    if (!(anchor.type === 'component')) {
+                      _context59.next = 267;
+                      break;
+                    }
+
+                    getResolvedAlias = function getResolvedAlias(alias) {
+                      if (!self.namespace.anchorPrefixStack.length) {
+                        return alias;
+                      }
+
+                      var resolved = null; //console.log("MAKE FROM STACK", self.namespace.anchorPrefixStack);
+
+                      for (var i = self.namespace.anchorPrefixStack.length - 1; i >= 0; i--) {
+                        if (!resolved) {
+                          resolved = self.namespace.anchorPrefixStack[i];
+                        } else {
+                          resolved = resolved.prepend(self.namespace.anchorPrefixStack[i]);
+                        }
+                      }
+
+                      return resolved.toSegmentedString() + '|' + alias;
+                    };
+
+                    _context59.next = 240;
+                    return _regenerator["default"].awrap(self.namespace.getComponentForAlias(anchor.alias));
+
+                  case 240:
+                    _component3 = _context59.sent;
+                    log("Invoke component '".concat(_component3.path, "' for alias '").concat(anchor.alias, "'"));
+
+                    if (!(anchor.contract && anchor.contract[1].impl.invokeWrapper)) {
+                      _context59.next = 252;
+                      break;
+                    }
+
+                    if (_component3.$wrappedInvoke) {
+                      _context59.next = 247;
+                      break;
+                    }
+
+                    _context59.next = 246;
+                    return _regenerator["default"].awrap(anchor.contract[1].impl.invokeWrapper(_component3).call(null, anchor.contract[0]));
+
+                  case 246:
+                    _component3.$wrappedInvoke = _context59.sent;
+
+                  case 247:
+                    _context59.next = 249;
+                    return _regenerator["default"].awrap(_component3.$wrappedInvoke(anchor.pointer, value));
+
+                  case 249:
+                    response = _context59.sent;
+                    _context59.next = 255;
+                    break;
+
+                  case 252:
+                    if (!anchor["interface"]) {
+                      _context59.next = 255;
+                      break;
+                    }
+
+                    _context59.next = 255;
+                    return _regenerator["default"].awrap(Promise.mapSeries(anchor["interface"], function _callee29(_interface, i) {
+                      return _regenerator["default"].async(function _callee29$(_context58) {
+                        while (1) {
+                          switch (_context58.prev = _context58.next) {
+                            case 0:
+                              _component3.$wrappedInvoke = _component3.$wrappedInvoke || [];
+
+                              if (!(_interface[1].contract && _interface[1].contract[1].impl.invokeWrapper)) {
+                                _context58.next = 9;
+                                break;
+                              }
+
+                              if (_component3.$wrappedInvoke[i]) {
+                                _context58.next = 6;
+                                break;
+                              }
+
+                              _context58.next = 5;
+                              return _regenerator["default"].awrap(_interface[1].contract[1].impl.invokeWrapper(_component3).call(null, _interface[1].contract[0]));
+
+                            case 5:
+                              _component3.$wrappedInvoke[i] = _context58.sent;
+
+                            case 6:
+                              _context58.next = 8;
+                              return _regenerator["default"].awrap(_component3.$wrappedInvoke[i](anchor.pointer, response || value));
+
+                            case 8:
+                              response = _context58.sent;
+
+                            case 9:
+                            case "end":
+                              return _context58.stop();
+                          }
+                        }
+                      });
+                    }));
+
+                  case 255:
+                    if (!(typeof response === "undefined")) {
+                      _context59.next = 263;
+                      break;
+                    }
+
+                    if (_component3.invoke) {
+                      _context59.next = 260;
+                      break;
+                    }
+
+                    console.error("anchor", anchor);
+                    console.error("component", _component3);
+                    throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
+
+                  case 260:
+                    _context59.next = 262;
+                    return _regenerator["default"].awrap(_component3.invoke(anchor.pointer, value, {
+                      callerNamespace: self.namespace
+                    }));
+
+                  case 262:
+                    response = _context59.sent;
+
+                  case 263:
+                    if (typeof response !== "undefined") {
+                      apiKey = getResolvedAlias(anchor.alias);
+                      self.namespace.apis[apiKey] = self.namespace.apis[apiKey] || [];
+                      self.namespace.apis[apiKey].push({
+                        anchor: self.namespace.anchorPrefixStack.slice().concat(nsPointerAnchor).filter(function (layer) {
+                          return !!layer;
+                        }).map(function (layer) {
+                          return layer.getSegments();
+                        }),
+                        "implements": _component3.resolvedNamespace && _component3.resolvedNamespace.getSegments() || [],
+                        api: response
+                      });
+                    }
+
+                    return _context59.abrupt("return", response);
+
+                  case 267:
+                    if (!(anchor.type === 'plugin')) {
+                      _context59.next = 271;
+                      break;
+                    }
+
+                    plugins = self.namespace.getPluginsForMatch(anchor.alias);
+                    _context59.next = 271;
+                    return _regenerator["default"].awrap(Promise.mapSeries(plugins, function (plugin) {
+                      return plugin.invoke(anchor.pointer, value);
+                    }));
+
+                  case 271:
+                    _context59.next = 277;
+                    break;
+
+                  case 273:
+                    CONSOLE.error("instruction:", anchor, ":", value);
+                    CONSOLE.error("anchor.alias:", anchor.alias);
+                    CONSOLE.error("anchor.pointer:", anchor.pointer);
+                    throw new Error("Unknown instruction!");
+
+                  case 277:
+                  case "end":
+                    return _context59.stop();
                 }
-              }, _callee48, this);
-            }));
-
-            function processInstruction(_x55, _x56, _x57) {
-              return _processInstruction.apply(this, arguments);
-            }
-
-            return processInstruction;
-          }()
+              }
+            }, null, this);
+          }
         }]);
         return Processor;
       }();
@@ -22908,33 +31119,33 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     }).call(this, require("path").join(__dirname, "inf.js"), require("path").join(__dirname, "."));
   }, {
     "assert": undefined,
-    "bluebird": 70,
+    "bluebird": 148,
     "child_process": undefined,
-    "clarinet": 104,
-    "codeblock": 48,
-    "colors/safe": 115,
+    "clarinet": 182,
+    "codeblock": 126,
+    "colors/safe": 193,
     "crypto": undefined,
-    "escape-regexp": 117,
+    "escape-regexp": 195,
     "events": undefined,
-    "fs-extra": 130,
-    "glob": 153,
-    "json-stable-stringify": 162,
+    "fs-extra": 208,
+    "glob": 231,
+    "json-stable-stringify": 240,
     "lib.json": 37,
-    "lodash": 274,
-    "lodash/get": 258,
-    "lodash/merge": 276,
-    "lodash/toPath": 278,
-    "lodash/values": 281,
-    "memorystream": 282,
-    "minimist": 284,
+    "lodash": 352,
+    "lodash/get": 336,
+    "lodash/merge": 354,
+    "lodash/toPath": 356,
+    "lodash/values": 359,
+    "memorystream": 360,
+    "minimist": 362,
     "path": undefined,
-    "resolve": 288,
-    "runbash": 299,
+    "resolve": 366,
+    "runbash": 378,
     "stream": undefined,
-    "traverse": 296,
+    "traverse": 375,
     "util": undefined
   }],
-  66: [function (require, module, exports) {
+  144: [function (require, module, exports) {
     'use strict';
 
     module.exports = balanced;
@@ -22997,2663 +31208,261 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return result;
     }
   }, {}],
-  67: [function (require, module, exports) {
+  145: [function (require, module, exports) {
     arguments[4][1][0].apply(exports, arguments);
   }, {
     "dup": 1
   }],
-  68: [function (require, module, exports) {
-    arguments[4][2][0].apply(exports, arguments);
+  146: [function (require, module, exports) {
+    arguments[4][39][0].apply(exports, arguments);
   }, {
-    "./queue": 92,
-    "./schedule": 95,
-    "./util": 102,
-    "dup": 2
+    "./queue": 170,
+    "./schedule": 173,
+    "dup": 39
   }],
-  69: [function (require, module, exports) {
+  147: [function (require, module, exports) {
     arguments[4][3][0].apply(exports, arguments);
   }, {
     "dup": 3
   }],
-  70: [function (require, module, exports) {
+  148: [function (require, module, exports) {
     arguments[4][4][0].apply(exports, arguments);
   }, {
-    "./promise": 88,
+    "./promise": 166,
     "dup": 4
   }],
-  71: [function (require, module, exports) {
+  149: [function (require, module, exports) {
     arguments[4][5][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 5
   }],
-  72: [function (require, module, exports) {
+  150: [function (require, module, exports) {
     arguments[4][6][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 6
   }],
-  73: [function (require, module, exports) {
+  151: [function (require, module, exports) {
     arguments[4][7][0].apply(exports, arguments);
   }, {
-    "./es5": 79,
-    "./util": 102,
+    "./es5": 157,
+    "./util": 180,
     "dup": 7
   }],
-  74: [function (require, module, exports) {
+  152: [function (require, module, exports) {
     arguments[4][8][0].apply(exports, arguments);
   }, {
     "dup": 8
   }],
-  75: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, Context) {
-      var getDomain = Promise._getDomain;
-      var async = Promise._async;
-
-      var Warning = require("./errors").Warning;
-
-      var util = require("./util");
-
-      var es5 = require("./es5");
-
-      var canAttachTrace = util.canAttachTrace;
-      var unhandledRejectionHandled;
-      var possiblyUnhandledRejection;
-      var bluebirdFramePattern = /[\\\/]bluebird[\\\/]js[\\\/](release|debug|instrumented)/;
-      var nodeFramePattern = /\((?:timers\.js):\d+:\d+\)/;
-      var parseLinePattern = /[\/<\(](.+?):(\d+):(\d+)\)?\s*$/;
-      var stackFramePattern = null;
-      var formatStack = null;
-      var indentStackFrames = false;
-      var printWarning;
-      var debugging = !!(util.env("BLUEBIRD_DEBUG") != 0 && (false || util.env("BLUEBIRD_DEBUG") || util.env("NODE_ENV") === "development"));
-      var warnings = !!(util.env("BLUEBIRD_WARNINGS") != 0 && (debugging || util.env("BLUEBIRD_WARNINGS")));
-      var longStackTraces = !!(util.env("BLUEBIRD_LONG_STACK_TRACES") != 0 && (debugging || util.env("BLUEBIRD_LONG_STACK_TRACES")));
-      var wForgottenReturn = util.env("BLUEBIRD_W_FORGOTTEN_RETURN") != 0 && (warnings || !!util.env("BLUEBIRD_W_FORGOTTEN_RETURN"));
-
-      Promise.prototype.suppressUnhandledRejections = function () {
-        var target = this._target();
-
-        target._bitField = target._bitField & ~1048576 | 524288;
-      };
-
-      Promise.prototype._ensurePossibleRejectionHandled = function () {
-        if ((this._bitField & 524288) !== 0) return;
-
-        this._setRejectionIsUnhandled();
-
-        var self = this;
-        setTimeout(function () {
-          self._notifyUnhandledRejection();
-        }, 1);
-      };
-
-      Promise.prototype._notifyUnhandledRejectionIsHandled = function () {
-        fireRejectionEvent("rejectionHandled", unhandledRejectionHandled, undefined, this);
-      };
-
-      Promise.prototype._setReturnedNonUndefined = function () {
-        this._bitField = this._bitField | 268435456;
-      };
-
-      Promise.prototype._returnedNonUndefined = function () {
-        return (this._bitField & 268435456) !== 0;
-      };
-
-      Promise.prototype._notifyUnhandledRejection = function () {
-        if (this._isRejectionUnhandled()) {
-          var reason = this._settledValue();
-
-          this._setUnhandledRejectionIsNotified();
-
-          fireRejectionEvent("unhandledRejection", possiblyUnhandledRejection, reason, this);
-        }
-      };
-
-      Promise.prototype._setUnhandledRejectionIsNotified = function () {
-        this._bitField = this._bitField | 262144;
-      };
-
-      Promise.prototype._unsetUnhandledRejectionIsNotified = function () {
-        this._bitField = this._bitField & ~262144;
-      };
-
-      Promise.prototype._isUnhandledRejectionNotified = function () {
-        return (this._bitField & 262144) > 0;
-      };
-
-      Promise.prototype._setRejectionIsUnhandled = function () {
-        this._bitField = this._bitField | 1048576;
-      };
-
-      Promise.prototype._unsetRejectionIsUnhandled = function () {
-        this._bitField = this._bitField & ~1048576;
-
-        if (this._isUnhandledRejectionNotified()) {
-          this._unsetUnhandledRejectionIsNotified();
-
-          this._notifyUnhandledRejectionIsHandled();
-        }
-      };
-
-      Promise.prototype._isRejectionUnhandled = function () {
-        return (this._bitField & 1048576) > 0;
-      };
-
-      Promise.prototype._warn = function (message, shouldUseOwnTrace, promise) {
-        return warn(message, shouldUseOwnTrace, promise || this);
-      };
-
-      Promise.onPossiblyUnhandledRejection = function (fn) {
-        var domain = getDomain();
-        possiblyUnhandledRejection = typeof fn === "function" ? domain === null ? fn : util.domainBind(domain, fn) : undefined;
-      };
-
-      Promise.onUnhandledRejectionHandled = function (fn) {
-        var domain = getDomain();
-        unhandledRejectionHandled = typeof fn === "function" ? domain === null ? fn : util.domainBind(domain, fn) : undefined;
-      };
-
-      var disableLongStackTraces = function disableLongStackTraces() {};
-
-      Promise.longStackTraces = function () {
-        if (async.haveItemsQueued() && !config.longStackTraces) {
-          throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
-        }
-
-        if (!config.longStackTraces && longStackTracesIsSupported()) {
-          var Promise_captureStackTrace = Promise.prototype._captureStackTrace;
-          var Promise_attachExtraTrace = Promise.prototype._attachExtraTrace;
-          var Promise_dereferenceTrace = Promise.prototype._dereferenceTrace;
-          config.longStackTraces = true;
-
-          disableLongStackTraces = function disableLongStackTraces() {
-            if (async.haveItemsQueued() && !config.longStackTraces) {
-              throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
-            }
-
-            Promise.prototype._captureStackTrace = Promise_captureStackTrace;
-            Promise.prototype._attachExtraTrace = Promise_attachExtraTrace;
-            Promise.prototype._dereferenceTrace = Promise_dereferenceTrace;
-            Context.deactivateLongStackTraces();
-            async.enableTrampoline();
-            config.longStackTraces = false;
-          };
-
-          Promise.prototype._captureStackTrace = longStackTracesCaptureStackTrace;
-          Promise.prototype._attachExtraTrace = longStackTracesAttachExtraTrace;
-          Promise.prototype._dereferenceTrace = longStackTracesDereferenceTrace;
-          Context.activateLongStackTraces();
-          async.disableTrampolineIfNecessary();
-        }
-      };
-
-      Promise.hasLongStackTraces = function () {
-        return config.longStackTraces && longStackTracesIsSupported();
-      };
-
-      var fireDomEvent = function () {
-        try {
-          if (typeof CustomEvent === "function") {
-            var event = new CustomEvent("CustomEvent");
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              var eventData = {
-                detail: event,
-                cancelable: true
-              };
-              es5.defineProperty(eventData, "promise", {
-                value: event.promise
-              });
-              es5.defineProperty(eventData, "reason", {
-                value: event.reason
-              });
-              var domEvent = new CustomEvent(name.toLowerCase(), eventData);
-              return !util.global.dispatchEvent(domEvent);
-            };
-          } else if (typeof Event === "function") {
-            var event = new Event("CustomEvent");
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              var domEvent = new Event(name.toLowerCase(), {
-                cancelable: true
-              });
-              domEvent.detail = event;
-              es5.defineProperty(domEvent, "promise", {
-                value: event.promise
-              });
-              es5.defineProperty(domEvent, "reason", {
-                value: event.reason
-              });
-              return !util.global.dispatchEvent(domEvent);
-            };
-          } else {
-            var event = document.createEvent("CustomEvent");
-            event.initCustomEvent("testingtheevent", false, true, {});
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              var domEvent = document.createEvent("CustomEvent");
-              domEvent.initCustomEvent(name.toLowerCase(), false, true, event);
-              return !util.global.dispatchEvent(domEvent);
-            };
-          }
-        } catch (e) {}
-
-        return function () {
-          return false;
-        };
-      }();
-
-      var fireGlobalEvent = function () {
-        if (util.isNode) {
-          return function () {
-            return process.emit.apply(process, arguments);
-          };
-        } else {
-          if (!util.global) {
-            return function () {
-              return false;
-            };
-          }
-
-          return function (name) {
-            var methodName = "on" + name.toLowerCase();
-            var method = util.global[methodName];
-            if (!method) return false;
-            method.apply(util.global, [].slice.call(arguments, 1));
-            return true;
-          };
-        }
-      }();
-
-      function generatePromiseLifecycleEventObject(name, promise) {
-        return {
-          promise: promise
-        };
-      }
-
-      var eventToObjectGenerator = {
-        promiseCreated: generatePromiseLifecycleEventObject,
-        promiseFulfilled: generatePromiseLifecycleEventObject,
-        promiseRejected: generatePromiseLifecycleEventObject,
-        promiseResolved: generatePromiseLifecycleEventObject,
-        promiseCancelled: generatePromiseLifecycleEventObject,
-        promiseChained: function promiseChained(name, promise, child) {
-          return {
-            promise: promise,
-            child: child
-          };
-        },
-        warning: function warning(name, _warning2) {
-          return {
-            warning: _warning2
-          };
-        },
-        unhandledRejection: function unhandledRejection(name, reason, promise) {
-          return {
-            reason: reason,
-            promise: promise
-          };
-        },
-        rejectionHandled: generatePromiseLifecycleEventObject
-      };
-
-      var activeFireEvent = function activeFireEvent(name) {
-        var globalEventFired = false;
-
-        try {
-          globalEventFired = fireGlobalEvent.apply(null, arguments);
-        } catch (e) {
-          async.throwLater(e);
-          globalEventFired = true;
-        }
-
-        var domEventFired = false;
-
-        try {
-          domEventFired = fireDomEvent(name, eventToObjectGenerator[name].apply(null, arguments));
-        } catch (e) {
-          async.throwLater(e);
-          domEventFired = true;
-        }
-
-        return domEventFired || globalEventFired;
-      };
-
-      Promise.config = function (opts) {
-        opts = Object(opts);
-
-        if ("longStackTraces" in opts) {
-          if (opts.longStackTraces) {
-            Promise.longStackTraces();
-          } else if (!opts.longStackTraces && Promise.hasLongStackTraces()) {
-            disableLongStackTraces();
-          }
-        }
-
-        if ("warnings" in opts) {
-          var warningsOption = opts.warnings;
-          config.warnings = !!warningsOption;
-          wForgottenReturn = config.warnings;
-
-          if (util.isObject(warningsOption)) {
-            if ("wForgottenReturn" in warningsOption) {
-              wForgottenReturn = !!warningsOption.wForgottenReturn;
-            }
-          }
-        }
-
-        if ("cancellation" in opts && opts.cancellation && !config.cancellation) {
-          if (async.haveItemsQueued()) {
-            throw new Error("cannot enable cancellation after promises are in use");
-          }
-
-          Promise.prototype._clearCancellationData = cancellationClearCancellationData;
-          Promise.prototype._propagateFrom = cancellationPropagateFrom;
-          Promise.prototype._onCancel = cancellationOnCancel;
-          Promise.prototype._setOnCancel = cancellationSetOnCancel;
-          Promise.prototype._attachCancellationCallback = cancellationAttachCancellationCallback;
-          Promise.prototype._execute = cancellationExecute;
-          _propagateFromFunction2 = cancellationPropagateFrom;
-          config.cancellation = true;
-        }
-
-        if ("monitoring" in opts) {
-          if (opts.monitoring && !config.monitoring) {
-            config.monitoring = true;
-            Promise.prototype._fireEvent = activeFireEvent;
-          } else if (!opts.monitoring && config.monitoring) {
-            config.monitoring = false;
-            Promise.prototype._fireEvent = defaultFireEvent;
-          }
-        }
-
-        return Promise;
-      };
-
-      function defaultFireEvent() {
-        return false;
-      }
-
-      Promise.prototype._fireEvent = defaultFireEvent;
-
-      Promise.prototype._execute = function (executor, resolve, reject) {
-        try {
-          executor(resolve, reject);
-        } catch (e) {
-          return e;
-        }
-      };
-
-      Promise.prototype._onCancel = function () {};
-
-      Promise.prototype._setOnCancel = function (handler) {
-        ;
-      };
-
-      Promise.prototype._attachCancellationCallback = function (onCancel) {
-        ;
-      };
-
-      Promise.prototype._captureStackTrace = function () {};
-
-      Promise.prototype._attachExtraTrace = function () {};
-
-      Promise.prototype._dereferenceTrace = function () {};
-
-      Promise.prototype._clearCancellationData = function () {};
-
-      Promise.prototype._propagateFrom = function (parent, flags) {
-        ;
-        ;
-      };
-
-      function cancellationExecute(executor, resolve, reject) {
-        var promise = this;
-
-        try {
-          executor(resolve, reject, function (onCancel) {
-            if (typeof onCancel !== "function") {
-              throw new TypeError("onCancel must be a function, got: " + util.toString(onCancel));
-            }
-
-            promise._attachCancellationCallback(onCancel);
-          });
-        } catch (e) {
-          return e;
-        }
-      }
-
-      function cancellationAttachCancellationCallback(onCancel) {
-        if (!this._isCancellable()) return this;
-
-        var previousOnCancel = this._onCancel();
-
-        if (previousOnCancel !== undefined) {
-          if (util.isArray(previousOnCancel)) {
-            previousOnCancel.push(onCancel);
-          } else {
-            this._setOnCancel([previousOnCancel, onCancel]);
-          }
-        } else {
-          this._setOnCancel(onCancel);
-        }
-      }
-
-      function cancellationOnCancel() {
-        return this._onCancelField;
-      }
-
-      function cancellationSetOnCancel(onCancel) {
-        this._onCancelField = onCancel;
-      }
-
-      function cancellationClearCancellationData() {
-        this._cancellationParent = undefined;
-        this._onCancelField = undefined;
-      }
-
-      function cancellationPropagateFrom(parent, flags) {
-        if ((flags & 1) !== 0) {
-          this._cancellationParent = parent;
-          var branchesRemainingToCancel = parent._branchesRemainingToCancel;
-
-          if (branchesRemainingToCancel === undefined) {
-            branchesRemainingToCancel = 0;
-          }
-
-          parent._branchesRemainingToCancel = branchesRemainingToCancel + 1;
-        }
-
-        if ((flags & 2) !== 0 && parent._isBound()) {
-          this._setBoundTo(parent._boundTo);
-        }
-      }
-
-      function bindingPropagateFrom(parent, flags) {
-        if ((flags & 2) !== 0 && parent._isBound()) {
-          this._setBoundTo(parent._boundTo);
-        }
-      }
-
-      var _propagateFromFunction2 = bindingPropagateFrom;
-
-      function _boundValueFunction2() {
-        var ret = this._boundTo;
-
-        if (ret !== undefined) {
-          if (ret instanceof Promise) {
-            if (ret.isFulfilled()) {
-              return ret.value();
-            } else {
-              return undefined;
-            }
-          }
-        }
-
-        return ret;
-      }
-
-      function longStackTracesCaptureStackTrace() {
-        this._trace = new CapturedTrace(this._peekContext());
-      }
-
-      function longStackTracesAttachExtraTrace(error, ignoreSelf) {
-        if (canAttachTrace(error)) {
-          var trace = this._trace;
-
-          if (trace !== undefined) {
-            if (ignoreSelf) trace = trace._parent;
-          }
-
-          if (trace !== undefined) {
-            trace.attachExtraTrace(error);
-          } else if (!error.__stackCleaned__) {
-            var parsed = parseStackAndMessage(error);
-            util.notEnumerableProp(error, "stack", parsed.message + "\n" + parsed.stack.join("\n"));
-            util.notEnumerableProp(error, "__stackCleaned__", true);
-          }
-        }
-      }
-
-      function longStackTracesDereferenceTrace() {
-        this._trace = undefined;
-      }
-
-      function checkForgottenReturns(returnValue, promiseCreated, name, promise, parent) {
-        if (returnValue === undefined && promiseCreated !== null && wForgottenReturn) {
-          if (parent !== undefined && parent._returnedNonUndefined()) return;
-          if ((promise._bitField & 65535) === 0) return;
-          if (name) name = name + " ";
-          var handlerLine = "";
-          var creatorLine = "";
-
-          if (promiseCreated._trace) {
-            var traceLines = promiseCreated._trace.stack.split("\n");
-
-            var stack = cleanStack(traceLines);
-
-            for (var i = stack.length - 1; i >= 0; --i) {
-              var line = stack[i];
-
-              if (!nodeFramePattern.test(line)) {
-                var lineMatches = line.match(parseLinePattern);
-
-                if (lineMatches) {
-                  handlerLine = "at " + lineMatches[1] + ":" + lineMatches[2] + ":" + lineMatches[3] + " ";
-                }
-
-                break;
-              }
-            }
-
-            if (stack.length > 0) {
-              var firstUserLine = stack[0];
-
-              for (var i = 0; i < traceLines.length; ++i) {
-                if (traceLines[i] === firstUserLine) {
-                  if (i > 0) {
-                    creatorLine = "\n" + traceLines[i - 1];
-                  }
-
-                  break;
-                }
-              }
-            }
-          }
-
-          var msg = "a promise was created in a " + name + "handler " + handlerLine + "but was not returned from it, " + "see http://goo.gl/rRqMUw" + creatorLine;
-
-          promise._warn(msg, true, promiseCreated);
-        }
-      }
-
-      function deprecated(name, replacement) {
-        var message = name + " is deprecated and will be removed in a future version.";
-        if (replacement) message += " Use " + replacement + " instead.";
-        return warn(message);
-      }
-
-      function warn(message, shouldUseOwnTrace, promise) {
-        if (!config.warnings) return;
-        var warning = new Warning(message);
-        var ctx;
-
-        if (shouldUseOwnTrace) {
-          promise._attachExtraTrace(warning);
-        } else if (config.longStackTraces && (ctx = Promise._peekContext())) {
-          ctx.attachExtraTrace(warning);
-        } else {
-          var parsed = parseStackAndMessage(warning);
-          warning.stack = parsed.message + "\n" + parsed.stack.join("\n");
-        }
-
-        if (!activeFireEvent("warning", warning)) {
-          formatAndLogError(warning, "", true);
-        }
-      }
-
-      function reconstructStack(message, stacks) {
-        for (var i = 0; i < stacks.length - 1; ++i) {
-          stacks[i].push("From previous event:");
-          stacks[i] = stacks[i].join("\n");
-        }
-
-        if (i < stacks.length) {
-          stacks[i] = stacks[i].join("\n");
-        }
-
-        return message + "\n" + stacks.join("\n");
-      }
-
-      function removeDuplicateOrEmptyJumps(stacks) {
-        for (var i = 0; i < stacks.length; ++i) {
-          if (stacks[i].length === 0 || i + 1 < stacks.length && stacks[i][0] === stacks[i + 1][0]) {
-            stacks.splice(i, 1);
-            i--;
-          }
-        }
-      }
-
-      function removeCommonRoots(stacks) {
-        var current = stacks[0];
-
-        for (var i = 1; i < stacks.length; ++i) {
-          var prev = stacks[i];
-          var currentLastIndex = current.length - 1;
-          var currentLastLine = current[currentLastIndex];
-          var commonRootMeetPoint = -1;
-
-          for (var j = prev.length - 1; j >= 0; --j) {
-            if (prev[j] === currentLastLine) {
-              commonRootMeetPoint = j;
-              break;
-            }
-          }
-
-          for (var j = commonRootMeetPoint; j >= 0; --j) {
-            var line = prev[j];
-
-            if (current[currentLastIndex] === line) {
-              current.pop();
-              currentLastIndex--;
-            } else {
-              break;
-            }
-          }
-
-          current = prev;
-        }
-      }
-
-      function cleanStack(stack) {
-        var ret = [];
-
-        for (var i = 0; i < stack.length; ++i) {
-          var line = stack[i];
-          var isTraceLine = "    (No stack trace)" === line || stackFramePattern.test(line);
-          var isInternalFrame = isTraceLine && shouldIgnore(line);
-
-          if (isTraceLine && !isInternalFrame) {
-            if (indentStackFrames && line.charAt(0) !== " ") {
-              line = "    " + line;
-            }
-
-            ret.push(line);
-          }
-        }
-
-        return ret;
-      }
-
-      function stackFramesAsArray(error) {
-        var stack = error.stack.replace(/\s+$/g, "").split("\n");
-
-        for (var i = 0; i < stack.length; ++i) {
-          var line = stack[i];
-
-          if ("    (No stack trace)" === line || stackFramePattern.test(line)) {
-            break;
-          }
-        }
-
-        if (i > 0 && error.name != "SyntaxError") {
-          stack = stack.slice(i);
-        }
-
-        return stack;
-      }
-
-      function parseStackAndMessage(error) {
-        var stack = error.stack;
-        var message = error.toString();
-        stack = typeof stack === "string" && stack.length > 0 ? stackFramesAsArray(error) : ["    (No stack trace)"];
-        return {
-          message: message,
-          stack: error.name == "SyntaxError" ? stack : cleanStack(stack)
-        };
-      }
-
-      function formatAndLogError(error, title, isSoft) {
-        if (typeof console !== "undefined") {
-          var message;
-
-          if (util.isObject(error)) {
-            var stack = error.stack;
-            message = title + formatStack(stack, error);
-          } else {
-            message = title + String(error);
-          }
-
-          if (typeof printWarning === "function") {
-            printWarning(message, isSoft);
-          } else if (typeof console.log === "function" || (0, _typeof2["default"])(console.log) === "object") {
-            console.log(message);
-          }
-        }
-      }
-
-      function fireRejectionEvent(name, localHandler, reason, promise) {
-        var localEventFired = false;
-
-        try {
-          if (typeof localHandler === "function") {
-            localEventFired = true;
-
-            if (name === "rejectionHandled") {
-              localHandler(promise);
-            } else {
-              localHandler(reason, promise);
-            }
-          }
-        } catch (e) {
-          async.throwLater(e);
-        }
-
-        if (name === "unhandledRejection") {
-          if (!activeFireEvent(name, reason, promise) && !localEventFired) {
-            formatAndLogError(reason, "Unhandled rejection ");
-          }
-        } else {
-          activeFireEvent(name, promise);
-        }
-      }
-
-      function formatNonError(obj) {
-        var str;
-
-        if (typeof obj === "function") {
-          str = "[function " + (obj.name || "anonymous") + "]";
-        } else {
-          str = obj && typeof obj.toString === "function" ? obj.toString() : util.toString(obj);
-          var ruselessToString = /\[object [a-zA-Z0-9$_]+\]/;
-
-          if (ruselessToString.test(str)) {
-            try {
-              var newStr = JSON.stringify(obj);
-              str = newStr;
-            } catch (e) {}
-          }
-
-          if (str.length === 0) {
-            str = "(empty array)";
-          }
-        }
-
-        return "(<" + snip(str) + ">, no stack trace)";
-      }
-
-      function snip(str) {
-        var maxChars = 41;
-
-        if (str.length < maxChars) {
-          return str;
-        }
-
-        return str.substr(0, maxChars - 3) + "...";
-      }
-
-      function longStackTracesIsSupported() {
-        return typeof captureStackTrace === "function";
-      }
-
-      var shouldIgnore = function shouldIgnore() {
-        return false;
-      };
-
-      var parseLineInfoRegex = /[\/<\(]([^:\/]+):(\d+):(?:\d+)\)?\s*$/;
-
-      function parseLineInfo(line) {
-        var matches = line.match(parseLineInfoRegex);
-
-        if (matches) {
-          return {
-            fileName: matches[1],
-            line: parseInt(matches[2], 10)
-          };
-        }
-      }
-
-      function setBounds(firstLineError, lastLineError) {
-        if (!longStackTracesIsSupported()) return;
-        var firstStackLines = (firstLineError.stack || "").split("\n");
-        var lastStackLines = (lastLineError.stack || "").split("\n");
-        var firstIndex = -1;
-        var lastIndex = -1;
-        var firstFileName;
-        var lastFileName;
-
-        for (var i = 0; i < firstStackLines.length; ++i) {
-          var result = parseLineInfo(firstStackLines[i]);
-
-          if (result) {
-            firstFileName = result.fileName;
-            firstIndex = result.line;
-            break;
-          }
-        }
-
-        for (var i = 0; i < lastStackLines.length; ++i) {
-          var result = parseLineInfo(lastStackLines[i]);
-
-          if (result) {
-            lastFileName = result.fileName;
-            lastIndex = result.line;
-            break;
-          }
-        }
-
-        if (firstIndex < 0 || lastIndex < 0 || !firstFileName || !lastFileName || firstFileName !== lastFileName || firstIndex >= lastIndex) {
-          return;
-        }
-
-        shouldIgnore = function shouldIgnore(line) {
-          if (bluebirdFramePattern.test(line)) return true;
-          var info = parseLineInfo(line);
-
-          if (info) {
-            if (info.fileName === firstFileName && firstIndex <= info.line && info.line <= lastIndex) {
-              return true;
-            }
-          }
-
-          return false;
-        };
-      }
-
-      function CapturedTrace(parent) {
-        this._parent = parent;
-        this._promisesCreated = 0;
-        var length = this._length = 1 + (parent === undefined ? 0 : parent._length);
-        captureStackTrace(this, CapturedTrace);
-        if (length > 32) this.uncycle();
-      }
-
-      util.inherits(CapturedTrace, Error);
-      Context.CapturedTrace = CapturedTrace;
-
-      CapturedTrace.prototype.uncycle = function () {
-        var length = this._length;
-        if (length < 2) return;
-        var nodes = [];
-        var stackToIndex = {};
-
-        for (var i = 0, node = this; node !== undefined; ++i) {
-          nodes.push(node);
-          node = node._parent;
-        }
-
-        length = this._length = i;
-
-        for (var i = length - 1; i >= 0; --i) {
-          var stack = nodes[i].stack;
-
-          if (stackToIndex[stack] === undefined) {
-            stackToIndex[stack] = i;
-          }
-        }
-
-        for (var i = 0; i < length; ++i) {
-          var currentStack = nodes[i].stack;
-          var index = stackToIndex[currentStack];
-
-          if (index !== undefined && index !== i) {
-            if (index > 0) {
-              nodes[index - 1]._parent = undefined;
-              nodes[index - 1]._length = 1;
-            }
-
-            nodes[i]._parent = undefined;
-            nodes[i]._length = 1;
-            var cycleEdgeNode = i > 0 ? nodes[i - 1] : this;
-
-            if (index < length - 1) {
-              cycleEdgeNode._parent = nodes[index + 1];
-
-              cycleEdgeNode._parent.uncycle();
-
-              cycleEdgeNode._length = cycleEdgeNode._parent._length + 1;
-            } else {
-              cycleEdgeNode._parent = undefined;
-              cycleEdgeNode._length = 1;
-            }
-
-            var currentChildLength = cycleEdgeNode._length + 1;
-
-            for (var j = i - 2; j >= 0; --j) {
-              nodes[j]._length = currentChildLength;
-              currentChildLength++;
-            }
-
-            return;
-          }
-        }
-      };
-
-      CapturedTrace.prototype.attachExtraTrace = function (error) {
-        if (error.__stackCleaned__) return;
-        this.uncycle();
-        var parsed = parseStackAndMessage(error);
-        var message = parsed.message;
-        var stacks = [parsed.stack];
-        var trace = this;
-
-        while (trace !== undefined) {
-          stacks.push(cleanStack(trace.stack.split("\n")));
-          trace = trace._parent;
-        }
-
-        removeCommonRoots(stacks);
-        removeDuplicateOrEmptyJumps(stacks);
-        util.notEnumerableProp(error, "stack", reconstructStack(message, stacks));
-        util.notEnumerableProp(error, "__stackCleaned__", true);
-      };
-
-      var captureStackTrace = function stackDetection() {
-        var v8stackFramePattern = /^\s*at\s*/;
-
-        var v8stackFormatter = function v8stackFormatter(stack, error) {
-          if (typeof stack === "string") return stack;
-
-          if (error.name !== undefined && error.message !== undefined) {
-            return error.toString();
-          }
-
-          return formatNonError(error);
-        };
-
-        if (typeof Error.stackTraceLimit === "number" && typeof Error.captureStackTrace === "function") {
-          Error.stackTraceLimit += 6;
-          stackFramePattern = v8stackFramePattern;
-          formatStack = v8stackFormatter;
-          var captureStackTrace = Error.captureStackTrace;
-
-          shouldIgnore = function shouldIgnore(line) {
-            return bluebirdFramePattern.test(line);
-          };
-
-          return function (receiver, ignoreUntil) {
-            Error.stackTraceLimit += 6;
-            captureStackTrace(receiver, ignoreUntil);
-            Error.stackTraceLimit -= 6;
-          };
-        }
-
-        var err = new Error();
-
-        if (typeof err.stack === "string" && err.stack.split("\n")[0].indexOf("stackDetection@") >= 0) {
-          stackFramePattern = /@/;
-          formatStack = v8stackFormatter;
-          indentStackFrames = true;
-          return function captureStackTrace(o) {
-            o.stack = new Error().stack;
-          };
-        }
-
-        var hasStackAfterThrow;
-
-        try {
-          throw new Error();
-        } catch (e) {
-          hasStackAfterThrow = "stack" in e;
-        }
-
-        if (!("stack" in err) && hasStackAfterThrow && typeof Error.stackTraceLimit === "number") {
-          stackFramePattern = v8stackFramePattern;
-          formatStack = v8stackFormatter;
-          return function captureStackTrace(o) {
-            Error.stackTraceLimit += 6;
-
-            try {
-              throw new Error();
-            } catch (e) {
-              o.stack = e.stack;
-            }
-
-            Error.stackTraceLimit -= 6;
-          };
-        }
-
-        formatStack = function formatStack(stack, error) {
-          if (typeof stack === "string") return stack;
-
-          if (((0, _typeof2["default"])(error) === "object" || typeof error === "function") && error.name !== undefined && error.message !== undefined) {
-            return error.toString();
-          }
-
-          return formatNonError(error);
-        };
-
-        return null;
-      }([]);
-
-      if (typeof console !== "undefined" && typeof console.warn !== "undefined") {
-        printWarning = function printWarning(message) {
-          console.warn(message);
-        };
-
-        if (util.isNode && process.stderr.isTTY) {
-          printWarning = function printWarning(message, isSoft) {
-            var color = isSoft ? "\x1B[33m" : "\x1B[31m";
-            console.warn(color + message + "\x1B[0m\n");
-          };
-        } else if (!util.isNode && typeof new Error().stack === "string") {
-          printWarning = function printWarning(message, isSoft) {
-            console.warn("%c" + message, isSoft ? "color: darkorange" : "color: red");
-          };
-        }
-      }
-
-      var config = {
-        warnings: warnings,
-        longStackTraces: false,
-        cancellation: false,
-        monitoring: false
-      };
-      if (longStackTraces) Promise.longStackTraces();
-      return {
-        longStackTraces: function longStackTraces() {
-          return config.longStackTraces;
-        },
-        warnings: function warnings() {
-          return config.warnings;
-        },
-        cancellation: function cancellation() {
-          return config.cancellation;
-        },
-        monitoring: function monitoring() {
-          return config.monitoring;
-        },
-        propagateFromFunction: function propagateFromFunction() {
-          return _propagateFromFunction2;
-        },
-        boundValueFunction: function boundValueFunction() {
-          return _boundValueFunction2;
-        },
-        checkForgottenReturns: checkForgottenReturns,
-        setBounds: setBounds,
-        warn: warn,
-        deprecated: deprecated,
-        CapturedTrace: CapturedTrace,
-        fireDomEvent: fireDomEvent,
-        fireGlobalEvent: fireGlobalEvent
-      };
-    };
+  153: [function (require, module, exports) {
+    arguments[4][46][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./es5": 79,
-    "./util": 102
+    "./errors": 156,
+    "./es5": 157,
+    "./util": 180,
+    "dup": 46
   }],
-  76: [function (require, module, exports) {
+  154: [function (require, module, exports) {
     arguments[4][10][0].apply(exports, arguments);
   }, {
     "dup": 10
   }],
-  77: [function (require, module, exports) {
+  155: [function (require, module, exports) {
     arguments[4][11][0].apply(exports, arguments);
   }, {
     "dup": 11
   }],
-  78: [function (require, module, exports) {
+  156: [function (require, module, exports) {
     arguments[4][12][0].apply(exports, arguments);
   }, {
-    "./es5": 79,
-    "./util": 102,
+    "./es5": 157,
+    "./util": 180,
     "dup": 12
   }],
-  79: [function (require, module, exports) {
+  157: [function (require, module, exports) {
     arguments[4][13][0].apply(exports, arguments);
   }, {
     "dup": 13
   }],
-  80: [function (require, module, exports) {
+  158: [function (require, module, exports) {
     arguments[4][14][0].apply(exports, arguments);
   }, {
     "dup": 14
   }],
-  81: [function (require, module, exports) {
+  159: [function (require, module, exports) {
     arguments[4][15][0].apply(exports, arguments);
   }, {
-    "./catch_filter": 73,
-    "./util": 102,
+    "./catch_filter": 151,
+    "./util": 180,
     "dup": 15
   }],
-  82: [function (require, module, exports) {
+  160: [function (require, module, exports) {
     arguments[4][16][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./util": 102,
+    "./errors": 156,
+    "./util": 180,
     "dup": 16
   }],
-  83: [function (require, module, exports) {
-    arguments[4][17][0].apply(exports, arguments);
+  161: [function (require, module, exports) {
+    arguments[4][54][0].apply(exports, arguments);
   }, {
-    "./util": 102,
-    "dup": 17
+    "./util": 180,
+    "dup": 54
   }],
-  84: [function (require, module, exports) {
-    arguments[4][18][0].apply(exports, arguments);
+  162: [function (require, module, exports) {
+    arguments[4][55][0].apply(exports, arguments);
   }, {
-    "./util": 102,
-    "dup": 18
+    "./util": 180,
+    "dup": 55
   }],
-  85: [function (require, module, exports) {
+  163: [function (require, module, exports) {
     arguments[4][19][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 19
   }],
-  86: [function (require, module, exports) {
+  164: [function (require, module, exports) {
     arguments[4][20][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./es5": 79,
-    "./util": 102,
+    "./errors": 156,
+    "./es5": 157,
+    "./util": 180,
     "dup": 20
   }],
-  87: [function (require, module, exports) {
+  165: [function (require, module, exports) {
     arguments[4][21][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 21
   }],
-  88: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function () {
-      var makeSelfResolutionError = function makeSelfResolutionError() {
-        return new TypeError("circular promise resolution chain\n\n    See http://goo.gl/MqrFmX\n");
-      };
-
-      var reflectHandler = function reflectHandler() {
-        return new Promise.PromiseInspection(this._target());
-      };
-
-      var apiRejection = function apiRejection(msg) {
-        return Promise.reject(new TypeError(msg));
-      };
-
-      function Proxyable() {}
-
-      var UNDEFINED_BINDING = {};
-
-      var util = require("./util");
-
-      var getDomain;
-
-      if (util.isNode) {
-        getDomain = function getDomain() {
-          var ret = process.domain;
-          if (ret === undefined) ret = null;
-          return ret;
-        };
-      } else {
-        getDomain = function getDomain() {
-          return null;
-        };
-      }
-
-      util.notEnumerableProp(Promise, "_getDomain", getDomain);
-
-      var es5 = require("./es5");
-
-      var Async = require("./async");
-
-      var async = new Async();
-      es5.defineProperty(Promise, "_async", {
-        value: async
-      });
-
-      var errors = require("./errors");
-
-      var TypeError = Promise.TypeError = errors.TypeError;
-      Promise.RangeError = errors.RangeError;
-      var CancellationError = Promise.CancellationError = errors.CancellationError;
-      Promise.TimeoutError = errors.TimeoutError;
-      Promise.OperationalError = errors.OperationalError;
-      Promise.RejectionError = errors.OperationalError;
-      Promise.AggregateError = errors.AggregateError;
-
-      var INTERNAL = function INTERNAL() {};
-
-      var APPLY = {};
-      var NEXT_FILTER = {};
-
-      var tryConvertToPromise = require("./thenables")(Promise, INTERNAL);
-
-      var PromiseArray = require("./promise_array")(Promise, INTERNAL, tryConvertToPromise, apiRejection, Proxyable);
-
-      var Context = require("./context")(Promise);
-      /*jshint unused:false*/
-
-
-      var createContext = Context.create;
-
-      var debug = require("./debuggability")(Promise, Context);
-
-      var CapturedTrace = debug.CapturedTrace;
-
-      var PassThroughHandlerContext = require("./finally")(Promise, tryConvertToPromise, NEXT_FILTER);
-
-      var catchFilter = require("./catch_filter")(NEXT_FILTER);
-
-      var nodebackForPromise = require("./nodeback");
-
-      var errorObj = util.errorObj;
-      var tryCatch = util.tryCatch;
-
-      function check(self, executor) {
-        if (self == null || self.constructor !== Promise) {
-          throw new TypeError("the promise constructor cannot be invoked directly\n\n    See http://goo.gl/MqrFmX\n");
-        }
-
-        if (typeof executor !== "function") {
-          throw new TypeError("expecting a function but got " + util.classString(executor));
-        }
-      }
-
-      function Promise(executor) {
-        if (executor !== INTERNAL) {
-          check(this, executor);
-        }
-
-        this._bitField = 0;
-        this._fulfillmentHandler0 = undefined;
-        this._rejectionHandler0 = undefined;
-        this._promise0 = undefined;
-        this._receiver0 = undefined;
-
-        this._resolveFromExecutor(executor);
-
-        this._promiseCreated();
-
-        this._fireEvent("promiseCreated", this);
-      }
-
-      Promise.prototype.toString = function () {
-        return "[object Promise]";
-      };
-
-      Promise.prototype.caught = Promise.prototype["catch"] = function (fn) {
-        var len = arguments.length;
-
-        if (len > 1) {
-          var catchInstances = new Array(len - 1),
-              j = 0,
-              i;
-
-          for (i = 0; i < len - 1; ++i) {
-            var item = arguments[i];
-
-            if (util.isObject(item)) {
-              catchInstances[j++] = item;
-            } else {
-              return apiRejection("Catch statement predicate: " + "expecting an object but got " + util.classString(item));
-            }
-          }
-
-          catchInstances.length = j;
-          fn = arguments[i];
-
-          if (typeof fn !== "function") {
-            throw new TypeError("The last argument to .catch() " + "must be a function, got " + util.toString(fn));
-          }
-
-          return this.then(undefined, catchFilter(catchInstances, fn, this));
-        }
-
-        return this.then(undefined, fn);
-      };
-
-      Promise.prototype.reflect = function () {
-        return this._then(reflectHandler, reflectHandler, undefined, this, undefined);
-      };
-
-      Promise.prototype.then = function (didFulfill, didReject) {
-        if (debug.warnings() && arguments.length > 0 && typeof didFulfill !== "function" && typeof didReject !== "function") {
-          var msg = ".then() only accepts functions but was passed: " + util.classString(didFulfill);
-
-          if (arguments.length > 1) {
-            msg += ", " + util.classString(didReject);
-          }
-
-          this._warn(msg);
-        }
-
-        return this._then(didFulfill, didReject, undefined, undefined, undefined);
-      };
-
-      Promise.prototype.done = function (didFulfill, didReject) {
-        var promise = this._then(didFulfill, didReject, undefined, undefined, undefined);
-
-        promise._setIsFinal();
-      };
-
-      Promise.prototype.spread = function (fn) {
-        if (typeof fn !== "function") {
-          return apiRejection("expecting a function but got " + util.classString(fn));
-        }
-
-        return this.all()._then(fn, undefined, undefined, APPLY, undefined);
-      };
-
-      Promise.prototype.toJSON = function () {
-        var ret = {
-          isFulfilled: false,
-          isRejected: false,
-          fulfillmentValue: undefined,
-          rejectionReason: undefined
-        };
-
-        if (this.isFulfilled()) {
-          ret.fulfillmentValue = this.value();
-          ret.isFulfilled = true;
-        } else if (this.isRejected()) {
-          ret.rejectionReason = this.reason();
-          ret.isRejected = true;
-        }
-
-        return ret;
-      };
-
-      Promise.prototype.all = function () {
-        if (arguments.length > 0) {
-          this._warn(".all() was passed arguments but it does not take any");
-        }
-
-        return new PromiseArray(this).promise();
-      };
-
-      Promise.prototype.error = function (fn) {
-        return this.caught(util.originatesFromRejection, fn);
-      };
-
-      Promise.getNewLibraryCopy = module.exports;
-
-      Promise.is = function (val) {
-        return val instanceof Promise;
-      };
-
-      Promise.fromNode = Promise.fromCallback = function (fn) {
-        var ret = new Promise(INTERNAL);
-
-        ret._captureStackTrace();
-
-        var multiArgs = arguments.length > 1 ? !!Object(arguments[1]).multiArgs : false;
-        var result = tryCatch(fn)(nodebackForPromise(ret, multiArgs));
-
-        if (result === errorObj) {
-          ret._rejectCallback(result.e, true);
-        }
-
-        if (!ret._isFateSealed()) ret._setAsyncGuaranteed();
-        return ret;
-      };
-
-      Promise.all = function (promises) {
-        return new PromiseArray(promises).promise();
-      };
-
-      Promise.cast = function (obj) {
-        var ret = tryConvertToPromise(obj);
-
-        if (!(ret instanceof Promise)) {
-          ret = new Promise(INTERNAL);
-
-          ret._captureStackTrace();
-
-          ret._setFulfilled();
-
-          ret._rejectionHandler0 = obj;
-        }
-
-        return ret;
-      };
-
-      Promise.resolve = Promise.fulfilled = Promise.cast;
-
-      Promise.reject = Promise.rejected = function (reason) {
-        var ret = new Promise(INTERNAL);
-
-        ret._captureStackTrace();
-
-        ret._rejectCallback(reason, true);
-
-        return ret;
-      };
-
-      Promise.setScheduler = function (fn) {
-        if (typeof fn !== "function") {
-          throw new TypeError("expecting a function but got " + util.classString(fn));
-        }
-
-        return async.setScheduler(fn);
-      };
-
-      Promise.prototype._then = function (didFulfill, didReject, _, receiver, internalData) {
-        var haveInternalData = internalData !== undefined;
-        var promise = haveInternalData ? internalData : new Promise(INTERNAL);
-
-        var target = this._target();
-
-        var bitField = target._bitField;
-
-        if (!haveInternalData) {
-          promise._propagateFrom(this, 3);
-
-          promise._captureStackTrace();
-
-          if (receiver === undefined && (this._bitField & 2097152) !== 0) {
-            if (!((bitField & 50397184) === 0)) {
-              receiver = this._boundValue();
-            } else {
-              receiver = target === this ? undefined : this._boundTo;
-            }
-          }
-
-          this._fireEvent("promiseChained", this, promise);
-        }
-
-        var domain = getDomain();
-
-        if (!((bitField & 50397184) === 0)) {
-          var handler,
-              value,
-              settler = target._settlePromiseCtx;
-
-          if ((bitField & 33554432) !== 0) {
-            value = target._rejectionHandler0;
-            handler = didFulfill;
-          } else if ((bitField & 16777216) !== 0) {
-            value = target._fulfillmentHandler0;
-            handler = didReject;
-
-            target._unsetRejectionIsUnhandled();
-          } else {
-            settler = target._settlePromiseLateCancellationObserver;
-            value = new CancellationError("late cancellation observer");
-
-            target._attachExtraTrace(value);
-
-            handler = didReject;
-          }
-
-          async.invoke(settler, target, {
-            handler: domain === null ? handler : typeof handler === "function" && util.domainBind(domain, handler),
-            promise: promise,
-            receiver: receiver,
-            value: value
-          });
-        } else {
-          target._addCallbacks(didFulfill, didReject, promise, receiver, domain);
-        }
-
-        return promise;
-      };
-
-      Promise.prototype._length = function () {
-        return this._bitField & 65535;
-      };
-
-      Promise.prototype._isFateSealed = function () {
-        return (this._bitField & 117506048) !== 0;
-      };
-
-      Promise.prototype._isFollowing = function () {
-        return (this._bitField & 67108864) === 67108864;
-      };
-
-      Promise.prototype._setLength = function (len) {
-        this._bitField = this._bitField & -65536 | len & 65535;
-      };
-
-      Promise.prototype._setFulfilled = function () {
-        this._bitField = this._bitField | 33554432;
-
-        this._fireEvent("promiseFulfilled", this);
-      };
-
-      Promise.prototype._setRejected = function () {
-        this._bitField = this._bitField | 16777216;
-
-        this._fireEvent("promiseRejected", this);
-      };
-
-      Promise.prototype._setFollowing = function () {
-        this._bitField = this._bitField | 67108864;
-
-        this._fireEvent("promiseResolved", this);
-      };
-
-      Promise.prototype._setIsFinal = function () {
-        this._bitField = this._bitField | 4194304;
-      };
-
-      Promise.prototype._isFinal = function () {
-        return (this._bitField & 4194304) > 0;
-      };
-
-      Promise.prototype._unsetCancelled = function () {
-        this._bitField = this._bitField & ~65536;
-      };
-
-      Promise.prototype._setCancelled = function () {
-        this._bitField = this._bitField | 65536;
-
-        this._fireEvent("promiseCancelled", this);
-      };
-
-      Promise.prototype._setWillBeCancelled = function () {
-        this._bitField = this._bitField | 8388608;
-      };
-
-      Promise.prototype._setAsyncGuaranteed = function () {
-        if (async.hasCustomScheduler()) return;
-        this._bitField = this._bitField | 134217728;
-      };
-
-      Promise.prototype._receiverAt = function (index) {
-        var ret = index === 0 ? this._receiver0 : this[index * 4 - 4 + 3];
-
-        if (ret === UNDEFINED_BINDING) {
-          return undefined;
-        } else if (ret === undefined && this._isBound()) {
-          return this._boundValue();
-        }
-
-        return ret;
-      };
-
-      Promise.prototype._promiseAt = function (index) {
-        return this[index * 4 - 4 + 2];
-      };
-
-      Promise.prototype._fulfillmentHandlerAt = function (index) {
-        return this[index * 4 - 4 + 0];
-      };
-
-      Promise.prototype._rejectionHandlerAt = function (index) {
-        return this[index * 4 - 4 + 1];
-      };
-
-      Promise.prototype._boundValue = function () {};
-
-      Promise.prototype._migrateCallback0 = function (follower) {
-        var bitField = follower._bitField;
-        var fulfill = follower._fulfillmentHandler0;
-        var reject = follower._rejectionHandler0;
-        var promise = follower._promise0;
-
-        var receiver = follower._receiverAt(0);
-
-        if (receiver === undefined) receiver = UNDEFINED_BINDING;
-
-        this._addCallbacks(fulfill, reject, promise, receiver, null);
-      };
-
-      Promise.prototype._migrateCallbackAt = function (follower, index) {
-        var fulfill = follower._fulfillmentHandlerAt(index);
-
-        var reject = follower._rejectionHandlerAt(index);
-
-        var promise = follower._promiseAt(index);
-
-        var receiver = follower._receiverAt(index);
-
-        if (receiver === undefined) receiver = UNDEFINED_BINDING;
-
-        this._addCallbacks(fulfill, reject, promise, receiver, null);
-      };
-
-      Promise.prototype._addCallbacks = function (fulfill, reject, promise, receiver, domain) {
-        var index = this._length();
-
-        if (index >= 65535 - 4) {
-          index = 0;
-
-          this._setLength(0);
-        }
-
-        if (index === 0) {
-          this._promise0 = promise;
-          this._receiver0 = receiver;
-
-          if (typeof fulfill === "function") {
-            this._fulfillmentHandler0 = domain === null ? fulfill : util.domainBind(domain, fulfill);
-          }
-
-          if (typeof reject === "function") {
-            this._rejectionHandler0 = domain === null ? reject : util.domainBind(domain, reject);
-          }
-        } else {
-          var base = index * 4 - 4;
-          this[base + 2] = promise;
-          this[base + 3] = receiver;
-
-          if (typeof fulfill === "function") {
-            this[base + 0] = domain === null ? fulfill : util.domainBind(domain, fulfill);
-          }
-
-          if (typeof reject === "function") {
-            this[base + 1] = domain === null ? reject : util.domainBind(domain, reject);
-          }
-        }
-
-        this._setLength(index + 1);
-
-        return index;
-      };
-
-      Promise.prototype._proxy = function (proxyable, arg) {
-        this._addCallbacks(undefined, undefined, arg, proxyable, null);
-      };
-
-      Promise.prototype._resolveCallback = function (value, shouldBind) {
-        if ((this._bitField & 117506048) !== 0) return;
-        if (value === this) return this._rejectCallback(makeSelfResolutionError(), false);
-        var maybePromise = tryConvertToPromise(value, this);
-        if (!(maybePromise instanceof Promise)) return this._fulfill(value);
-        if (shouldBind) this._propagateFrom(maybePromise, 2);
-
-        var promise = maybePromise._target();
-
-        if (promise === this) {
-          this._reject(makeSelfResolutionError());
-
-          return;
-        }
-
-        var bitField = promise._bitField;
-
-        if ((bitField & 50397184) === 0) {
-          var len = this._length();
-
-          if (len > 0) promise._migrateCallback0(this);
-
-          for (var i = 1; i < len; ++i) {
-            promise._migrateCallbackAt(this, i);
-          }
-
-          this._setFollowing();
-
-          this._setLength(0);
-
-          this._setFollowee(promise);
-        } else if ((bitField & 33554432) !== 0) {
-          this._fulfill(promise._value());
-        } else if ((bitField & 16777216) !== 0) {
-          this._reject(promise._reason());
-        } else {
-          var reason = new CancellationError("late cancellation observer");
-
-          promise._attachExtraTrace(reason);
-
-          this._reject(reason);
-        }
-      };
-
-      Promise.prototype._rejectCallback = function (reason, synchronous, ignoreNonErrorWarnings) {
-        var trace = util.ensureErrorObject(reason);
-        var hasStack = trace === reason;
-
-        if (!hasStack && !ignoreNonErrorWarnings && debug.warnings()) {
-          var message = "a promise was rejected with a non-error: " + util.classString(reason);
-
-          this._warn(message, true);
-        }
-
-        this._attachExtraTrace(trace, synchronous ? hasStack : false);
-
-        this._reject(reason);
-      };
-
-      Promise.prototype._resolveFromExecutor = function (executor) {
-        if (executor === INTERNAL) return;
-        var promise = this;
-
-        this._captureStackTrace();
-
-        this._pushContext();
-
-        var synchronous = true;
-
-        var r = this._execute(executor, function (value) {
-          promise._resolveCallback(value);
-        }, function (reason) {
-          promise._rejectCallback(reason, synchronous);
-        });
-
-        synchronous = false;
-
-        this._popContext();
-
-        if (r !== undefined) {
-          promise._rejectCallback(r, true);
-        }
-      };
-
-      Promise.prototype._settlePromiseFromHandler = function (handler, receiver, value, promise) {
-        var bitField = promise._bitField;
-        if ((bitField & 65536) !== 0) return;
-
-        promise._pushContext();
-
-        var x;
-
-        if (receiver === APPLY) {
-          if (!value || typeof value.length !== "number") {
-            x = errorObj;
-            x.e = new TypeError("cannot .spread() a non-array: " + util.classString(value));
-          } else {
-            x = tryCatch(handler).apply(this._boundValue(), value);
-          }
-        } else {
-          x = tryCatch(handler).call(receiver, value);
-        }
-
-        var promiseCreated = promise._popContext();
-
-        bitField = promise._bitField;
-        if ((bitField & 65536) !== 0) return;
-
-        if (x === NEXT_FILTER) {
-          promise._reject(value);
-        } else if (x === errorObj) {
-          promise._rejectCallback(x.e, false);
-        } else {
-          debug.checkForgottenReturns(x, promiseCreated, "", promise, this);
-
-          promise._resolveCallback(x);
-        }
-      };
-
-      Promise.prototype._target = function () {
-        var ret = this;
-
-        while (ret._isFollowing()) {
-          ret = ret._followee();
-        }
-
-        return ret;
-      };
-
-      Promise.prototype._followee = function () {
-        return this._rejectionHandler0;
-      };
-
-      Promise.prototype._setFollowee = function (promise) {
-        this._rejectionHandler0 = promise;
-      };
-
-      Promise.prototype._settlePromise = function (promise, handler, receiver, value) {
-        var isPromise = promise instanceof Promise;
-        var bitField = this._bitField;
-        var asyncGuaranteed = (bitField & 134217728) !== 0;
-
-        if ((bitField & 65536) !== 0) {
-          if (isPromise) promise._invokeInternalOnCancel();
-
-          if (receiver instanceof PassThroughHandlerContext && receiver.isFinallyHandler()) {
-            receiver.cancelPromise = promise;
-
-            if (tryCatch(handler).call(receiver, value) === errorObj) {
-              promise._reject(errorObj.e);
-            }
-          } else if (handler === reflectHandler) {
-            promise._fulfill(reflectHandler.call(receiver));
-          } else if (receiver instanceof Proxyable) {
-            receiver._promiseCancelled(promise);
-          } else if (isPromise || promise instanceof PromiseArray) {
-            promise._cancel();
-          } else {
-            receiver.cancel();
-          }
-        } else if (typeof handler === "function") {
-          if (!isPromise) {
-            handler.call(receiver, value, promise);
-          } else {
-            if (asyncGuaranteed) promise._setAsyncGuaranteed();
-
-            this._settlePromiseFromHandler(handler, receiver, value, promise);
-          }
-        } else if (receiver instanceof Proxyable) {
-          if (!receiver._isResolved()) {
-            if ((bitField & 33554432) !== 0) {
-              receiver._promiseFulfilled(value, promise);
-            } else {
-              receiver._promiseRejected(value, promise);
-            }
-          }
-        } else if (isPromise) {
-          if (asyncGuaranteed) promise._setAsyncGuaranteed();
-
-          if ((bitField & 33554432) !== 0) {
-            promise._fulfill(value);
-          } else {
-            promise._reject(value);
-          }
-        }
-      };
-
-      Promise.prototype._settlePromiseLateCancellationObserver = function (ctx) {
-        var handler = ctx.handler;
-        var promise = ctx.promise;
-        var receiver = ctx.receiver;
-        var value = ctx.value;
-
-        if (typeof handler === "function") {
-          if (!(promise instanceof Promise)) {
-            handler.call(receiver, value, promise);
-          } else {
-            this._settlePromiseFromHandler(handler, receiver, value, promise);
-          }
-        } else if (promise instanceof Promise) {
-          promise._reject(value);
-        }
-      };
-
-      Promise.prototype._settlePromiseCtx = function (ctx) {
-        this._settlePromise(ctx.promise, ctx.handler, ctx.receiver, ctx.value);
-      };
-
-      Promise.prototype._settlePromise0 = function (handler, value, bitField) {
-        var promise = this._promise0;
-
-        var receiver = this._receiverAt(0);
-
-        this._promise0 = undefined;
-        this._receiver0 = undefined;
-
-        this._settlePromise(promise, handler, receiver, value);
-      };
-
-      Promise.prototype._clearCallbackDataAtIndex = function (index) {
-        var base = index * 4 - 4;
-        this[base + 2] = this[base + 3] = this[base + 0] = this[base + 1] = undefined;
-      };
-
-      Promise.prototype._fulfill = function (value) {
-        var bitField = this._bitField;
-        if ((bitField & 117506048) >>> 16) return;
-
-        if (value === this) {
-          var err = makeSelfResolutionError();
-
-          this._attachExtraTrace(err);
-
-          return this._reject(err);
-        }
-
-        this._setFulfilled();
-
-        this._rejectionHandler0 = value;
-
-        if ((bitField & 65535) > 0) {
-          if ((bitField & 134217728) !== 0) {
-            this._settlePromises();
-          } else {
-            async.settlePromises(this);
-          }
-
-          this._dereferenceTrace();
-        }
-      };
-
-      Promise.prototype._reject = function (reason) {
-        var bitField = this._bitField;
-        if ((bitField & 117506048) >>> 16) return;
-
-        this._setRejected();
-
-        this._fulfillmentHandler0 = reason;
-
-        if (this._isFinal()) {
-          return async.fatalError(reason, util.isNode);
-        }
-
-        if ((bitField & 65535) > 0) {
-          async.settlePromises(this);
-        } else {
-          this._ensurePossibleRejectionHandled();
-        }
-      };
-
-      Promise.prototype._fulfillPromises = function (len, value) {
-        for (var i = 1; i < len; i++) {
-          var handler = this._fulfillmentHandlerAt(i);
-
-          var promise = this._promiseAt(i);
-
-          var receiver = this._receiverAt(i);
-
-          this._clearCallbackDataAtIndex(i);
-
-          this._settlePromise(promise, handler, receiver, value);
-        }
-      };
-
-      Promise.prototype._rejectPromises = function (len, reason) {
-        for (var i = 1; i < len; i++) {
-          var handler = this._rejectionHandlerAt(i);
-
-          var promise = this._promiseAt(i);
-
-          var receiver = this._receiverAt(i);
-
-          this._clearCallbackDataAtIndex(i);
-
-          this._settlePromise(promise, handler, receiver, reason);
-        }
-      };
-
-      Promise.prototype._settlePromises = function () {
-        var bitField = this._bitField;
-        var len = bitField & 65535;
-
-        if (len > 0) {
-          if ((bitField & 16842752) !== 0) {
-            var reason = this._fulfillmentHandler0;
-
-            this._settlePromise0(this._rejectionHandler0, reason, bitField);
-
-            this._rejectPromises(len, reason);
-          } else {
-            var value = this._rejectionHandler0;
-
-            this._settlePromise0(this._fulfillmentHandler0, value, bitField);
-
-            this._fulfillPromises(len, value);
-          }
-
-          this._setLength(0);
-        }
-
-        this._clearCancellationData();
-      };
-
-      Promise.prototype._settledValue = function () {
-        var bitField = this._bitField;
-
-        if ((bitField & 33554432) !== 0) {
-          return this._rejectionHandler0;
-        } else if ((bitField & 16777216) !== 0) {
-          return this._fulfillmentHandler0;
-        }
-      };
-
-      if (typeof Symbol !== "undefined" && Symbol.toStringTag) {
-        es5.defineProperty(Promise.prototype, Symbol.toStringTag, {
-          get: function get() {
-            return "Object";
-          }
-        });
-      }
-
-      function deferResolve(v) {
-        this.promise._resolveCallback(v);
-      }
-
-      function deferReject(v) {
-        this.promise._rejectCallback(v, false);
-      }
-
-      Promise.defer = Promise.pending = function () {
-        debug.deprecated("Promise.defer", "new Promise");
-        var promise = new Promise(INTERNAL);
-        return {
-          promise: promise,
-          resolve: deferResolve,
-          reject: deferReject
-        };
-      };
-
-      util.notEnumerableProp(Promise, "_makeSelfResolutionError", makeSelfResolutionError);
-
-      require("./method")(Promise, INTERNAL, tryConvertToPromise, apiRejection, debug);
-
-      require("./bind")(Promise, INTERNAL, tryConvertToPromise, debug);
-
-      require("./cancel")(Promise, PromiseArray, apiRejection, debug);
-
-      require("./direct_resolve")(Promise);
-
-      require("./synchronous_inspection")(Promise);
-
-      require("./join")(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async, getDomain);
-
-      Promise.Promise = Promise;
-      Promise.version = "3.5.5";
-
-      require('./call_get.js')(Promise);
-
-      require('./generators.js')(Promise, apiRejection, INTERNAL, tryConvertToPromise, Proxyable, debug);
-
-      require('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
-
-      require('./nodeify.js')(Promise);
-
-      require('./promisify.js')(Promise, INTERNAL);
-
-      require('./props.js')(Promise, PromiseArray, tryConvertToPromise, apiRejection);
-
-      require('./race.js')(Promise, INTERNAL, tryConvertToPromise, apiRejection);
-
-      require('./reduce.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
-
-      require('./settle.js')(Promise, PromiseArray, debug);
-
-      require('./some.js')(Promise, PromiseArray, apiRejection);
-
-      require('./timers.js')(Promise, INTERNAL, debug);
-
-      require('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
-
-      require('./any.js')(Promise);
-
-      require('./each.js')(Promise, INTERNAL);
-
-      require('./filter.js')(Promise, INTERNAL);
-
-      util.toFastProperties(Promise);
-      util.toFastProperties(Promise.prototype);
-
-      function fillTypes(value) {
-        var p = new Promise(INTERNAL);
-        p._fulfillmentHandler0 = value;
-        p._rejectionHandler0 = value;
-        p._promise0 = value;
-        p._receiver0 = value;
-      } // Complete slack tracking, opt out of field-type tracking and           
-      // stabilize map                                                         
-
-
-      fillTypes({
-        a: 1
-      });
-      fillTypes({
-        b: 2
-      });
-      fillTypes({
-        c: 3
-      });
-      fillTypes(1);
-      fillTypes(function () {});
-      fillTypes(undefined);
-      fillTypes(false);
-      fillTypes(new Promise(INTERNAL));
-      debug.setBounds(Async.firstLineError, util.lastLineError);
-      return Promise;
-    };
+  166: [function (require, module, exports) {
+    arguments[4][59][0].apply(exports, arguments);
   }, {
-    "./any.js": 67,
-    "./async": 68,
-    "./bind": 69,
-    "./call_get.js": 71,
-    "./cancel": 72,
-    "./catch_filter": 73,
-    "./context": 74,
-    "./debuggability": 75,
-    "./direct_resolve": 76,
-    "./each.js": 77,
-    "./errors": 78,
-    "./es5": 79,
-    "./filter.js": 80,
-    "./finally": 81,
-    "./generators.js": 82,
-    "./join": 83,
-    "./map.js": 84,
-    "./method": 85,
-    "./nodeback": 86,
-    "./nodeify.js": 87,
-    "./promise_array": 89,
-    "./promisify.js": 90,
-    "./props.js": 91,
-    "./race.js": 93,
-    "./reduce.js": 94,
-    "./settle.js": 96,
-    "./some.js": 97,
-    "./synchronous_inspection": 98,
-    "./thenables": 99,
-    "./timers.js": 100,
-    "./using.js": 101,
-    "./util": 102
+    "./any.js": 145,
+    "./async": 146,
+    "./bind": 147,
+    "./call_get.js": 149,
+    "./cancel": 150,
+    "./catch_filter": 151,
+    "./context": 152,
+    "./debuggability": 153,
+    "./direct_resolve": 154,
+    "./each.js": 155,
+    "./errors": 156,
+    "./es5": 157,
+    "./filter.js": 158,
+    "./finally": 159,
+    "./generators.js": 160,
+    "./join": 161,
+    "./map.js": 162,
+    "./method": 163,
+    "./nodeback": 164,
+    "./nodeify.js": 165,
+    "./promise_array": 167,
+    "./promisify.js": 168,
+    "./props.js": 169,
+    "./race.js": 171,
+    "./reduce.js": 172,
+    "./settle.js": 174,
+    "./some.js": 175,
+    "./synchronous_inspection": 176,
+    "./thenables": 177,
+    "./timers.js": 178,
+    "./using.js": 179,
+    "./util": 180,
+    "async_hooks": undefined,
+    "dup": 59
   }],
-  89: [function (require, module, exports) {
-    arguments[4][23][0].apply(exports, arguments);
+  167: [function (require, module, exports) {
+    arguments[4][60][0].apply(exports, arguments);
   }, {
-    "./util": 102,
-    "dup": 23
+    "./util": 180,
+    "dup": 60
   }],
-  90: [function (require, module, exports) {
+  168: [function (require, module, exports) {
     arguments[4][24][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./nodeback": 86,
-    "./util": 102,
+    "./errors": 156,
+    "./nodeback": 164,
+    "./util": 180,
     "dup": 24
   }],
-  91: [function (require, module, exports) {
+  169: [function (require, module, exports) {
     arguments[4][25][0].apply(exports, arguments);
   }, {
-    "./es5": 79,
-    "./util": 102,
+    "./es5": 157,
+    "./util": 180,
     "dup": 25
   }],
-  92: [function (require, module, exports) {
+  170: [function (require, module, exports) {
     arguments[4][26][0].apply(exports, arguments);
   }, {
     "dup": 26
   }],
-  93: [function (require, module, exports) {
+  171: [function (require, module, exports) {
     arguments[4][27][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 27
   }],
-  94: [function (require, module, exports) {
-    arguments[4][28][0].apply(exports, arguments);
+  172: [function (require, module, exports) {
+    arguments[4][65][0].apply(exports, arguments);
   }, {
-    "./util": 102,
-    "dup": 28
+    "./util": 180,
+    "dup": 65
   }],
-  95: [function (require, module, exports) {
-    "use strict";
-
-    var util = require("./util");
-
-    var schedule;
-
-    var noAsyncScheduler = function noAsyncScheduler() {
-      throw new Error("No async scheduler available\n\n    See http://goo.gl/MqrFmX\n");
-    };
-
-    var NativePromise = util.getNativePromise();
-
-    if (util.isNode && typeof MutationObserver === "undefined") {
-      var GlobalSetImmediate = global.setImmediate;
-      var ProcessNextTick = process.nextTick;
-      schedule = util.isRecentNode ? function (fn) {
-        GlobalSetImmediate.call(global, fn);
-      } : function (fn) {
-        ProcessNextTick.call(process, fn);
-      };
-    } else if (typeof NativePromise === "function" && typeof NativePromise.resolve === "function") {
-      var nativePromise = NativePromise.resolve();
-
-      schedule = function schedule(fn) {
-        nativePromise.then(fn);
-      };
-    } else if (typeof MutationObserver !== "undefined" && !(typeof window !== "undefined" && window.navigator && (window.navigator.standalone || window.cordova)) && "classList" in document.documentElement) {
-      schedule = function () {
-        var div = document.createElement("div");
-        var opts = {
-          attributes: true
-        };
-        var toggleScheduled = false;
-        var div2 = document.createElement("div");
-        var o2 = new MutationObserver(function () {
-          div.classList.toggle("foo");
-          toggleScheduled = false;
-        });
-        o2.observe(div2, opts);
-
-        var scheduleToggle = function scheduleToggle() {
-          if (toggleScheduled) return;
-          toggleScheduled = true;
-          div2.classList.toggle("foo");
-        };
-
-        return function schedule(fn) {
-          var o = new MutationObserver(function () {
-            o.disconnect();
-            fn();
-          });
-          o.observe(div, opts);
-          scheduleToggle();
-        };
-      }();
-    } else if (typeof setImmediate !== "undefined") {
-      schedule = function schedule(fn) {
-        setImmediate(fn);
-      };
-    } else if (typeof setTimeout !== "undefined") {
-      schedule = function schedule(fn) {
-        setTimeout(fn, 0);
-      };
-    } else {
-      schedule = noAsyncScheduler;
-    }
-
-    module.exports = schedule;
+  173: [function (require, module, exports) {
+    arguments[4][66][0].apply(exports, arguments);
   }, {
-    "./util": 102
+    "./util": 180,
+    "dup": 66
   }],
-  96: [function (require, module, exports) {
-    arguments[4][30][0].apply(exports, arguments);
+  174: [function (require, module, exports) {
+    arguments[4][67][0].apply(exports, arguments);
   }, {
-    "./util": 102,
-    "dup": 30
+    "./util": 180,
+    "dup": 67
   }],
-  97: [function (require, module, exports) {
+  175: [function (require, module, exports) {
     arguments[4][31][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./util": 102,
+    "./errors": 156,
+    "./util": 180,
     "dup": 31
   }],
-  98: [function (require, module, exports) {
+  176: [function (require, module, exports) {
     arguments[4][32][0].apply(exports, arguments);
   }, {
     "dup": 32
   }],
-  99: [function (require, module, exports) {
+  177: [function (require, module, exports) {
     arguments[4][33][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 33
   }],
-  100: [function (require, module, exports) {
+  178: [function (require, module, exports) {
     arguments[4][34][0].apply(exports, arguments);
   }, {
-    "./util": 102,
+    "./util": 180,
     "dup": 34
   }],
-  101: [function (require, module, exports) {
+  179: [function (require, module, exports) {
     arguments[4][35][0].apply(exports, arguments);
   }, {
-    "./errors": 78,
-    "./util": 102,
+    "./errors": 156,
+    "./util": 180,
     "dup": 35
   }],
-  102: [function (require, module, exports) {
-    "use strict";
-
-    var es5 = require("./es5");
-
-    var canEvaluate = typeof navigator == "undefined";
-    var errorObj = {
-      e: {}
-    };
-    var tryCatchTarget;
-    var globalObject = typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : this !== undefined ? this : null;
-
-    function tryCatcher() {
-      try {
-        var target = tryCatchTarget;
-        tryCatchTarget = null;
-        return target.apply(this, arguments);
-      } catch (e) {
-        errorObj.e = e;
-        return errorObj;
-      }
-    }
-
-    function tryCatch(fn) {
-      tryCatchTarget = fn;
-      return tryCatcher;
-    }
-
-    var inherits = function inherits(Child, Parent) {
-      var hasProp = {}.hasOwnProperty;
-
-      function T() {
-        this.constructor = Child;
-        this.constructor$ = Parent;
-
-        for (var propertyName in Parent.prototype) {
-          if (hasProp.call(Parent.prototype, propertyName) && propertyName.charAt(propertyName.length - 1) !== "$") {
-            this[propertyName + "$"] = Parent.prototype[propertyName];
-          }
-        }
-      }
-
-      T.prototype = Parent.prototype;
-      Child.prototype = new T();
-      return Child.prototype;
-    };
-
-    function isPrimitive(val) {
-      return val == null || val === true || val === false || typeof val === "string" || typeof val === "number";
-    }
-
-    function isObject(value) {
-      return typeof value === "function" || (0, _typeof2["default"])(value) === "object" && value !== null;
-    }
-
-    function maybeWrapAsError(maybeError) {
-      if (!isPrimitive(maybeError)) return maybeError;
-      return new Error(safeToString(maybeError));
-    }
-
-    function withAppended(target, appendee) {
-      var len = target.length;
-      var ret = new Array(len + 1);
-      var i;
-
-      for (i = 0; i < len; ++i) {
-        ret[i] = target[i];
-      }
-
-      ret[i] = appendee;
-      return ret;
-    }
-
-    function getDataPropertyOrDefault(obj, key, defaultValue) {
-      if (es5.isES5) {
-        var desc = Object.getOwnPropertyDescriptor(obj, key);
-
-        if (desc != null) {
-          return desc.get == null && desc.set == null ? desc.value : defaultValue;
-        }
-      } else {
-        return {}.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
-      }
-    }
-
-    function notEnumerableProp(obj, name, value) {
-      if (isPrimitive(obj)) return obj;
-      var descriptor = {
-        value: value,
-        configurable: true,
-        enumerable: false,
-        writable: true
-      };
-      es5.defineProperty(obj, name, descriptor);
-      return obj;
-    }
-
-    function thrower(r) {
-      throw r;
-    }
-
-    var inheritedDataKeys = function () {
-      var excludedPrototypes = [Array.prototype, Object.prototype, Function.prototype];
-
-      var isExcludedProto = function isExcludedProto(val) {
-        for (var i = 0; i < excludedPrototypes.length; ++i) {
-          if (excludedPrototypes[i] === val) {
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      if (es5.isES5) {
-        var getKeys = Object.getOwnPropertyNames;
-        return function (obj) {
-          var ret = [];
-          var visitedKeys = Object.create(null);
-
-          while (obj != null && !isExcludedProto(obj)) {
-            var keys;
-
-            try {
-              keys = getKeys(obj);
-            } catch (e) {
-              return ret;
-            }
-
-            for (var i = 0; i < keys.length; ++i) {
-              var key = keys[i];
-              if (visitedKeys[key]) continue;
-              visitedKeys[key] = true;
-              var desc = Object.getOwnPropertyDescriptor(obj, key);
-
-              if (desc != null && desc.get == null && desc.set == null) {
-                ret.push(key);
-              }
-            }
-
-            obj = es5.getPrototypeOf(obj);
-          }
-
-          return ret;
-        };
-      } else {
-        var hasProp = {}.hasOwnProperty;
-        return function (obj) {
-          if (isExcludedProto(obj)) return [];
-          var ret = [];
-          /*jshint forin:false */
-
-          enumeration: for (var key in obj) {
-            if (hasProp.call(obj, key)) {
-              ret.push(key);
-            } else {
-              for (var i = 0; i < excludedPrototypes.length; ++i) {
-                if (hasProp.call(excludedPrototypes[i], key)) {
-                  continue enumeration;
-                }
-              }
-
-              ret.push(key);
-            }
-          }
-
-          return ret;
-        };
-      }
-    }();
-
-    var thisAssignmentPattern = /this\s*\.\s*\S+\s*=/;
-
-    function isClass(fn) {
-      try {
-        if (typeof fn === "function") {
-          var keys = es5.names(fn.prototype);
-          var hasMethods = es5.isES5 && keys.length > 1;
-          var hasMethodsOtherThanConstructor = keys.length > 0 && !(keys.length === 1 && keys[0] === "constructor");
-          var hasThisAssignmentAndStaticMethods = thisAssignmentPattern.test(fn + "") && es5.names(fn).length > 0;
-
-          if (hasMethods || hasMethodsOtherThanConstructor || hasThisAssignmentAndStaticMethods) {
-            return true;
-          }
-        }
-
-        return false;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    function toFastProperties(obj) {
-      /*jshint -W027,-W055,-W031*/
-      function FakeConstructor() {}
-
-      FakeConstructor.prototype = obj;
-      var receiver = new FakeConstructor();
-
-      function ic() {
-        return (0, _typeof2["default"])(receiver.foo);
-      }
-
-      ic();
-      ic();
-      return obj;
-      eval(obj);
-    }
-
-    var rident = /^[a-z$_][a-z$_0-9]*$/i;
-
-    function isIdentifier(str) {
-      return rident.test(str);
-    }
-
-    function filledRange(count, prefix, suffix) {
-      var ret = new Array(count);
-
-      for (var i = 0; i < count; ++i) {
-        ret[i] = prefix + i + suffix;
-      }
-
-      return ret;
-    }
-
-    function safeToString(obj) {
-      try {
-        return obj + "";
-      } catch (e) {
-        return "[no string representation]";
-      }
-    }
-
-    function isError(obj) {
-      return obj instanceof Error || obj !== null && (0, _typeof2["default"])(obj) === "object" && typeof obj.message === "string" && typeof obj.name === "string";
-    }
-
-    function markAsOriginatingFromRejection(e) {
-      try {
-        notEnumerableProp(e, "isOperational", true);
-      } catch (ignore) {}
-    }
-
-    function originatesFromRejection(e) {
-      if (e == null) return false;
-      return e instanceof Error["__BluebirdErrorTypes__"].OperationalError || e["isOperational"] === true;
-    }
-
-    function canAttachTrace(obj) {
-      return isError(obj) && es5.propertyIsWritable(obj, "stack");
-    }
-
-    var ensureErrorObject = function () {
-      if (!("stack" in new Error())) {
-        return function (value) {
-          if (canAttachTrace(value)) return value;
-
-          try {
-            throw new Error(safeToString(value));
-          } catch (err) {
-            return err;
-          }
-        };
-      } else {
-        return function (value) {
-          if (canAttachTrace(value)) return value;
-          return new Error(safeToString(value));
-        };
-      }
-    }();
-
-    function classString(obj) {
-      return {}.toString.call(obj);
-    }
-
-    function copyDescriptors(from, to, filter) {
-      var keys = es5.names(from);
-
-      for (var i = 0; i < keys.length; ++i) {
-        var key = keys[i];
-
-        if (filter(key)) {
-          try {
-            es5.defineProperty(to, key, es5.getDescriptor(from, key));
-          } catch (ignore) {}
-        }
-      }
-    }
-
-    var asArray = function asArray(v) {
-      if (es5.isArray(v)) {
-        return v;
-      }
-
-      return null;
-    };
-
-    if (typeof Symbol !== "undefined" && Symbol.iterator) {
-      var ArrayFrom = typeof Array.from === "function" ? function (v) {
-        return Array.from(v);
-      } : function (v) {
-        var ret = [];
-        var it = v[Symbol.iterator]();
-        var itResult;
-
-        while (!(itResult = it.next()).done) {
-          ret.push(itResult.value);
-        }
-
-        return ret;
-      };
-
-      asArray = function asArray(v) {
-        if (es5.isArray(v)) {
-          return v;
-        } else if (v != null && typeof v[Symbol.iterator] === "function") {
-          return ArrayFrom(v);
-        }
-
-        return null;
-      };
-    }
-
-    var isNode = typeof process !== "undefined" && classString(process).toLowerCase() === "[object process]";
-    var hasEnvVariables = typeof process !== "undefined" && typeof process.env !== "undefined";
-
-    function env(key) {
-      return hasEnvVariables ? process.env[key] : undefined;
-    }
-
-    function getNativePromise() {
-      if (typeof Promise === "function") {
-        try {
-          var promise = new Promise(function () {});
-
-          if ({}.toString.call(promise) === "[object Promise]") {
-            return Promise;
-          }
-        } catch (e) {}
-      }
-    }
-
-    function domainBind(self, cb) {
-      return self.bind(cb);
-    }
-
-    var ret = {
-      isClass: isClass,
-      isIdentifier: isIdentifier,
-      inheritedDataKeys: inheritedDataKeys,
-      getDataPropertyOrDefault: getDataPropertyOrDefault,
-      thrower: thrower,
-      isArray: es5.isArray,
-      asArray: asArray,
-      notEnumerableProp: notEnumerableProp,
-      isPrimitive: isPrimitive,
-      isObject: isObject,
-      isError: isError,
-      canEvaluate: canEvaluate,
-      errorObj: errorObj,
-      tryCatch: tryCatch,
-      inherits: inherits,
-      withAppended: withAppended,
-      maybeWrapAsError: maybeWrapAsError,
-      toFastProperties: toFastProperties,
-      filledRange: filledRange,
-      toString: safeToString,
-      canAttachTrace: canAttachTrace,
-      ensureErrorObject: ensureErrorObject,
-      originatesFromRejection: originatesFromRejection,
-      markAsOriginatingFromRejection: markAsOriginatingFromRejection,
-      classString: classString,
-      copyDescriptors: copyDescriptors,
-      hasDevTools: typeof chrome !== "undefined" && chrome && typeof chrome.loadTimes === "function",
-      isNode: isNode,
-      hasEnvVariables: hasEnvVariables,
-      env: env,
-      global: globalObject,
-      getNativePromise: getNativePromise,
-      domainBind: domainBind
-    };
-
-    ret.isRecentNode = ret.isNode && function () {
-      var version;
-
-      if (process.versions && process.versions.node) {
-        version = process.versions.node.split(".").map(Number);
-      } else if (process.version) {
-        version = process.version.split(".").map(Number);
-      }
-
-      return version[0] === 0 && version[1] > 10 || version[0] > 0;
-    }();
-
-    if (ret.isNode) ret.toFastProperties(process);
-
-    try {
-      throw new Error();
-    } catch (e) {
-      ret.lastLineError = e;
-    }
-
-    module.exports = ret;
+  180: [function (require, module, exports) {
+    arguments[4][73][0].apply(exports, arguments);
   }, {
-    "./es5": 79
+    "./es5": 157,
+    "async_hooks": undefined,
+    "dup": 73
   }],
-  103: [function (require, module, exports) {
+  181: [function (require, module, exports) {
     var concatMap = require('concat-map');
 
     var balanced = require('balanced-match');
@@ -25835,16 +31644,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return expansions;
     }
   }, {
-    "balanced-match": 66,
-    "concat-map": 116
+    "balanced-match": 144,
+    "concat-map": 194
   }],
-  104: [function (require, module, exports) {
+  182: [function (require, module, exports) {
     ;
 
     (function (clarinet) {
       "use strict"; // non node-js needs to set clarinet debug on root
 
-      var env = (typeof process === "undefined" ? "undefined" : (0, _typeof2["default"])(process)) === 'object' && process.env ? process.env : window;
+      var env = (typeof process === "undefined" ? "undefined" : (0, _typeof2["default"])(process)) === 'object' && process.env ? process.env : self;
 
       clarinet.parser = function (opt) {
         return new CParser(opt);
@@ -26594,68 +32403,358 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "stream": undefined
   }],
-  105: [function (require, module, exports) {
-    arguments[4][49][0].apply(exports, arguments);
+  183: [function (require, module, exports) {
+    /*
+    
+    The MIT License (MIT)
+    
+    Original Library
+      - Copyright (c) Marak Squires
+    
+    Additional functionality
+     - Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+    
+    */
+    var colors = {};
+    module['exports'] = colors;
+    colors.themes = {};
+
+    var util = require('util');
+
+    var ansiStyles = colors.styles = require('./styles');
+
+    var defineProps = Object.defineProperties;
+    var newLineRegex = new RegExp(/[\r\n]+/g);
+    colors.supportsColor = require('./system/supports-colors').supportsColor;
+
+    if (typeof colors.enabled === 'undefined') {
+      colors.enabled = colors.supportsColor() !== false;
+    }
+
+    colors.enable = function () {
+      colors.enabled = true;
+    };
+
+    colors.disable = function () {
+      colors.enabled = false;
+    };
+
+    colors.stripColors = colors.strip = function (str) {
+      return ('' + str).replace(/\x1B\[\d+m/g, '');
+    }; // eslint-disable-next-line no-unused-vars
+
+
+    var stylize = colors.stylize = function stylize(str, style) {
+      if (!colors.enabled) {
+        return str + '';
+      }
+
+      var styleMap = ansiStyles[style]; // Stylize should work for non-ANSI styles, too
+
+      if (!styleMap && style in colors) {
+        // Style maps like trap operate as functions on strings;
+        // they don't have properties like open or close.
+        return colors[style](str);
+      }
+
+      return styleMap.open + str + styleMap.close;
+    };
+
+    var matchOperatorsRe = /[|\\{}()[\]^$+*?.]/g;
+
+    var escapeStringRegexp = function escapeStringRegexp(str) {
+      if (typeof str !== 'string') {
+        throw new TypeError('Expected a string');
+      }
+
+      return str.replace(matchOperatorsRe, '\\$&');
+    };
+
+    function build(_styles) {
+      var builder = function builder() {
+        return applyStyle.apply(builder, arguments);
+      };
+
+      builder._styles = _styles; // __proto__ is used because we must return a function, but there is
+      // no way to create a function with a different prototype.
+
+      builder.__proto__ = proto;
+      return builder;
+    }
+
+    var styles = function () {
+      var ret = {};
+      ansiStyles.grey = ansiStyles.gray;
+      Object.keys(ansiStyles).forEach(function (key) {
+        ansiStyles[key].closeRe = new RegExp(escapeStringRegexp(ansiStyles[key].close), 'g');
+        ret[key] = {
+          get: function get() {
+            return build(this._styles.concat(key));
+          }
+        };
+      });
+      return ret;
+    }();
+
+    var proto = defineProps(function colors() {}, styles);
+
+    function applyStyle() {
+      var args = Array.prototype.slice.call(arguments);
+      var str = args.map(function (arg) {
+        // Use weak equality check so we can colorize null/undefined in safe mode
+        if (arg != null && arg.constructor === String) {
+          return arg;
+        } else {
+          return util.inspect(arg);
+        }
+      }).join(' ');
+
+      if (!colors.enabled || !str) {
+        return str;
+      }
+
+      var newLinesPresent = str.indexOf('\n') != -1;
+      var nestedStyles = this._styles;
+      var i = nestedStyles.length;
+
+      while (i--) {
+        var code = ansiStyles[nestedStyles[i]];
+        str = code.open + str.replace(code.closeRe, code.open) + code.close;
+
+        if (newLinesPresent) {
+          str = str.replace(newLineRegex, function (match) {
+            return code.close + match + code.open;
+          });
+        }
+      }
+
+      return str;
+    }
+
+    colors.setTheme = function (theme) {
+      if (typeof theme === 'string') {
+        console.log('colors.setTheme now only accepts an object, not a string.  ' + 'If you are trying to set a theme from a file, it is now your (the ' + 'caller\'s) responsibility to require the file.  The old syntax ' + 'looked like colors.setTheme(__dirname + ' + '\'/../themes/generic-logging.js\'); The new syntax looks like ' + 'colors.setTheme(require(__dirname + ' + '\'/../themes/generic-logging.js\'));');
+        return;
+      }
+
+      for (var style in theme) {
+        (function (style) {
+          colors[style] = function (str) {
+            if ((0, _typeof2["default"])(theme[style]) === 'object') {
+              var out = str;
+
+              for (var i in theme[style]) {
+                out = colors[theme[style][i]](out);
+              }
+
+              return out;
+            }
+
+            return colors[theme[style]](str);
+          };
+        })(style);
+      }
+    };
+
+    function init() {
+      var ret = {};
+      Object.keys(styles).forEach(function (name) {
+        ret[name] = {
+          get: function get() {
+            return build([name]);
+          }
+        };
+      });
+      return ret;
+    }
+
+    var sequencer = function sequencer(map, str) {
+      var exploded = str.split('');
+      exploded = exploded.map(map);
+      return exploded.join('');
+    }; // custom formatter methods
+
+
+    colors.trap = require('./custom/trap');
+    colors.zalgo = require('./custom/zalgo'); // maps
+
+    colors.maps = {};
+    colors.maps.america = require('./maps/america')(colors);
+    colors.maps.zebra = require('./maps/zebra')(colors);
+    colors.maps.rainbow = require('./maps/rainbow')(colors);
+    colors.maps.random = require('./maps/random')(colors);
+
+    for (var map in colors.maps) {
+      (function (map) {
+        colors[map] = function (str) {
+          return sequencer(colors.maps[map], str);
+        };
+      })(map);
+    }
+
+    defineProps(colors, init());
   }, {
-    "./custom/trap": 106,
-    "./custom/zalgo": 107,
-    "./maps/america": 108,
-    "./maps/rainbow": 109,
-    "./maps/random": 110,
-    "./maps/zebra": 111,
-    "./styles": 112,
-    "./system/supports-colors": 114,
-    "dup": 49,
+    "./custom/trap": 184,
+    "./custom/zalgo": 185,
+    "./maps/america": 186,
+    "./maps/rainbow": 187,
+    "./maps/random": 188,
+    "./maps/zebra": 189,
+    "./styles": 190,
+    "./system/supports-colors": 192,
     "util": undefined
   }],
-  106: [function (require, module, exports) {
-    arguments[4][50][0].apply(exports, arguments);
+  184: [function (require, module, exports) {
+    arguments[4][128][0].apply(exports, arguments);
   }, {
-    "dup": 50
+    "dup": 128
   }],
-  107: [function (require, module, exports) {
-    arguments[4][51][0].apply(exports, arguments);
+  185: [function (require, module, exports) {
+    arguments[4][129][0].apply(exports, arguments);
   }, {
-    "dup": 51
+    "dup": 129
   }],
-  108: [function (require, module, exports) {
-    arguments[4][54][0].apply(exports, arguments);
+  186: [function (require, module, exports) {
+    arguments[4][132][0].apply(exports, arguments);
   }, {
-    "dup": 54
+    "dup": 132
   }],
-  109: [function (require, module, exports) {
-    arguments[4][55][0].apply(exports, arguments);
+  187: [function (require, module, exports) {
+    arguments[4][133][0].apply(exports, arguments);
   }, {
-    "dup": 55
+    "dup": 133
   }],
-  110: [function (require, module, exports) {
-    arguments[4][56][0].apply(exports, arguments);
+  188: [function (require, module, exports) {
+    module['exports'] = function (colors) {
+      var available = ['underline', 'inverse', 'grey', 'yellow', 'red', 'green', 'blue', 'white', 'cyan', 'magenta', 'brightYellow', 'brightRed', 'brightGreen', 'brightBlue', 'brightWhite', 'brightCyan', 'brightMagenta'];
+      return function (letter, i, exploded) {
+        return letter === ' ' ? letter : colors[available[Math.round(Math.random() * (available.length - 2))]](letter);
+      };
+    };
+  }, {}],
+  189: [function (require, module, exports) {
+    arguments[4][135][0].apply(exports, arguments);
   }, {
-    "dup": 56
+    "dup": 135
   }],
-  111: [function (require, module, exports) {
-    arguments[4][57][0].apply(exports, arguments);
+  190: [function (require, module, exports) {
+    /*
+    The MIT License (MIT)
+    
+    Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+    
+    */
+    var styles = {};
+    module['exports'] = styles;
+    var codes = {
+      reset: [0, 0],
+      bold: [1, 22],
+      dim: [2, 22],
+      italic: [3, 23],
+      underline: [4, 24],
+      inverse: [7, 27],
+      hidden: [8, 28],
+      strikethrough: [9, 29],
+      black: [30, 39],
+      red: [31, 39],
+      green: [32, 39],
+      yellow: [33, 39],
+      blue: [34, 39],
+      magenta: [35, 39],
+      cyan: [36, 39],
+      white: [37, 39],
+      gray: [90, 39],
+      grey: [90, 39],
+      brightRed: [91, 39],
+      brightGreen: [92, 39],
+      brightYellow: [93, 39],
+      brightBlue: [94, 39],
+      brightMagenta: [95, 39],
+      brightCyan: [96, 39],
+      brightWhite: [97, 39],
+      bgBlack: [40, 49],
+      bgRed: [41, 49],
+      bgGreen: [42, 49],
+      bgYellow: [43, 49],
+      bgBlue: [44, 49],
+      bgMagenta: [45, 49],
+      bgCyan: [46, 49],
+      bgWhite: [47, 49],
+      bgGray: [100, 49],
+      bgGrey: [100, 49],
+      bgBrightRed: [101, 49],
+      bgBrightGreen: [102, 49],
+      bgBrightYellow: [103, 49],
+      bgBrightBlue: [104, 49],
+      bgBrightMagenta: [105, 49],
+      bgBrightCyan: [106, 49],
+      bgBrightWhite: [107, 49],
+      // legacy styles for colors pre v1.0.0
+      blackBG: [40, 49],
+      redBG: [41, 49],
+      greenBG: [42, 49],
+      yellowBG: [43, 49],
+      blueBG: [44, 49],
+      magentaBG: [45, 49],
+      cyanBG: [46, 49],
+      whiteBG: [47, 49]
+    };
+    Object.keys(codes).forEach(function (key) {
+      var val = codes[key];
+      var style = styles[key] = [];
+      style.open = "\x1B[" + val[0] + 'm';
+      style.close = "\x1B[" + val[1] + 'm';
+    });
+  }, {}],
+  191: [function (require, module, exports) {
+    arguments[4][137][0].apply(exports, arguments);
   }, {
-    "dup": 57
+    "dup": 137
   }],
-  112: [function (require, module, exports) {
-    arguments[4][58][0].apply(exports, arguments);
+  192: [function (require, module, exports) {
+    arguments[4][138][0].apply(exports, arguments);
   }, {
-    "dup": 58
-  }],
-  113: [function (require, module, exports) {
-    arguments[4][59][0].apply(exports, arguments);
-  }, {
-    "dup": 59
-  }],
-  114: [function (require, module, exports) {
-    arguments[4][60][0].apply(exports, arguments);
-  }, {
-    "./has-flag.js": 113,
-    "dup": 60,
+    "./has-flag.js": 191,
+    "dup": 138,
     "os": undefined
   }],
-  115: [function (require, module, exports) {
+  193: [function (require, module, exports) {
     //
     // Remark: Requiring this file will use the "safe" colors API,
     // which will not touch String.prototype.
@@ -26668,9 +32767,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module['exports'] = colors;
   }, {
-    "./lib/colors": 105
+    "./lib/colors": 183
   }],
-  116: [function (require, module, exports) {
+  194: [function (require, module, exports) {
     module.exports = function (xs, fn) {
       var res = [];
 
@@ -26686,7 +32785,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return Object.prototype.toString.call(xs) === '[object Array]';
     };
   }, {}],
-  117: [function (require, module, exports) {
+  195: [function (require, module, exports) {
     /**
      * Escape regexp special characters in `str`.
      *
@@ -26698,2257 +32797,283 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return String(str).replace(/([.*+?=^!:${}()|[\]\/\\])/g, '\\$1');
     };
   }, {}],
-  118: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var mkdirpSync = require('../mkdirs').mkdirsSync;
-
-    var utimesSync = require('../util/utimes.js').utimesMillisSync;
-
-    var stat = require('../util/stat');
-
-    function copySync(src, dest, opts) {
-      if (typeof opts === 'function') {
-        opts = {
-          filter: opts
-        };
-      }
-
-      opts = opts || {};
-      opts.clobber = 'clobber' in opts ? !!opts.clobber : true; // default to true for now
-
-      opts.overwrite = 'overwrite' in opts ? !!opts.overwrite : opts.clobber; // overwrite falls back to clobber
-      // Warn about using preserveTimestamps on 32-bit node
-
-      if (opts.preserveTimestamps && process.arch === 'ia32') {
-        console.warn("fs-extra: Using the preserveTimestamps option in 32-bit node is not recommended;\n\n    see https://github.com/jprichardson/node-fs-extra/issues/269");
-      }
-
-      var _stat$checkPathsSync = stat.checkPathsSync(src, dest, 'copy'),
-          srcStat = _stat$checkPathsSync.srcStat,
-          destStat = _stat$checkPathsSync.destStat;
-
-      stat.checkParentPathsSync(src, srcStat, dest, 'copy');
-      return handleFilterAndCopy(destStat, src, dest, opts);
-    }
-
-    function handleFilterAndCopy(destStat, src, dest, opts) {
-      if (opts.filter && !opts.filter(src, dest)) return;
-      var destParent = path.dirname(dest);
-      if (!fs.existsSync(destParent)) mkdirpSync(destParent);
-      return startCopy(destStat, src, dest, opts);
-    }
-
-    function startCopy(destStat, src, dest, opts) {
-      if (opts.filter && !opts.filter(src, dest)) return;
-      return getStats(destStat, src, dest, opts);
-    }
-
-    function getStats(destStat, src, dest, opts) {
-      var statSync = opts.dereference ? fs.statSync : fs.lstatSync;
-      var srcStat = statSync(src);
-      if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts);else if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts);else if (srcStat.isSymbolicLink()) return onLink(destStat, src, dest, opts);
-    }
-
-    function onFile(srcStat, destStat, src, dest, opts) {
-      if (!destStat) return copyFile(srcStat, src, dest, opts);
-      return mayCopyFile(srcStat, src, dest, opts);
-    }
-
-    function mayCopyFile(srcStat, src, dest, opts) {
-      if (opts.overwrite) {
-        fs.unlinkSync(dest);
-        return copyFile(srcStat, src, dest, opts);
-      } else if (opts.errorOnExist) {
-        throw new Error("'".concat(dest, "' already exists"));
-      }
-    }
-
-    function copyFile(srcStat, src, dest, opts) {
-      if (typeof fs.copyFileSync === 'function') {
-        fs.copyFileSync(src, dest);
-        fs.chmodSync(dest, srcStat.mode);
-
-        if (opts.preserveTimestamps) {
-          return utimesSync(dest, srcStat.atime, srcStat.mtime);
-        }
-
-        return;
-      }
-
-      return copyFileFallback(srcStat, src, dest, opts);
-    }
-
-    function copyFileFallback(srcStat, src, dest, opts) {
-      var BUF_LENGTH = 64 * 1024;
-
-      var _buff = require('../util/buffer')(BUF_LENGTH);
-
-      var fdr = fs.openSync(src, 'r');
-      var fdw = fs.openSync(dest, 'w', srcStat.mode);
-      var pos = 0;
-
-      while (pos < srcStat.size) {
-        var bytesRead = fs.readSync(fdr, _buff, 0, BUF_LENGTH, pos);
-        fs.writeSync(fdw, _buff, 0, bytesRead);
-        pos += bytesRead;
-      }
-
-      if (opts.preserveTimestamps) fs.futimesSync(fdw, srcStat.atime, srcStat.mtime);
-      fs.closeSync(fdr);
-      fs.closeSync(fdw);
-    }
-
-    function onDir(srcStat, destStat, src, dest, opts) {
-      if (!destStat) return mkDirAndCopy(srcStat, src, dest, opts);
-
-      if (destStat && !destStat.isDirectory()) {
-        throw new Error("Cannot overwrite non-directory '".concat(dest, "' with directory '").concat(src, "'."));
-      }
-
-      return copyDir(src, dest, opts);
-    }
-
-    function mkDirAndCopy(srcStat, src, dest, opts) {
-      fs.mkdirSync(dest);
-      copyDir(src, dest, opts);
-      return fs.chmodSync(dest, srcStat.mode);
-    }
-
-    function copyDir(src, dest, opts) {
-      fs.readdirSync(src).forEach(function (item) {
-        return copyDirItem(item, src, dest, opts);
-      });
-    }
-
-    function copyDirItem(item, src, dest, opts) {
-      var srcItem = path.join(src, item);
-      var destItem = path.join(dest, item);
-
-      var _stat$checkPathsSync2 = stat.checkPathsSync(srcItem, destItem, 'copy'),
-          destStat = _stat$checkPathsSync2.destStat;
-
-      return startCopy(destStat, srcItem, destItem, opts);
-    }
-
-    function onLink(destStat, src, dest, opts) {
-      var resolvedSrc = fs.readlinkSync(src);
-
-      if (opts.dereference) {
-        resolvedSrc = path.resolve(process.cwd(), resolvedSrc);
-      }
-
-      if (!destStat) {
-        return fs.symlinkSync(resolvedSrc, dest);
-      } else {
-        var resolvedDest;
-
-        try {
-          resolvedDest = fs.readlinkSync(dest);
-        } catch (err) {
-          // dest exists and is a regular file or directory,
-          // Windows may throw UNKNOWN error. If dest already exists,
-          // fs throws error anyway, so no need to guard against it here.
-          if (err.code === 'EINVAL' || err.code === 'UNKNOWN') return fs.symlinkSync(resolvedSrc, dest);
-          throw err;
-        }
-
-        if (opts.dereference) {
-          resolvedDest = path.resolve(process.cwd(), resolvedDest);
-        }
-
-        if (stat.isSrcSubdir(resolvedSrc, resolvedDest)) {
-          throw new Error("Cannot copy '".concat(resolvedSrc, "' to a subdirectory of itself, '").concat(resolvedDest, "'."));
-        } // prevent copy if src is a subdir of dest since unlinking
-        // dest in this case would result in removing src contents
-        // and therefore a broken symlink would be created.
-
-
-        if (fs.statSync(dest).isDirectory() && stat.isSrcSubdir(resolvedDest, resolvedSrc)) {
-          throw new Error("Cannot overwrite '".concat(resolvedDest, "' with '").concat(resolvedSrc, "'."));
-        }
-
-        return copyLink(resolvedSrc, dest);
-      }
-    }
-
-    function copyLink(resolvedSrc, dest) {
-      fs.unlinkSync(dest);
-      return fs.symlinkSync(resolvedSrc, dest);
-    }
-
-    module.exports = copySync;
+  196: [function (require, module, exports) {
+    arguments[4][74][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../util/buffer": 147,
-    "../util/stat": 148,
-    "../util/utimes.js": 149,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../util/buffer": 225,
+    "../util/stat": 226,
+    "../util/utimes.js": 227,
+    "dup": 74,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  119: [function (require, module, exports) {
-    'use strict';
-
-    module.exports = {
-      copySync: require('./copy-sync')
-    };
+  197: [function (require, module, exports) {
+    arguments[4][75][0].apply(exports, arguments);
   }, {
-    "./copy-sync": 118
+    "./copy-sync": 196,
+    "dup": 75
   }],
-  120: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var mkdirp = require('../mkdirs').mkdirs;
-
-    var pathExists = require('../path-exists').pathExists;
-
-    var utimes = require('../util/utimes').utimesMillis;
-
-    var stat = require('../util/stat');
-
-    function copy(src, dest, opts, cb) {
-      if (typeof opts === 'function' && !cb) {
-        cb = opts;
-        opts = {};
-      } else if (typeof opts === 'function') {
-        opts = {
-          filter: opts
-        };
-      }
-
-      cb = cb || function () {};
-
-      opts = opts || {};
-      opts.clobber = 'clobber' in opts ? !!opts.clobber : true; // default to true for now
-
-      opts.overwrite = 'overwrite' in opts ? !!opts.overwrite : opts.clobber; // overwrite falls back to clobber
-      // Warn about using preserveTimestamps on 32-bit node
-
-      if (opts.preserveTimestamps && process.arch === 'ia32') {
-        console.warn("fs-extra: Using the preserveTimestamps option in 32-bit node is not recommended;\n\n    see https://github.com/jprichardson/node-fs-extra/issues/269");
-      }
-
-      stat.checkPaths(src, dest, 'copy', function (err, stats) {
-        if (err) return cb(err);
-        var srcStat = stats.srcStat,
-            destStat = stats.destStat;
-        stat.checkParentPaths(src, srcStat, dest, 'copy', function (err) {
-          if (err) return cb(err);
-          if (opts.filter) return handleFilter(checkParentDir, destStat, src, dest, opts, cb);
-          return checkParentDir(destStat, src, dest, opts, cb);
-        });
-      });
-    }
-
-    function checkParentDir(destStat, src, dest, opts, cb) {
-      var destParent = path.dirname(dest);
-      pathExists(destParent, function (err, dirExists) {
-        if (err) return cb(err);
-        if (dirExists) return startCopy(destStat, src, dest, opts, cb);
-        mkdirp(destParent, function (err) {
-          if (err) return cb(err);
-          return startCopy(destStat, src, dest, opts, cb);
-        });
-      });
-    }
-
-    function handleFilter(onInclude, destStat, src, dest, opts, cb) {
-      Promise.resolve(opts.filter(src, dest)).then(function (include) {
-        if (include) return onInclude(destStat, src, dest, opts, cb);
-        return cb();
-      }, function (error) {
-        return cb(error);
-      });
-    }
-
-    function startCopy(destStat, src, dest, opts, cb) {
-      if (opts.filter) return handleFilter(getStats, destStat, src, dest, opts, cb);
-      return getStats(destStat, src, dest, opts, cb);
-    }
-
-    function getStats(destStat, src, dest, opts, cb) {
-      var stat = opts.dereference ? fs.stat : fs.lstat;
-      stat(src, function (err, srcStat) {
-        if (err) return cb(err);
-        if (srcStat.isDirectory()) return onDir(srcStat, destStat, src, dest, opts, cb);else if (srcStat.isFile() || srcStat.isCharacterDevice() || srcStat.isBlockDevice()) return onFile(srcStat, destStat, src, dest, opts, cb);else if (srcStat.isSymbolicLink()) return onLink(destStat, src, dest, opts, cb);
-      });
-    }
-
-    function onFile(srcStat, destStat, src, dest, opts, cb) {
-      if (!destStat) return copyFile(srcStat, src, dest, opts, cb);
-      return mayCopyFile(srcStat, src, dest, opts, cb);
-    }
-
-    function mayCopyFile(srcStat, src, dest, opts, cb) {
-      if (opts.overwrite) {
-        fs.unlink(dest, function (err) {
-          if (err) return cb(err);
-          return copyFile(srcStat, src, dest, opts, cb);
-        });
-      } else if (opts.errorOnExist) {
-        return cb(new Error("'".concat(dest, "' already exists")));
-      } else return cb();
-    }
-
-    function copyFile(srcStat, src, dest, opts, cb) {
-      if (typeof fs.copyFile === 'function') {
-        return fs.copyFile(src, dest, function (err) {
-          if (err) return cb(err);
-          return setDestModeAndTimestamps(srcStat, dest, opts, cb);
-        });
-      }
-
-      return copyFileFallback(srcStat, src, dest, opts, cb);
-    }
-
-    function copyFileFallback(srcStat, src, dest, opts, cb) {
-      var rs = fs.createReadStream(src);
-      rs.on('error', function (err) {
-        return cb(err);
-      }).once('open', function () {
-        var ws = fs.createWriteStream(dest, {
-          mode: srcStat.mode
-        });
-        ws.on('error', function (err) {
-          return cb(err);
-        }).on('open', function () {
-          return rs.pipe(ws);
-        }).once('close', function () {
-          return setDestModeAndTimestamps(srcStat, dest, opts, cb);
-        });
-      });
-    }
-
-    function setDestModeAndTimestamps(srcStat, dest, opts, cb) {
-      fs.chmod(dest, srcStat.mode, function (err) {
-        if (err) return cb(err);
-
-        if (opts.preserveTimestamps) {
-          return utimes(dest, srcStat.atime, srcStat.mtime, cb);
-        }
-
-        return cb();
-      });
-    }
-
-    function onDir(srcStat, destStat, src, dest, opts, cb) {
-      if (!destStat) return mkDirAndCopy(srcStat, src, dest, opts, cb);
-
-      if (destStat && !destStat.isDirectory()) {
-        return cb(new Error("Cannot overwrite non-directory '".concat(dest, "' with directory '").concat(src, "'.")));
-      }
-
-      return copyDir(src, dest, opts, cb);
-    }
-
-    function mkDirAndCopy(srcStat, src, dest, opts, cb) {
-      fs.mkdir(dest, function (err) {
-        if (err) return cb(err);
-        copyDir(src, dest, opts, function (err) {
-          if (err) return cb(err);
-          return fs.chmod(dest, srcStat.mode, cb);
-        });
-      });
-    }
-
-    function copyDir(src, dest, opts, cb) {
-      fs.readdir(src, function (err, items) {
-        if (err) return cb(err);
-        return copyDirItems(items, src, dest, opts, cb);
-      });
-    }
-
-    function copyDirItems(items, src, dest, opts, cb) {
-      var item = items.pop();
-      if (!item) return cb();
-      return copyDirItem(items, item, src, dest, opts, cb);
-    }
-
-    function copyDirItem(items, item, src, dest, opts, cb) {
-      var srcItem = path.join(src, item);
-      var destItem = path.join(dest, item);
-      stat.checkPaths(srcItem, destItem, 'copy', function (err, stats) {
-        if (err) return cb(err);
-        var destStat = stats.destStat;
-        startCopy(destStat, srcItem, destItem, opts, function (err) {
-          if (err) return cb(err);
-          return copyDirItems(items, src, dest, opts, cb);
-        });
-      });
-    }
-
-    function onLink(destStat, src, dest, opts, cb) {
-      fs.readlink(src, function (err, resolvedSrc) {
-        if (err) return cb(err);
-
-        if (opts.dereference) {
-          resolvedSrc = path.resolve(process.cwd(), resolvedSrc);
-        }
-
-        if (!destStat) {
-          return fs.symlink(resolvedSrc, dest, cb);
-        } else {
-          fs.readlink(dest, function (err, resolvedDest) {
-            if (err) {
-              // dest exists and is a regular file or directory,
-              // Windows may throw UNKNOWN error. If dest already exists,
-              // fs throws error anyway, so no need to guard against it here.
-              if (err.code === 'EINVAL' || err.code === 'UNKNOWN') return fs.symlink(resolvedSrc, dest, cb);
-              return cb(err);
-            }
-
-            if (opts.dereference) {
-              resolvedDest = path.resolve(process.cwd(), resolvedDest);
-            }
-
-            if (stat.isSrcSubdir(resolvedSrc, resolvedDest)) {
-              return cb(new Error("Cannot copy '".concat(resolvedSrc, "' to a subdirectory of itself, '").concat(resolvedDest, "'.")));
-            } // do not copy if src is a subdir of dest since unlinking
-            // dest in this case would result in removing src contents
-            // and therefore a broken symlink would be created.
-
-
-            if (destStat.isDirectory() && stat.isSrcSubdir(resolvedDest, resolvedSrc)) {
-              return cb(new Error("Cannot overwrite '".concat(resolvedDest, "' with '").concat(resolvedSrc, "'.")));
-            }
-
-            return copyLink(resolvedSrc, dest, cb);
-          });
-        }
-      });
-    }
-
-    function copyLink(resolvedSrc, dest, cb) {
-      fs.unlink(dest, function (err) {
-        if (err) return cb(err);
-        return fs.symlink(resolvedSrc, dest, cb);
-      });
-    }
-
-    module.exports = copy;
+  198: [function (require, module, exports) {
+    arguments[4][76][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "../util/stat": 148,
-    "../util/utimes": 149,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "../util/stat": 226,
+    "../util/utimes": 227,
+    "dup": 76,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  121: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    module.exports = {
-      copy: u(require('./copy'))
-    };
+  199: [function (require, module, exports) {
+    arguments[4][77][0].apply(exports, arguments);
   }, {
-    "./copy": 120,
-    "universalify": 297
+    "./copy": 198,
+    "dup": 77,
+    "universalify": 376
   }],
-  122: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var mkdir = require('../mkdirs');
-
-    var remove = require('../remove');
-
-    var emptyDir = u(function emptyDir(dir, callback) {
-      callback = callback || function () {};
-
-      fs.readdir(dir, function (err, items) {
-        if (err) return mkdir.mkdirs(dir, callback);
-        items = items.map(function (item) {
-          return path.join(dir, item);
-        });
-        deleteItem();
-
-        function deleteItem() {
-          var item = items.pop();
-          if (!item) return callback();
-          remove.remove(item, function (err) {
-            if (err) return callback(err);
-            deleteItem();
-          });
-        }
-      });
-    });
-
-    function emptyDirSync(dir) {
-      var items;
-
-      try {
-        items = fs.readdirSync(dir);
-      } catch (err) {
-        return mkdir.mkdirsSync(dir);
-      }
-
-      items.forEach(function (item) {
-        item = path.join(dir, item);
-        remove.removeSync(item);
-      });
-    }
-
-    module.exports = {
-      emptyDirSync: emptyDirSync,
-      emptydirSync: emptyDirSync,
-      emptyDir: emptyDir,
-      emptydir: emptyDir
-    };
+  200: [function (require, module, exports) {
+    arguments[4][78][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../remove": 145,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../remove": 223,
+    "dup": 78,
+    "graceful-fs": 234,
     "path": undefined,
-    "universalify": 297
+    "universalify": 376
   }],
-  123: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var path = require('path');
-
-    var fs = require('graceful-fs');
-
-    var mkdir = require('../mkdirs');
-
-    var pathExists = require('../path-exists').pathExists;
-
-    function createFile(file, callback) {
-      function makeFile() {
-        fs.writeFile(file, '', function (err) {
-          if (err) return callback(err);
-          callback();
-        });
-      }
-
-      fs.stat(file, function (err, stats) {
-        // eslint-disable-line handle-callback-err
-        if (!err && stats.isFile()) return callback();
-        var dir = path.dirname(file);
-        pathExists(dir, function (err, dirExists) {
-          if (err) return callback(err);
-          if (dirExists) return makeFile();
-          mkdir.mkdirs(dir, function (err) {
-            if (err) return callback(err);
-            makeFile();
-          });
-        });
-      });
-    }
-
-    function createFileSync(file) {
-      var stats;
-
-      try {
-        stats = fs.statSync(file);
-      } catch (e) {}
-
-      if (stats && stats.isFile()) return;
-      var dir = path.dirname(file);
-
-      if (!fs.existsSync(dir)) {
-        mkdir.mkdirsSync(dir);
-      }
-
-      fs.writeFileSync(file, '');
-    }
-
-    module.exports = {
-      createFile: u(createFile),
-      createFileSync: createFileSync
-    };
+  201: [function (require, module, exports) {
+    arguments[4][79][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "dup": 79,
+    "graceful-fs": 234,
     "path": undefined,
-    "universalify": 297
+    "universalify": 376
   }],
-  124: [function (require, module, exports) {
-    'use strict';
-
-    var file = require('./file');
-
-    var link = require('./link');
-
-    var symlink = require('./symlink');
-
-    module.exports = {
-      // file
-      createFile: file.createFile,
-      createFileSync: file.createFileSync,
-      ensureFile: file.createFile,
-      ensureFileSync: file.createFileSync,
-      // link
-      createLink: link.createLink,
-      createLinkSync: link.createLinkSync,
-      ensureLink: link.createLink,
-      ensureLinkSync: link.createLinkSync,
-      // symlink
-      createSymlink: symlink.createSymlink,
-      createSymlinkSync: symlink.createSymlinkSync,
-      ensureSymlink: symlink.createSymlink,
-      ensureSymlinkSync: symlink.createSymlinkSync
-    };
+  202: [function (require, module, exports) {
+    arguments[4][80][0].apply(exports, arguments);
   }, {
-    "./file": 123,
-    "./link": 125,
-    "./symlink": 128
+    "./file": 201,
+    "./link": 203,
+    "./symlink": 206,
+    "dup": 80
   }],
-  125: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var path = require('path');
-
-    var fs = require('graceful-fs');
-
-    var mkdir = require('../mkdirs');
-
-    var pathExists = require('../path-exists').pathExists;
-
-    function createLink(srcpath, dstpath, callback) {
-      function makeLink(srcpath, dstpath) {
-        fs.link(srcpath, dstpath, function (err) {
-          if (err) return callback(err);
-          callback(null);
-        });
-      }
-
-      pathExists(dstpath, function (err, destinationExists) {
-        if (err) return callback(err);
-        if (destinationExists) return callback(null);
-        fs.lstat(srcpath, function (err) {
-          if (err) {
-            err.message = err.message.replace('lstat', 'ensureLink');
-            return callback(err);
-          }
-
-          var dir = path.dirname(dstpath);
-          pathExists(dir, function (err, dirExists) {
-            if (err) return callback(err);
-            if (dirExists) return makeLink(srcpath, dstpath);
-            mkdir.mkdirs(dir, function (err) {
-              if (err) return callback(err);
-              makeLink(srcpath, dstpath);
-            });
-          });
-        });
-      });
-    }
-
-    function createLinkSync(srcpath, dstpath) {
-      var destinationExists = fs.existsSync(dstpath);
-      if (destinationExists) return undefined;
-
-      try {
-        fs.lstatSync(srcpath);
-      } catch (err) {
-        err.message = err.message.replace('lstat', 'ensureLink');
-        throw err;
-      }
-
-      var dir = path.dirname(dstpath);
-      var dirExists = fs.existsSync(dir);
-      if (dirExists) return fs.linkSync(srcpath, dstpath);
-      mkdir.mkdirsSync(dir);
-      return fs.linkSync(srcpath, dstpath);
-    }
-
-    module.exports = {
-      createLink: u(createLink),
-      createLinkSync: createLinkSync
-    };
+  203: [function (require, module, exports) {
+    arguments[4][81][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "dup": 81,
+    "graceful-fs": 234,
     "path": undefined,
-    "universalify": 297
+    "universalify": 376
   }],
-  126: [function (require, module, exports) {
-    'use strict';
-
-    var path = require('path');
-
-    var fs = require('graceful-fs');
-
-    var pathExists = require('../path-exists').pathExists;
-    /**
-     * Function that returns two types of paths, one relative to symlink, and one
-     * relative to the current working directory. Checks if path is absolute or
-     * relative. If the path is relative, this function checks if the path is
-     * relative to symlink or relative to current working directory. This is an
-     * initiative to find a smarter `srcpath` to supply when building symlinks.
-     * This allows you to determine which path to use out of one of three possible
-     * types of source paths. The first is an absolute path. This is detected by
-     * `path.isAbsolute()`. When an absolute path is provided, it is checked to
-     * see if it exists. If it does it's used, if not an error is returned
-     * (callback)/ thrown (sync). The other two options for `srcpath` are a
-     * relative url. By default Node's `fs.symlink` works by creating a symlink
-     * using `dstpath` and expects the `srcpath` to be relative to the newly
-     * created symlink. If you provide a `srcpath` that does not exist on the file
-     * system it results in a broken symlink. To minimize this, the function
-     * checks to see if the 'relative to symlink' source file exists, and if it
-     * does it will use it. If it does not, it checks if there's a file that
-     * exists that is relative to the current working directory, if does its used.
-     * This preserves the expectations of the original fs.symlink spec and adds
-     * the ability to pass in `relative to current working direcotry` paths.
-     */
-
-
-    function symlinkPaths(srcpath, dstpath, callback) {
-      if (path.isAbsolute(srcpath)) {
-        return fs.lstat(srcpath, function (err) {
-          if (err) {
-            err.message = err.message.replace('lstat', 'ensureSymlink');
-            return callback(err);
-          }
-
-          return callback(null, {
-            'toCwd': srcpath,
-            'toDst': srcpath
-          });
-        });
-      } else {
-        var dstdir = path.dirname(dstpath);
-        var relativeToDst = path.join(dstdir, srcpath);
-        return pathExists(relativeToDst, function (err, exists) {
-          if (err) return callback(err);
-
-          if (exists) {
-            return callback(null, {
-              'toCwd': relativeToDst,
-              'toDst': srcpath
-            });
-          } else {
-            return fs.lstat(srcpath, function (err) {
-              if (err) {
-                err.message = err.message.replace('lstat', 'ensureSymlink');
-                return callback(err);
-              }
-
-              return callback(null, {
-                'toCwd': srcpath,
-                'toDst': path.relative(dstdir, srcpath)
-              });
-            });
-          }
-        });
-      }
-    }
-
-    function symlinkPathsSync(srcpath, dstpath) {
-      var exists;
-
-      if (path.isAbsolute(srcpath)) {
-        exists = fs.existsSync(srcpath);
-        if (!exists) throw new Error('absolute srcpath does not exist');
-        return {
-          'toCwd': srcpath,
-          'toDst': srcpath
-        };
-      } else {
-        var dstdir = path.dirname(dstpath);
-        var relativeToDst = path.join(dstdir, srcpath);
-        exists = fs.existsSync(relativeToDst);
-
-        if (exists) {
-          return {
-            'toCwd': relativeToDst,
-            'toDst': srcpath
-          };
-        } else {
-          exists = fs.existsSync(srcpath);
-          if (!exists) throw new Error('relative srcpath does not exist');
-          return {
-            'toCwd': srcpath,
-            'toDst': path.relative(dstdir, srcpath)
-          };
-        }
-      }
-    }
-
-    module.exports = {
-      symlinkPaths: symlinkPaths,
-      symlinkPathsSync: symlinkPathsSync
-    };
+  204: [function (require, module, exports) {
+    arguments[4][82][0].apply(exports, arguments);
   }, {
-    "../path-exists": 144,
-    "graceful-fs": 156,
+    "../path-exists": 222,
+    "dup": 82,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  127: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    function symlinkType(srcpath, type, callback) {
-      callback = typeof type === 'function' ? type : callback;
-      type = typeof type === 'function' ? false : type;
-      if (type) return callback(null, type);
-      fs.lstat(srcpath, function (err, stats) {
-        if (err) return callback(null, 'file');
-        type = stats && stats.isDirectory() ? 'dir' : 'file';
-        callback(null, type);
-      });
-    }
-
-    function symlinkTypeSync(srcpath, type) {
-      var stats;
-      if (type) return type;
-
-      try {
-        stats = fs.lstatSync(srcpath);
-      } catch (e) {
-        return 'file';
-      }
-
-      return stats && stats.isDirectory() ? 'dir' : 'file';
-    }
-
-    module.exports = {
-      symlinkType: symlinkType,
-      symlinkTypeSync: symlinkTypeSync
-    };
+  205: [function (require, module, exports) {
+    arguments[4][83][0].apply(exports, arguments);
   }, {
-    "graceful-fs": 156
+    "dup": 83,
+    "graceful-fs": 234
   }],
-  128: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var path = require('path');
-
-    var fs = require('graceful-fs');
-
-    var _mkdirs = require('../mkdirs');
-
-    var mkdirs = _mkdirs.mkdirs;
-    var mkdirsSync = _mkdirs.mkdirsSync;
-
-    var _symlinkPaths = require('./symlink-paths');
-
-    var symlinkPaths = _symlinkPaths.symlinkPaths;
-    var symlinkPathsSync = _symlinkPaths.symlinkPathsSync;
-
-    var _symlinkType = require('./symlink-type');
-
-    var symlinkType = _symlinkType.symlinkType;
-    var symlinkTypeSync = _symlinkType.symlinkTypeSync;
-
-    var pathExists = require('../path-exists').pathExists;
-
-    function createSymlink(srcpath, dstpath, type, callback) {
-      callback = typeof type === 'function' ? type : callback;
-      type = typeof type === 'function' ? false : type;
-      pathExists(dstpath, function (err, destinationExists) {
-        if (err) return callback(err);
-        if (destinationExists) return callback(null);
-        symlinkPaths(srcpath, dstpath, function (err, relative) {
-          if (err) return callback(err);
-          srcpath = relative.toDst;
-          symlinkType(relative.toCwd, type, function (err, type) {
-            if (err) return callback(err);
-            var dir = path.dirname(dstpath);
-            pathExists(dir, function (err, dirExists) {
-              if (err) return callback(err);
-              if (dirExists) return fs.symlink(srcpath, dstpath, type, callback);
-              mkdirs(dir, function (err) {
-                if (err) return callback(err);
-                fs.symlink(srcpath, dstpath, type, callback);
-              });
-            });
-          });
-        });
-      });
-    }
-
-    function createSymlinkSync(srcpath, dstpath, type) {
-      var destinationExists = fs.existsSync(dstpath);
-      if (destinationExists) return undefined;
-      var relative = symlinkPathsSync(srcpath, dstpath);
-      srcpath = relative.toDst;
-      type = symlinkTypeSync(relative.toCwd, type);
-      var dir = path.dirname(dstpath);
-      var exists = fs.existsSync(dir);
-      if (exists) return fs.symlinkSync(srcpath, dstpath, type);
-      mkdirsSync(dir);
-      return fs.symlinkSync(srcpath, dstpath, type);
-    }
-
-    module.exports = {
-      createSymlink: u(createSymlink),
-      createSymlinkSync: createSymlinkSync
-    };
+  206: [function (require, module, exports) {
+    arguments[4][84][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "./symlink-paths": 126,
-    "./symlink-type": 127,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "./symlink-paths": 204,
+    "./symlink-type": 205,
+    "dup": 84,
+    "graceful-fs": 234,
     "path": undefined,
-    "universalify": 297
+    "universalify": 376
   }],
-  129: [function (require, module, exports) {
-    'use strict'; // This is adapted from https://github.com/normalize/mz
-    // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
-
-    var u = require('universalify').fromCallback;
-
-    var fs = require('graceful-fs');
-
-    var api = ['access', 'appendFile', 'chmod', 'chown', 'close', 'copyFile', 'fchmod', 'fchown', 'fdatasync', 'fstat', 'fsync', 'ftruncate', 'futimes', 'lchown', 'lchmod', 'link', 'lstat', 'mkdir', 'mkdtemp', 'open', 'readFile', 'readdir', 'readlink', 'realpath', 'rename', 'rmdir', 'stat', 'symlink', 'truncate', 'unlink', 'utimes', 'writeFile'].filter(function (key) {
-      // Some commands are not available on some systems. Ex:
-      // fs.copyFile was added in Node.js v8.5.0
-      // fs.mkdtemp was added in Node.js v5.10.0
-      // fs.lchown is not available on at least some Linux
-      return typeof fs[key] === 'function';
-    }); // Export all keys:
-
-    Object.keys(fs).forEach(function (key) {
-      if (key === 'promises') {
-        // fs.promises is a getter property that triggers ExperimentalWarning
-        // Don't re-export it here, the getter is defined in "lib/index.js"
-        return;
-      }
-
-      exports[key] = fs[key];
-    }); // Universalify async methods:
-
-    api.forEach(function (method) {
-      exports[method] = u(fs[method]);
-    }); // We differ from mz/fs in that we still ship the old, broken, fs.exists()
-    // since we are a drop-in replacement for the native module
-
-    exports.exists = function (filename, callback) {
-      if (typeof callback === 'function') {
-        return fs.exists(filename, callback);
-      }
-
-      return new Promise(function (resolve) {
-        return fs.exists(filename, resolve);
-      });
-    }; // fs.read() & fs.write need special treatment due to multiple callback args
-
-
-    exports.read = function (fd, buffer, offset, length, position, callback) {
-      if (typeof callback === 'function') {
-        return fs.read(fd, buffer, offset, length, position, callback);
-      }
-
-      return new Promise(function (resolve, reject) {
-        fs.read(fd, buffer, offset, length, position, function (err, bytesRead, buffer) {
-          if (err) return reject(err);
-          resolve({
-            bytesRead: bytesRead,
-            buffer: buffer
-          });
-        });
-      });
-    }; // Function signature can be
-    // fs.write(fd, buffer[, offset[, length[, position]]], callback)
-    // OR
-    // fs.write(fd, string[, position[, encoding]], callback)
-    // We need to handle both cases, so we use ...args
-
-
-    exports.write = function (fd, buffer) {
-      for (var _len = arguments.length, args = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
-        args[_key - 2] = arguments[_key];
-      }
-
-      if (typeof args[args.length - 1] === 'function') {
-        return fs.write.apply(fs, [fd, buffer].concat(args));
-      }
-
-      return new Promise(function (resolve, reject) {
-        fs.write.apply(fs, [fd, buffer].concat(args, [function (err, bytesWritten, buffer) {
-          if (err) return reject(err);
-          resolve({
-            bytesWritten: bytesWritten,
-            buffer: buffer
-          });
-        }]));
-      });
-    }; // fs.realpath.native only available in Node v9.2+
-
-
-    if (typeof fs.realpath["native"] === 'function') {
-      exports.realpath["native"] = u(fs.realpath["native"]);
-    }
+  207: [function (require, module, exports) {
+    arguments[4][85][0].apply(exports, arguments);
   }, {
-    "graceful-fs": 156,
-    "universalify": 297
+    "dup": 85,
+    "graceful-fs": 234,
+    "universalify": 376
   }],
-  130: [function (require, module, exports) {
-    'use strict';
-
-    module.exports = Object.assign({}, // Export promiseified graceful-fs:
-    require('./fs'), // Export extra methods:
-    require('./copy-sync'), require('./copy'), require('./empty'), require('./ensure'), require('./json'), require('./mkdirs'), require('./move-sync'), require('./move'), require('./output'), require('./path-exists'), require('./remove')); // Export fs.promises as a getter property so that we don't trigger
-    // ExperimentalWarning before fs.promises is actually accessed.
-
-    var fs = require('fs');
-
-    if (Object.getOwnPropertyDescriptor(fs, 'promises')) {
-      Object.defineProperty(module.exports, 'promises', {
-        get: function get() {
-          return fs.promises;
-        }
-      });
-    }
+  208: [function (require, module, exports) {
+    arguments[4][86][0].apply(exports, arguments);
   }, {
-    "./copy": 121,
-    "./copy-sync": 119,
-    "./empty": 122,
-    "./ensure": 124,
-    "./fs": 129,
-    "./json": 131,
-    "./mkdirs": 135,
-    "./move": 141,
-    "./move-sync": 139,
-    "./output": 143,
-    "./path-exists": 144,
-    "./remove": 145,
+    "./copy": 199,
+    "./copy-sync": 197,
+    "./empty": 200,
+    "./ensure": 202,
+    "./fs": 207,
+    "./json": 209,
+    "./mkdirs": 213,
+    "./move": 219,
+    "./move-sync": 217,
+    "./output": 221,
+    "./path-exists": 222,
+    "./remove": 223,
+    "dup": 86,
     "fs": undefined
   }],
-  131: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var jsonFile = require('./jsonfile');
-
-    jsonFile.outputJson = u(require('./output-json'));
-    jsonFile.outputJsonSync = require('./output-json-sync'); // aliases
-
-    jsonFile.outputJSON = jsonFile.outputJson;
-    jsonFile.outputJSONSync = jsonFile.outputJsonSync;
-    jsonFile.writeJSON = jsonFile.writeJson;
-    jsonFile.writeJSONSync = jsonFile.writeJsonSync;
-    jsonFile.readJSON = jsonFile.readJson;
-    jsonFile.readJSONSync = jsonFile.readJsonSync;
-    module.exports = jsonFile;
+  209: [function (require, module, exports) {
+    arguments[4][87][0].apply(exports, arguments);
   }, {
-    "./jsonfile": 132,
-    "./output-json": 134,
-    "./output-json-sync": 133,
-    "universalify": 297
+    "./jsonfile": 210,
+    "./output-json": 212,
+    "./output-json-sync": 211,
+    "dup": 87,
+    "universalify": 376
   }],
-  132: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var jsonFile = require('jsonfile');
-
-    module.exports = {
-      // jsonfile exports
-      readJson: u(jsonFile.readFile),
-      readJsonSync: jsonFile.readFileSync,
-      writeJson: u(jsonFile.writeFile),
-      writeJsonSync: jsonFile.writeFileSync
-    };
+  210: [function (require, module, exports) {
+    arguments[4][88][0].apply(exports, arguments);
   }, {
-    "jsonfile": 163,
-    "universalify": 297
+    "dup": 88,
+    "jsonfile": 241,
+    "universalify": 376
   }],
-  133: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var mkdir = require('../mkdirs');
-
-    var jsonFile = require('./jsonfile');
-
-    function outputJsonSync(file, data, options) {
-      var dir = path.dirname(file);
-
-      if (!fs.existsSync(dir)) {
-        mkdir.mkdirsSync(dir);
-      }
-
-      jsonFile.writeJsonSync(file, data, options);
-    }
-
-    module.exports = outputJsonSync;
+  211: [function (require, module, exports) {
+    arguments[4][89][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "./jsonfile": 132,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "./jsonfile": 210,
+    "dup": 89,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  134: [function (require, module, exports) {
-    'use strict';
-
-    var path = require('path');
-
-    var mkdir = require('../mkdirs');
-
-    var pathExists = require('../path-exists').pathExists;
-
-    var jsonFile = require('./jsonfile');
-
-    function outputJson(file, data, options, callback) {
-      if (typeof options === 'function') {
-        callback = options;
-        options = {};
-      }
-
-      var dir = path.dirname(file);
-      pathExists(dir, function (err, itDoes) {
-        if (err) return callback(err);
-        if (itDoes) return jsonFile.writeJson(file, data, options, callback);
-        mkdir.mkdirs(dir, function (err) {
-          if (err) return callback(err);
-          jsonFile.writeJson(file, data, options, callback);
-        });
-      });
-    }
-
-    module.exports = outputJson;
+  212: [function (require, module, exports) {
+    arguments[4][90][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "./jsonfile": 132,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "./jsonfile": 210,
+    "dup": 90,
     "path": undefined
   }],
-  135: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var mkdirs = u(require('./mkdirs'));
-
-    var mkdirsSync = require('./mkdirs-sync');
-
-    module.exports = {
-      mkdirs: mkdirs,
-      mkdirsSync: mkdirsSync,
-      // alias
-      mkdirp: mkdirs,
-      mkdirpSync: mkdirsSync,
-      ensureDir: mkdirs,
-      ensureDirSync: mkdirsSync
-    };
+  213: [function (require, module, exports) {
+    arguments[4][91][0].apply(exports, arguments);
   }, {
-    "./mkdirs": 137,
-    "./mkdirs-sync": 136,
-    "universalify": 297
+    "./mkdirs": 215,
+    "./mkdirs-sync": 214,
+    "dup": 91,
+    "universalify": 376
   }],
-  136: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var invalidWin32Path = require('./win32').invalidWin32Path;
-
-    var o777 = parseInt('0777', 8);
-
-    function mkdirsSync(p, opts, made) {
-      if (!opts || (0, _typeof2["default"])(opts) !== 'object') {
-        opts = {
-          mode: opts
-        };
-      }
-
-      var mode = opts.mode;
-      var xfs = opts.fs || fs;
-
-      if (process.platform === 'win32' && invalidWin32Path(p)) {
-        var errInval = new Error(p + ' contains invalid WIN32 path characters.');
-        errInval.code = 'EINVAL';
-        throw errInval;
-      }
-
-      if (mode === undefined) {
-        mode = o777 & ~process.umask();
-      }
-
-      if (!made) made = null;
-      p = path.resolve(p);
-
-      try {
-        xfs.mkdirSync(p, mode);
-        made = made || p;
-      } catch (err0) {
-        if (err0.code === 'ENOENT') {
-          if (path.dirname(p) === p) throw err0;
-          made = mkdirsSync(path.dirname(p), opts, made);
-          mkdirsSync(p, opts, made);
-        } else {
-          // In the case of any other error, just see if there's a dir there
-          // already. If so, then hooray!  If not, then something is borked.
-          var stat;
-
-          try {
-            stat = xfs.statSync(p);
-          } catch (err1) {
-            throw err0;
-          }
-
-          if (!stat.isDirectory()) throw err0;
-        }
-      }
-
-      return made;
-    }
-
-    module.exports = mkdirsSync;
+  214: [function (require, module, exports) {
+    arguments[4][92][0].apply(exports, arguments);
   }, {
-    "./win32": 138,
-    "graceful-fs": 156,
+    "./win32": 216,
+    "dup": 92,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  137: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var invalidWin32Path = require('./win32').invalidWin32Path;
-
-    var o777 = parseInt('0777', 8);
-
-    function mkdirs(p, opts, callback, made) {
-      if (typeof opts === 'function') {
-        callback = opts;
-        opts = {};
-      } else if (!opts || (0, _typeof2["default"])(opts) !== 'object') {
-        opts = {
-          mode: opts
-        };
-      }
-
-      if (process.platform === 'win32' && invalidWin32Path(p)) {
-        var errInval = new Error(p + ' contains invalid WIN32 path characters.');
-        errInval.code = 'EINVAL';
-        return callback(errInval);
-      }
-
-      var mode = opts.mode;
-      var xfs = opts.fs || fs;
-
-      if (mode === undefined) {
-        mode = o777 & ~process.umask();
-      }
-
-      if (!made) made = null;
-
-      callback = callback || function () {};
-
-      p = path.resolve(p);
-      xfs.mkdir(p, mode, function (er) {
-        if (!er) {
-          made = made || p;
-          return callback(null, made);
-        }
-
-        switch (er.code) {
-          case 'ENOENT':
-            if (path.dirname(p) === p) return callback(er);
-            mkdirs(path.dirname(p), opts, function (er, made) {
-              if (er) callback(er, made);else mkdirs(p, opts, callback, made);
-            });
-            break;
-          // In the case of any other error, just see if there's a dir
-          // there already.  If so, then hooray!  If not, then something
-          // is borked.
-
-          default:
-            xfs.stat(p, function (er2, stat) {
-              // if the stat fails, then that's super weird.
-              // let the original error be the failure reason.
-              if (er2 || !stat.isDirectory()) callback(er, made);else callback(null, made);
-            });
-            break;
-        }
-      });
-    }
-
-    module.exports = mkdirs;
+  215: [function (require, module, exports) {
+    arguments[4][93][0].apply(exports, arguments);
   }, {
-    "./win32": 138,
-    "graceful-fs": 156,
+    "./win32": 216,
+    "dup": 93,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  138: [function (require, module, exports) {
-    'use strict';
-
-    var path = require('path'); // get drive on windows
-
-
-    function getRootPath(p) {
-      p = path.normalize(path.resolve(p)).split(path.sep);
-      if (p.length > 0) return p[0];
-      return null;
-    } // http://stackoverflow.com/a/62888/10333 contains more accurate
-    // TODO: expand to include the rest
-
-
-    var INVALID_PATH_CHARS = /[<>:"|?*]/;
-
-    function invalidWin32Path(p) {
-      var rp = getRootPath(p);
-      p = p.replace(rp, '');
-      return INVALID_PATH_CHARS.test(p);
-    }
-
-    module.exports = {
-      getRootPath: getRootPath,
-      invalidWin32Path: invalidWin32Path
-    };
+  216: [function (require, module, exports) {
+    arguments[4][94][0].apply(exports, arguments);
   }, {
+    "dup": 94,
     "path": undefined
   }],
-  139: [function (require, module, exports) {
-    'use strict';
-
-    module.exports = {
-      moveSync: require('./move-sync')
-    };
+  217: [function (require, module, exports) {
+    arguments[4][95][0].apply(exports, arguments);
   }, {
-    "./move-sync": 140
+    "./move-sync": 218,
+    "dup": 95
   }],
-  140: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var copySync = require('../copy-sync').copySync;
-
-    var removeSync = require('../remove').removeSync;
-
-    var mkdirpSync = require('../mkdirs').mkdirpSync;
-
-    var stat = require('../util/stat');
-
-    function moveSync(src, dest, opts) {
-      opts = opts || {};
-      var overwrite = opts.overwrite || opts.clobber || false;
-
-      var _stat$checkPathsSync3 = stat.checkPathsSync(src, dest, 'move'),
-          srcStat = _stat$checkPathsSync3.srcStat;
-
-      stat.checkParentPathsSync(src, srcStat, dest, 'move');
-      mkdirpSync(path.dirname(dest));
-      return doRename(src, dest, overwrite);
-    }
-
-    function doRename(src, dest, overwrite) {
-      if (overwrite) {
-        removeSync(dest);
-        return rename(src, dest, overwrite);
-      }
-
-      if (fs.existsSync(dest)) throw new Error('dest already exists.');
-      return rename(src, dest, overwrite);
-    }
-
-    function rename(src, dest, overwrite) {
-      try {
-        fs.renameSync(src, dest);
-      } catch (err) {
-        if (err.code !== 'EXDEV') throw err;
-        return moveAcrossDevice(src, dest, overwrite);
-      }
-    }
-
-    function moveAcrossDevice(src, dest, overwrite) {
-      var opts = {
-        overwrite: overwrite,
-        errorOnExist: true
-      };
-      copySync(src, dest, opts);
-      return removeSync(src);
-    }
-
-    module.exports = moveSync;
+  218: [function (require, module, exports) {
+    arguments[4][96][0].apply(exports, arguments);
   }, {
-    "../copy-sync": 119,
-    "../mkdirs": 135,
-    "../remove": 145,
-    "../util/stat": 148,
-    "graceful-fs": 156,
+    "../copy-sync": 197,
+    "../mkdirs": 213,
+    "../remove": 223,
+    "../util/stat": 226,
+    "dup": 96,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  141: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    module.exports = {
-      move: u(require('./move'))
-    };
+  219: [function (require, module, exports) {
+    arguments[4][97][0].apply(exports, arguments);
   }, {
-    "./move": 142,
-    "universalify": 297
+    "./move": 220,
+    "dup": 97,
+    "universalify": 376
   }],
-  142: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var copy = require('../copy').copy;
-
-    var remove = require('../remove').remove;
-
-    var mkdirp = require('../mkdirs').mkdirp;
-
-    var pathExists = require('../path-exists').pathExists;
-
-    var stat = require('../util/stat');
-
-    function move(src, dest, opts, cb) {
-      if (typeof opts === 'function') {
-        cb = opts;
-        opts = {};
-      }
-
-      var overwrite = opts.overwrite || opts.clobber || false;
-      stat.checkPaths(src, dest, 'move', function (err, stats) {
-        if (err) return cb(err);
-        var srcStat = stats.srcStat;
-        stat.checkParentPaths(src, srcStat, dest, 'move', function (err) {
-          if (err) return cb(err);
-          mkdirp(path.dirname(dest), function (err) {
-            if (err) return cb(err);
-            return doRename(src, dest, overwrite, cb);
-          });
-        });
-      });
-    }
-
-    function doRename(src, dest, overwrite, cb) {
-      if (overwrite) {
-        return remove(dest, function (err) {
-          if (err) return cb(err);
-          return rename(src, dest, overwrite, cb);
-        });
-      }
-
-      pathExists(dest, function (err, destExists) {
-        if (err) return cb(err);
-        if (destExists) return cb(new Error('dest already exists.'));
-        return rename(src, dest, overwrite, cb);
-      });
-    }
-
-    function rename(src, dest, overwrite, cb) {
-      fs.rename(src, dest, function (err) {
-        if (!err) return cb();
-        if (err.code !== 'EXDEV') return cb(err);
-        return moveAcrossDevice(src, dest, overwrite, cb);
-      });
-    }
-
-    function moveAcrossDevice(src, dest, overwrite, cb) {
-      var opts = {
-        overwrite: overwrite,
-        errorOnExist: true
-      };
-      copy(src, dest, opts, function (err) {
-        if (err) return cb(err);
-        return remove(src, cb);
-      });
-    }
-
-    module.exports = move;
+  220: [function (require, module, exports) {
+    arguments[4][98][0].apply(exports, arguments);
   }, {
-    "../copy": 121,
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "../remove": 145,
-    "../util/stat": 148,
-    "graceful-fs": 156,
+    "../copy": 199,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "../remove": 223,
+    "../util/stat": 226,
+    "dup": 98,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  143: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var mkdir = require('../mkdirs');
-
-    var pathExists = require('../path-exists').pathExists;
-
-    function outputFile(file, data, encoding, callback) {
-      if (typeof encoding === 'function') {
-        callback = encoding;
-        encoding = 'utf8';
-      }
-
-      var dir = path.dirname(file);
-      pathExists(dir, function (err, itDoes) {
-        if (err) return callback(err);
-        if (itDoes) return fs.writeFile(file, data, encoding, callback);
-        mkdir.mkdirs(dir, function (err) {
-          if (err) return callback(err);
-          fs.writeFile(file, data, encoding, callback);
-        });
-      });
-    }
-
-    function outputFileSync(file) {
-      var dir = path.dirname(file);
-
-      for (var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
-        args[_key2 - 1] = arguments[_key2];
-      }
-
-      if (fs.existsSync(dir)) {
-        return fs.writeFileSync.apply(fs, [file].concat(args));
-      }
-
-      mkdir.mkdirsSync(dir);
-      fs.writeFileSync.apply(fs, [file].concat(args));
-    }
-
-    module.exports = {
-      outputFile: u(outputFile),
-      outputFileSync: outputFileSync
-    };
+  221: [function (require, module, exports) {
+    arguments[4][99][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 135,
-    "../path-exists": 144,
-    "graceful-fs": 156,
+    "../mkdirs": 213,
+    "../path-exists": 222,
+    "dup": 99,
+    "graceful-fs": 234,
     "path": undefined,
-    "universalify": 297
+    "universalify": 376
   }],
-  144: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromPromise;
-
-    var fs = require('../fs');
-
-    function pathExists(path) {
-      return fs.access(path).then(function () {
-        return true;
-      })["catch"](function () {
-        return false;
-      });
-    }
-
-    module.exports = {
-      pathExists: u(pathExists),
-      pathExistsSync: fs.existsSync
-    };
+  222: [function (require, module, exports) {
+    arguments[4][100][0].apply(exports, arguments);
   }, {
-    "../fs": 129,
-    "universalify": 297
+    "../fs": 207,
+    "dup": 100,
+    "universalify": 376
   }],
-  145: [function (require, module, exports) {
-    'use strict';
-
-    var u = require('universalify').fromCallback;
-
-    var rimraf = require('./rimraf');
-
-    module.exports = {
-      remove: u(rimraf),
-      removeSync: rimraf.sync
-    };
+  223: [function (require, module, exports) {
+    arguments[4][101][0].apply(exports, arguments);
   }, {
-    "./rimraf": 146,
-    "universalify": 297
+    "./rimraf": 224,
+    "dup": 101,
+    "universalify": 376
   }],
-  146: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var assert = require('assert');
-
-    var isWindows = process.platform === 'win32';
-
-    function defaults(options) {
-      var methods = ['unlink', 'chmod', 'stat', 'lstat', 'rmdir', 'readdir'];
-      methods.forEach(function (m) {
-        options[m] = options[m] || fs[m];
-        m = m + 'Sync';
-        options[m] = options[m] || fs[m];
-      });
-      options.maxBusyTries = options.maxBusyTries || 3;
-    }
-
-    function rimraf(p, options, cb) {
-      var busyTries = 0;
-
-      if (typeof options === 'function') {
-        cb = options;
-        options = {};
-      }
-
-      assert(p, 'rimraf: missing path');
-      assert.strictEqual((0, _typeof2["default"])(p), 'string', 'rimraf: path should be a string');
-      assert.strictEqual((0, _typeof2["default"])(cb), 'function', 'rimraf: callback function required');
-      assert(options, 'rimraf: invalid options argument provided');
-      assert.strictEqual((0, _typeof2["default"])(options), 'object', 'rimraf: options should be object');
-      defaults(options);
-      rimraf_(p, options, function CB(er) {
-        if (er) {
-          if ((er.code === 'EBUSY' || er.code === 'ENOTEMPTY' || er.code === 'EPERM') && busyTries < options.maxBusyTries) {
-            busyTries++;
-            var time = busyTries * 100; // try again, with the same exact callback as this one.
-
-            return setTimeout(function () {
-              return rimraf_(p, options, CB);
-            }, time);
-          } // already gone
-
-
-          if (er.code === 'ENOENT') er = null;
-        }
-
-        cb(er);
-      });
-    } // Two possible strategies.
-    // 1. Assume it's a file.  unlink it, then do the dir stuff on EPERM or EISDIR
-    // 2. Assume it's a directory.  readdir, then do the file stuff on ENOTDIR
-    //
-    // Both result in an extra syscall when you guess wrong.  However, there
-    // are likely far more normal files in the world than directories.  This
-    // is based on the assumption that a the average number of files per
-    // directory is >= 1.
-    //
-    // If anyone ever complains about this, then I guess the strategy could
-    // be made configurable somehow.  But until then, YAGNI.
-
-
-    function rimraf_(p, options, cb) {
-      assert(p);
-      assert(options);
-      assert(typeof cb === 'function'); // sunos lets the root user unlink directories, which is... weird.
-      // so we have to lstat here and make sure it's not a dir.
-
-      options.lstat(p, function (er, st) {
-        if (er && er.code === 'ENOENT') {
-          return cb(null);
-        } // Windows can EPERM on stat.  Life is suffering.
-
-
-        if (er && er.code === 'EPERM' && isWindows) {
-          return fixWinEPERM(p, options, er, cb);
-        }
-
-        if (st && st.isDirectory()) {
-          return rmdir(p, options, er, cb);
-        }
-
-        options.unlink(p, function (er) {
-          if (er) {
-            if (er.code === 'ENOENT') {
-              return cb(null);
-            }
-
-            if (er.code === 'EPERM') {
-              return isWindows ? fixWinEPERM(p, options, er, cb) : rmdir(p, options, er, cb);
-            }
-
-            if (er.code === 'EISDIR') {
-              return rmdir(p, options, er, cb);
-            }
-          }
-
-          return cb(er);
-        });
-      });
-    }
-
-    function fixWinEPERM(p, options, er, cb) {
-      assert(p);
-      assert(options);
-      assert(typeof cb === 'function');
-
-      if (er) {
-        assert(er instanceof Error);
-      }
-
-      options.chmod(p, 438, function (er2) {
-        if (er2) {
-          cb(er2.code === 'ENOENT' ? null : er);
-        } else {
-          options.stat(p, function (er3, stats) {
-            if (er3) {
-              cb(er3.code === 'ENOENT' ? null : er);
-            } else if (stats.isDirectory()) {
-              rmdir(p, options, er, cb);
-            } else {
-              options.unlink(p, cb);
-            }
-          });
-        }
-      });
-    }
-
-    function fixWinEPERMSync(p, options, er) {
-      var stats;
-      assert(p);
-      assert(options);
-
-      if (er) {
-        assert(er instanceof Error);
-      }
-
-      try {
-        options.chmodSync(p, 438);
-      } catch (er2) {
-        if (er2.code === 'ENOENT') {
-          return;
-        } else {
-          throw er;
-        }
-      }
-
-      try {
-        stats = options.statSync(p);
-      } catch (er3) {
-        if (er3.code === 'ENOENT') {
-          return;
-        } else {
-          throw er;
-        }
-      }
-
-      if (stats.isDirectory()) {
-        rmdirSync(p, options, er);
-      } else {
-        options.unlinkSync(p);
-      }
-    }
-
-    function rmdir(p, options, originalEr, cb) {
-      assert(p);
-      assert(options);
-
-      if (originalEr) {
-        assert(originalEr instanceof Error);
-      }
-
-      assert(typeof cb === 'function'); // try to rmdir first, and only readdir on ENOTEMPTY or EEXIST (SunOS)
-      // if we guessed wrong, and it's not a directory, then
-      // raise the original error.
-
-      options.rmdir(p, function (er) {
-        if (er && (er.code === 'ENOTEMPTY' || er.code === 'EEXIST' || er.code === 'EPERM')) {
-          rmkids(p, options, cb);
-        } else if (er && er.code === 'ENOTDIR') {
-          cb(originalEr);
-        } else {
-          cb(er);
-        }
-      });
-    }
-
-    function rmkids(p, options, cb) {
-      assert(p);
-      assert(options);
-      assert(typeof cb === 'function');
-      options.readdir(p, function (er, files) {
-        if (er) return cb(er);
-        var n = files.length;
-        var errState;
-        if (n === 0) return options.rmdir(p, cb);
-        files.forEach(function (f) {
-          rimraf(path.join(p, f), options, function (er) {
-            if (errState) {
-              return;
-            }
-
-            if (er) return cb(errState = er);
-
-            if (--n === 0) {
-              options.rmdir(p, cb);
-            }
-          });
-        });
-      });
-    } // this looks simpler, and is strictly *faster*, but will
-    // tie up the JavaScript thread and fail on excessively
-    // deep directory trees.
-
-
-    function rimrafSync(p, options) {
-      var st;
-      options = options || {};
-      defaults(options);
-      assert(p, 'rimraf: missing path');
-      assert.strictEqual((0, _typeof2["default"])(p), 'string', 'rimraf: path should be a string');
-      assert(options, 'rimraf: missing options');
-      assert.strictEqual((0, _typeof2["default"])(options), 'object', 'rimraf: options should be object');
-
-      try {
-        st = options.lstatSync(p);
-      } catch (er) {
-        if (er.code === 'ENOENT') {
-          return;
-        } // Windows can EPERM on stat.  Life is suffering.
-
-
-        if (er.code === 'EPERM' && isWindows) {
-          fixWinEPERMSync(p, options, er);
-        }
-      }
-
-      try {
-        // sunos lets the root user unlink directories, which is... weird.
-        if (st && st.isDirectory()) {
-          rmdirSync(p, options, null);
-        } else {
-          options.unlinkSync(p);
-        }
-      } catch (er) {
-        if (er.code === 'ENOENT') {
-          return;
-        } else if (er.code === 'EPERM') {
-          return isWindows ? fixWinEPERMSync(p, options, er) : rmdirSync(p, options, er);
-        } else if (er.code !== 'EISDIR') {
-          throw er;
-        }
-
-        rmdirSync(p, options, er);
-      }
-    }
-
-    function rmdirSync(p, options, originalEr) {
-      assert(p);
-      assert(options);
-
-      if (originalEr) {
-        assert(originalEr instanceof Error);
-      }
-
-      try {
-        options.rmdirSync(p);
-      } catch (er) {
-        if (er.code === 'ENOTDIR') {
-          throw originalEr;
-        } else if (er.code === 'ENOTEMPTY' || er.code === 'EEXIST' || er.code === 'EPERM') {
-          rmkidsSync(p, options);
-        } else if (er.code !== 'ENOENT') {
-          throw er;
-        }
-      }
-    }
-
-    function rmkidsSync(p, options) {
-      assert(p);
-      assert(options);
-      options.readdirSync(p).forEach(function (f) {
-        return rimrafSync(path.join(p, f), options);
-      });
-
-      if (isWindows) {
-        // We only end up here once we got ENOTEMPTY at least once, and
-        // at this point, we are guaranteed to have removed all the kids.
-        // So, we know that it won't be ENOENT or ENOTDIR or anything else.
-        // try really hard to delete stuff on windows, because it has a
-        // PROFOUNDLY annoying habit of not closing handles promptly when
-        // files are deleted, resulting in spurious ENOTEMPTY errors.
-        var startTime = Date.now();
-
-        do {
-          try {
-            var ret = options.rmdirSync(p, options);
-            return ret;
-          } catch (er) {}
-        } while (Date.now() - startTime < 500); // give up after 500ms
-
-      } else {
-        var _ret = options.rmdirSync(p, options);
-
-        return _ret;
-      }
-    }
-
-    module.exports = rimraf;
-    rimraf.sync = rimrafSync;
+  224: [function (require, module, exports) {
+    arguments[4][102][0].apply(exports, arguments);
   }, {
     "assert": undefined,
-    "graceful-fs": 156,
+    "dup": 102,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  147: [function (require, module, exports) {
-    'use strict';
-    /* eslint-disable node/no-deprecated-api */
-
-    module.exports = function (size) {
-      if (typeof Buffer.allocUnsafe === 'function') {
-        try {
-          return Buffer.allocUnsafe(size);
-        } catch (e) {
-          return new Buffer(size);
-        }
-      }
-
-      return new Buffer(size);
-    };
-  }, {}],
-  148: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var path = require('path');
-
-    var NODE_VERSION_MAJOR_WITH_BIGINT = 10;
-    var NODE_VERSION_MINOR_WITH_BIGINT = 5;
-    var NODE_VERSION_PATCH_WITH_BIGINT = 0;
-    var nodeVersion = process.versions.node.split('.');
-    var nodeVersionMajor = Number.parseInt(nodeVersion[0], 10);
-    var nodeVersionMinor = Number.parseInt(nodeVersion[1], 10);
-    var nodeVersionPatch = Number.parseInt(nodeVersion[2], 10);
-
-    function nodeSupportsBigInt() {
-      if (nodeVersionMajor > NODE_VERSION_MAJOR_WITH_BIGINT) {
-        return true;
-      } else if (nodeVersionMajor === NODE_VERSION_MAJOR_WITH_BIGINT) {
-        if (nodeVersionMinor > NODE_VERSION_MINOR_WITH_BIGINT) {
-          return true;
-        } else if (nodeVersionMinor === NODE_VERSION_MINOR_WITH_BIGINT) {
-          if (nodeVersionPatch >= NODE_VERSION_PATCH_WITH_BIGINT) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-    }
-
-    function getStats(src, dest, cb) {
-      if (nodeSupportsBigInt()) {
-        fs.stat(src, {
-          bigint: true
-        }, function (err, srcStat) {
-          if (err) return cb(err);
-          fs.stat(dest, {
-            bigint: true
-          }, function (err, destStat) {
-            if (err) {
-              if (err.code === 'ENOENT') return cb(null, {
-                srcStat: srcStat,
-                destStat: null
-              });
-              return cb(err);
-            }
-
-            return cb(null, {
-              srcStat: srcStat,
-              destStat: destStat
-            });
-          });
-        });
-      } else {
-        fs.stat(src, function (err, srcStat) {
-          if (err) return cb(err);
-          fs.stat(dest, function (err, destStat) {
-            if (err) {
-              if (err.code === 'ENOENT') return cb(null, {
-                srcStat: srcStat,
-                destStat: null
-              });
-              return cb(err);
-            }
-
-            return cb(null, {
-              srcStat: srcStat,
-              destStat: destStat
-            });
-          });
-        });
-      }
-    }
-
-    function getStatsSync(src, dest) {
-      var srcStat, destStat;
-
-      if (nodeSupportsBigInt()) {
-        srcStat = fs.statSync(src, {
-          bigint: true
-        });
-      } else {
-        srcStat = fs.statSync(src);
-      }
-
-      try {
-        if (nodeSupportsBigInt()) {
-          destStat = fs.statSync(dest, {
-            bigint: true
-          });
-        } else {
-          destStat = fs.statSync(dest);
-        }
-      } catch (err) {
-        if (err.code === 'ENOENT') return {
-          srcStat: srcStat,
-          destStat: null
-        };
-        throw err;
-      }
-
-      return {
-        srcStat: srcStat,
-        destStat: destStat
-      };
-    }
-
-    function checkPaths(src, dest, funcName, cb) {
-      getStats(src, dest, function (err, stats) {
-        if (err) return cb(err);
-        var srcStat = stats.srcStat,
-            destStat = stats.destStat;
-
-        if (destStat && destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
-          return cb(new Error('Source and destination must not be the same.'));
-        }
-
-        if (srcStat.isDirectory() && isSrcSubdir(src, dest)) {
-          return cb(new Error(errMsg(src, dest, funcName)));
-        }
-
-        return cb(null, {
-          srcStat: srcStat,
-          destStat: destStat
-        });
-      });
-    }
-
-    function checkPathsSync(src, dest, funcName) {
-      var _getStatsSync = getStatsSync(src, dest),
-          srcStat = _getStatsSync.srcStat,
-          destStat = _getStatsSync.destStat;
-
-      if (destStat && destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
-        throw new Error('Source and destination must not be the same.');
-      }
-
-      if (srcStat.isDirectory() && isSrcSubdir(src, dest)) {
-        throw new Error(errMsg(src, dest, funcName));
-      }
-
-      return {
-        srcStat: srcStat,
-        destStat: destStat
-      };
-    } // recursively check if dest parent is a subdirectory of src.
-    // It works for all file types including symlinks since it
-    // checks the src and dest inodes. It starts from the deepest
-    // parent and stops once it reaches the src parent or the root path.
-
-
-    function checkParentPaths(src, srcStat, dest, funcName, cb) {
-      var srcParent = path.resolve(path.dirname(src));
-      var destParent = path.resolve(path.dirname(dest));
-      if (destParent === srcParent || destParent === path.parse(destParent).root) return cb();
-
-      if (nodeSupportsBigInt()) {
-        fs.stat(destParent, {
-          bigint: true
-        }, function (err, destStat) {
-          if (err) {
-            if (err.code === 'ENOENT') return cb();
-            return cb(err);
-          }
-
-          if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
-            return cb(new Error(errMsg(src, dest, funcName)));
-          }
-
-          return checkParentPaths(src, srcStat, destParent, funcName, cb);
-        });
-      } else {
-        fs.stat(destParent, function (err, destStat) {
-          if (err) {
-            if (err.code === 'ENOENT') return cb();
-            return cb(err);
-          }
-
-          if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
-            return cb(new Error(errMsg(src, dest, funcName)));
-          }
-
-          return checkParentPaths(src, srcStat, destParent, funcName, cb);
-        });
-      }
-    }
-
-    function checkParentPathsSync(src, srcStat, dest, funcName) {
-      var srcParent = path.resolve(path.dirname(src));
-      var destParent = path.resolve(path.dirname(dest));
-      if (destParent === srcParent || destParent === path.parse(destParent).root) return;
-      var destStat;
-
-      try {
-        if (nodeSupportsBigInt()) {
-          destStat = fs.statSync(destParent, {
-            bigint: true
-          });
-        } else {
-          destStat = fs.statSync(destParent);
-        }
-      } catch (err) {
-        if (err.code === 'ENOENT') return;
-        throw err;
-      }
-
-      if (destStat.ino && destStat.dev && destStat.ino === srcStat.ino && destStat.dev === srcStat.dev) {
-        throw new Error(errMsg(src, dest, funcName));
-      }
-
-      return checkParentPathsSync(src, srcStat, destParent, funcName);
-    } // return true if dest is a subdir of src, otherwise false.
-    // It only checks the path strings.
-
-
-    function isSrcSubdir(src, dest) {
-      var srcArr = path.resolve(src).split(path.sep).filter(function (i) {
-        return i;
-      });
-      var destArr = path.resolve(dest).split(path.sep).filter(function (i) {
-        return i;
-      });
-      return srcArr.reduce(function (acc, cur, i) {
-        return acc && destArr[i] === cur;
-      }, true);
-    }
-
-    function errMsg(src, dest, funcName) {
-      return "Cannot ".concat(funcName, " '").concat(src, "' to a subdirectory of itself, '").concat(dest, "'.");
-    }
-
-    module.exports = {
-      checkPaths: checkPaths,
-      checkPathsSync: checkPathsSync,
-      checkParentPaths: checkParentPaths,
-      checkParentPathsSync: checkParentPathsSync,
-      isSrcSubdir: isSrcSubdir
-    };
+  225: [function (require, module, exports) {
+    arguments[4][103][0].apply(exports, arguments);
   }, {
-    "graceful-fs": 156,
+    "dup": 103
+  }],
+  226: [function (require, module, exports) {
+    arguments[4][104][0].apply(exports, arguments);
+  }, {
+    "dup": 104,
+    "graceful-fs": 234,
     "path": undefined
   }],
-  149: [function (require, module, exports) {
-    'use strict';
-
-    var fs = require('graceful-fs');
-
-    var os = require('os');
-
-    var path = require('path'); // HFS, ext{2,3}, FAT do not, Node.js v0.10 does not
-
-
-    function hasMillisResSync() {
-      var tmpfile = path.join('millis-test-sync' + Date.now().toString() + Math.random().toString().slice(2));
-      tmpfile = path.join(os.tmpdir(), tmpfile); // 550 millis past UNIX epoch
-
-      var d = new Date(1435410243862);
-      fs.writeFileSync(tmpfile, 'https://github.com/jprichardson/node-fs-extra/pull/141');
-      var fd = fs.openSync(tmpfile, 'r+');
-      fs.futimesSync(fd, d, d);
-      fs.closeSync(fd);
-      return fs.statSync(tmpfile).mtime > 1435410243000;
-    }
-
-    function hasMillisRes(callback) {
-      var tmpfile = path.join('millis-test' + Date.now().toString() + Math.random().toString().slice(2));
-      tmpfile = path.join(os.tmpdir(), tmpfile); // 550 millis past UNIX epoch
-
-      var d = new Date(1435410243862);
-      fs.writeFile(tmpfile, 'https://github.com/jprichardson/node-fs-extra/pull/141', function (err) {
-        if (err) return callback(err);
-        fs.open(tmpfile, 'r+', function (err, fd) {
-          if (err) return callback(err);
-          fs.futimes(fd, d, d, function (err) {
-            if (err) return callback(err);
-            fs.close(fd, function (err) {
-              if (err) return callback(err);
-              fs.stat(tmpfile, function (err, stats) {
-                if (err) return callback(err);
-                callback(null, stats.mtime > 1435410243000);
-              });
-            });
-          });
-        });
-      });
-    }
-
-    function timeRemoveMillis(timestamp) {
-      if (typeof timestamp === 'number') {
-        return Math.floor(timestamp / 1000) * 1000;
-      } else if (timestamp instanceof Date) {
-        return new Date(Math.floor(timestamp.getTime() / 1000) * 1000);
-      } else {
-        throw new Error('fs-extra: timeRemoveMillis() unknown parameter type');
-      }
-    }
-
-    function utimesMillis(path, atime, mtime, callback) {
-      // if (!HAS_MILLIS_RES) return fs.utimes(path, atime, mtime, callback)
-      fs.open(path, 'r+', function (err, fd) {
-        if (err) return callback(err);
-        fs.futimes(fd, atime, mtime, function (futimesErr) {
-          fs.close(fd, function (closeErr) {
-            if (callback) callback(futimesErr || closeErr);
-          });
-        });
-      });
-    }
-
-    function utimesMillisSync(path, atime, mtime) {
-      var fd = fs.openSync(path, 'r+');
-      fs.futimesSync(fd, atime, mtime);
-      return fs.closeSync(fd);
-    }
-
-    module.exports = {
-      hasMillisRes: hasMillisRes,
-      hasMillisResSync: hasMillisResSync,
-      timeRemoveMillis: timeRemoveMillis,
-      utimesMillis: utimesMillis,
-      utimesMillisSync: utimesMillisSync
-    };
+  227: [function (require, module, exports) {
+    arguments[4][105][0].apply(exports, arguments);
   }, {
-    "graceful-fs": 156,
+    "dup": 105,
+    "graceful-fs": 234,
     "os": undefined,
     "path": undefined
   }],
-  150: [function (require, module, exports) {
+  228: [function (require, module, exports) {
     module.exports = realpath;
     realpath.realpath = realpath;
     realpath.sync = realpathSync;
@@ -29014,10 +33139,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       fs.realpathSync = origRealpathSync;
     }
   }, {
-    "./old.js": 151,
+    "./old.js": 229,
     "fs": undefined
   }],
-  151: [function (require, module, exports) {
+  229: [function (require, module, exports) {
     // Copyright Joyent, Inc. and other Node contributors.
     //
     // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29315,7 +33440,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "fs": undefined,
     "path": undefined
   }],
-  152: [function (require, module, exports) {
+  230: [function (require, module, exports) {
     exports.alphasort = alphasort;
     exports.alphasorti = alphasorti;
     exports.setopts = setopts;
@@ -29530,11 +33655,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     }
   }, {
-    "minimatch": 283,
+    "minimatch": 361,
     "path": undefined,
-    "path-is-absolute": 286
+    "path-is-absolute": 364
   }],
-  153: [function (require, module, exports) {
+  231: [function (require, module, exports) {
     // Approach:
     //
     // 1. Get the minimatch set
@@ -30237,21 +34362,21 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return cb(null, c, stat);
     };
   }, {
-    "./common.js": 152,
-    "./sync.js": 154,
+    "./common.js": 230,
+    "./sync.js": 232,
     "assert": undefined,
     "events": undefined,
     "fs": undefined,
-    "fs.realpath": 150,
-    "inflight": 159,
-    "inherits": 160,
-    "minimatch": 283,
-    "once": 285,
+    "fs.realpath": 228,
+    "inflight": 237,
+    "inherits": 238,
+    "minimatch": 361,
+    "once": 363,
     "path": undefined,
-    "path-is-absolute": 286,
+    "path-is-absolute": 364,
     "util": undefined
   }],
-  154: [function (require, module, exports) {
+  232: [function (require, module, exports) {
     module.exports = globSync;
     globSync.GlobSync = GlobSync;
 
@@ -30682,824 +34807,45 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return common.makeAbs(this, f);
     };
   }, {
-    "./common.js": 152,
-    "./glob.js": 153,
+    "./common.js": 230,
+    "./glob.js": 231,
     "assert": undefined,
     "fs": undefined,
-    "fs.realpath": 150,
-    "minimatch": 283,
+    "fs.realpath": 228,
+    "minimatch": 361,
     "path": undefined,
-    "path-is-absolute": 286,
+    "path-is-absolute": 364,
     "util": undefined
   }],
-  155: [function (require, module, exports) {
-    'use strict';
-
-    module.exports = clone;
-
-    function clone(obj) {
-      if (obj === null || (0, _typeof2["default"])(obj) !== 'object') return obj;
-      if (obj instanceof Object) var copy = {
-        __proto__: obj.__proto__
-      };else var copy = Object.create(null);
-      Object.getOwnPropertyNames(obj).forEach(function (key) {
-        Object.defineProperty(copy, key, Object.getOwnPropertyDescriptor(obj, key));
-      });
-      return copy;
-    }
-  }, {}],
-  156: [function (require, module, exports) {
-    var fs = require('fs');
-
-    var polyfills = require('./polyfills.js');
-
-    var legacy = require('./legacy-streams.js');
-
-    var clone = require('./clone.js');
-
-    var util = require('util');
-    /* istanbul ignore next - node 0.x polyfill */
-
-
-    var gracefulQueue;
-    var previousSymbol;
-    /* istanbul ignore else - node 0.x polyfill */
-
-    if (typeof Symbol === 'function' && typeof Symbol["for"] === 'function') {
-      gracefulQueue = Symbol["for"]('graceful-fs.queue'); // This is used in testing by future versions
-
-      previousSymbol = Symbol["for"]('graceful-fs.previous');
-    } else {
-      gracefulQueue = '___graceful-fs.queue';
-      previousSymbol = '___graceful-fs.previous';
-    }
-
-    function noop() {}
-
-    var debug = noop;
-    if (util.debuglog) debug = util.debuglog('gfs4');else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) debug = function debug() {
-      var m = util.format.apply(util, arguments);
-      m = 'GFS4: ' + m.split(/\n/).join('\nGFS4: ');
-      console.error(m);
-    }; // Once time initialization
-
-    if (!global[gracefulQueue]) {
-      // This queue can be shared by multiple loaded instances
-      var queue = [];
-      Object.defineProperty(global, gracefulQueue, {
-        get: function get() {
-          return queue;
-        }
-      }); // Patch fs.close/closeSync to shared queue version, because we need
-      // to retry() whenever a close happens *anywhere* in the program.
-      // This is essential when multiple graceful-fs instances are
-      // in play at the same time.
-
-      fs.close = function (fs$close) {
-        function close(fd, cb) {
-          return fs$close.call(fs, fd, function (err) {
-            // This function uses the graceful-fs shared queue
-            if (!err) {
-              retry();
-            }
-
-            if (typeof cb === 'function') cb.apply(this, arguments);
-          });
-        }
-
-        Object.defineProperty(close, previousSymbol, {
-          value: fs$close
-        });
-        return close;
-      }(fs.close);
-
-      fs.closeSync = function (fs$closeSync) {
-        function closeSync(fd) {
-          // This function uses the graceful-fs shared queue
-          fs$closeSync.apply(fs, arguments);
-          retry();
-        }
-
-        Object.defineProperty(closeSync, previousSymbol, {
-          value: fs$closeSync
-        });
-        return closeSync;
-      }(fs.closeSync);
-
-      if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) {
-        process.on('exit', function () {
-          debug(global[gracefulQueue]);
-
-          require('assert').equal(global[gracefulQueue].length, 0);
-        });
-      }
-    }
-
-    module.exports = patch(clone(fs));
-
-    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs.__patched) {
-      module.exports = patch(fs);
-      fs.__patched = true;
-    }
-
-    function patch(fs) {
-      // Everything that references the open() function needs to be in here
-      polyfills(fs);
-      fs.gracefulify = patch;
-      fs.createReadStream = createReadStream;
-      fs.createWriteStream = createWriteStream;
-      var fs$readFile = fs.readFile;
-      fs.readFile = readFile;
-
-      function readFile(path, options, cb) {
-        if (typeof options === 'function') cb = options, options = null;
-        return go$readFile(path, options, cb);
-
-        function go$readFile(path, options, cb) {
-          return fs$readFile(path, options, function (err) {
-            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readFile, [path, options, cb]]);else {
-              if (typeof cb === 'function') cb.apply(this, arguments);
-              retry();
-            }
-          });
-        }
-      }
-
-      var fs$writeFile = fs.writeFile;
-      fs.writeFile = writeFile;
-
-      function writeFile(path, data, options, cb) {
-        if (typeof options === 'function') cb = options, options = null;
-        return go$writeFile(path, data, options, cb);
-
-        function go$writeFile(path, data, options, cb) {
-          return fs$writeFile(path, data, options, function (err) {
-            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$writeFile, [path, data, options, cb]]);else {
-              if (typeof cb === 'function') cb.apply(this, arguments);
-              retry();
-            }
-          });
-        }
-      }
-
-      var fs$appendFile = fs.appendFile;
-      if (fs$appendFile) fs.appendFile = appendFile;
-
-      function appendFile(path, data, options, cb) {
-        if (typeof options === 'function') cb = options, options = null;
-        return go$appendFile(path, data, options, cb);
-
-        function go$appendFile(path, data, options, cb) {
-          return fs$appendFile(path, data, options, function (err) {
-            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$appendFile, [path, data, options, cb]]);else {
-              if (typeof cb === 'function') cb.apply(this, arguments);
-              retry();
-            }
-          });
-        }
-      }
-
-      var fs$readdir = fs.readdir;
-      fs.readdir = readdir;
-
-      function readdir(path, options, cb) {
-        var args = [path];
-
-        if (typeof options !== 'function') {
-          args.push(options);
-        } else {
-          cb = options;
-        }
-
-        args.push(go$readdir$cb);
-        return go$readdir(args);
-
-        function go$readdir$cb(err, files) {
-          if (files && files.sort) files.sort();
-          if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$readdir, [args]]);else {
-            if (typeof cb === 'function') cb.apply(this, arguments);
-            retry();
-          }
-        }
-      }
-
-      function go$readdir(args) {
-        return fs$readdir.apply(fs, args);
-      }
-
-      if (process.version.substr(0, 4) === 'v0.8') {
-        var legStreams = legacy(fs);
-        ReadStream = legStreams.ReadStream;
-        WriteStream = legStreams.WriteStream;
-      }
-
-      var fs$ReadStream = fs.ReadStream;
-
-      if (fs$ReadStream) {
-        ReadStream.prototype = Object.create(fs$ReadStream.prototype);
-        ReadStream.prototype.open = ReadStream$open;
-      }
-
-      var fs$WriteStream = fs.WriteStream;
-
-      if (fs$WriteStream) {
-        WriteStream.prototype = Object.create(fs$WriteStream.prototype);
-        WriteStream.prototype.open = WriteStream$open;
-      }
-
-      Object.defineProperty(fs, 'ReadStream', {
-        get: function get() {
-          return ReadStream;
-        },
-        set: function set(val) {
-          ReadStream = val;
-        },
-        enumerable: true,
-        configurable: true
-      });
-      Object.defineProperty(fs, 'WriteStream', {
-        get: function get() {
-          return WriteStream;
-        },
-        set: function set(val) {
-          WriteStream = val;
-        },
-        enumerable: true,
-        configurable: true
-      }); // legacy names
-
-      Object.defineProperty(fs, 'FileReadStream', {
-        get: function get() {
-          return ReadStream;
-        },
-        set: function set(val) {
-          ReadStream = val;
-        },
-        enumerable: true,
-        configurable: true
-      });
-      Object.defineProperty(fs, 'FileWriteStream', {
-        get: function get() {
-          return WriteStream;
-        },
-        set: function set(val) {
-          WriteStream = val;
-        },
-        enumerable: true,
-        configurable: true
-      });
-
-      function ReadStream(path, options) {
-        if (this instanceof ReadStream) return fs$ReadStream.apply(this, arguments), this;else return ReadStream.apply(Object.create(ReadStream.prototype), arguments);
-      }
-
-      function ReadStream$open() {
-        var that = this;
-        open(that.path, that.flags, that.mode, function (err, fd) {
-          if (err) {
-            if (that.autoClose) that.destroy();
-            that.emit('error', err);
-          } else {
-            that.fd = fd;
-            that.emit('open', fd);
-            that.read();
-          }
-        });
-      }
-
-      function WriteStream(path, options) {
-        if (this instanceof WriteStream) return fs$WriteStream.apply(this, arguments), this;else return WriteStream.apply(Object.create(WriteStream.prototype), arguments);
-      }
-
-      function WriteStream$open() {
-        var that = this;
-        open(that.path, that.flags, that.mode, function (err, fd) {
-          if (err) {
-            that.destroy();
-            that.emit('error', err);
-          } else {
-            that.fd = fd;
-            that.emit('open', fd);
-          }
-        });
-      }
-
-      function createReadStream(path, options) {
-        return new fs.ReadStream(path, options);
-      }
-
-      function createWriteStream(path, options) {
-        return new fs.WriteStream(path, options);
-      }
-
-      var fs$open = fs.open;
-      fs.open = open;
-
-      function open(path, flags, mode, cb) {
-        if (typeof mode === 'function') cb = mode, mode = null;
-        return go$open(path, flags, mode, cb);
-
-        function go$open(path, flags, mode, cb) {
-          return fs$open(path, flags, mode, function (err, fd) {
-            if (err && (err.code === 'EMFILE' || err.code === 'ENFILE')) enqueue([go$open, [path, flags, mode, cb]]);else {
-              if (typeof cb === 'function') cb.apply(this, arguments);
-              retry();
-            }
-          });
-        }
-      }
-
-      return fs;
-    }
-
-    function enqueue(elem) {
-      debug('ENQUEUE', elem[0].name, elem[1]);
-      global[gracefulQueue].push(elem);
-    }
-
-    function retry() {
-      var elem = global[gracefulQueue].shift();
-
-      if (elem) {
-        debug('RETRY', elem[0].name, elem[1]);
-        elem[0].apply(null, elem[1]);
-      }
-    }
+  233: [function (require, module, exports) {
+    arguments[4][106][0].apply(exports, arguments);
   }, {
-    "./clone.js": 155,
-    "./legacy-streams.js": 157,
-    "./polyfills.js": 158,
+    "dup": 106
+  }],
+  234: [function (require, module, exports) {
+    arguments[4][107][0].apply(exports, arguments);
+  }, {
+    "./clone.js": 233,
+    "./legacy-streams.js": 235,
+    "./polyfills.js": 236,
     "assert": undefined,
+    "dup": 107,
     "fs": undefined,
     "util": undefined
   }],
-  157: [function (require, module, exports) {
-    var Stream = require('stream').Stream;
-
-    module.exports = legacy;
-
-    function legacy(fs) {
-      return {
-        ReadStream: ReadStream,
-        WriteStream: WriteStream
-      };
-
-      function ReadStream(path, options) {
-        if (!(this instanceof ReadStream)) return new ReadStream(path, options);
-        Stream.call(this);
-        var self = this;
-        this.path = path;
-        this.fd = null;
-        this.readable = true;
-        this.paused = false;
-        this.flags = 'r';
-        this.mode = 438;
-        /*=0666*/
-
-        this.bufferSize = 64 * 1024;
-        options = options || {}; // Mixin options into this
-
-        var keys = Object.keys(options);
-
-        for (var index = 0, length = keys.length; index < length; index++) {
-          var key = keys[index];
-          this[key] = options[key];
-        }
-
-        if (this.encoding) this.setEncoding(this.encoding);
-
-        if (this.start !== undefined) {
-          if ('number' !== typeof this.start) {
-            throw TypeError('start must be a Number');
-          }
-
-          if (this.end === undefined) {
-            this.end = Infinity;
-          } else if ('number' !== typeof this.end) {
-            throw TypeError('end must be a Number');
-          }
-
-          if (this.start > this.end) {
-            throw new Error('start must be <= end');
-          }
-
-          this.pos = this.start;
-        }
-
-        if (this.fd !== null) {
-          process.nextTick(function () {
-            self._read();
-          });
-          return;
-        }
-
-        fs.open(this.path, this.flags, this.mode, function (err, fd) {
-          if (err) {
-            self.emit('error', err);
-            self.readable = false;
-            return;
-          }
-
-          self.fd = fd;
-          self.emit('open', fd);
-
-          self._read();
-        });
-      }
-
-      function WriteStream(path, options) {
-        if (!(this instanceof WriteStream)) return new WriteStream(path, options);
-        Stream.call(this);
-        this.path = path;
-        this.fd = null;
-        this.writable = true;
-        this.flags = 'w';
-        this.encoding = 'binary';
-        this.mode = 438;
-        /*=0666*/
-
-        this.bytesWritten = 0;
-        options = options || {}; // Mixin options into this
-
-        var keys = Object.keys(options);
-
-        for (var index = 0, length = keys.length; index < length; index++) {
-          var key = keys[index];
-          this[key] = options[key];
-        }
-
-        if (this.start !== undefined) {
-          if ('number' !== typeof this.start) {
-            throw TypeError('start must be a Number');
-          }
-
-          if (this.start < 0) {
-            throw new Error('start must be >= zero');
-          }
-
-          this.pos = this.start;
-        }
-
-        this.busy = false;
-        this._queue = [];
-
-        if (this.fd === null) {
-          this._open = fs.open;
-
-          this._queue.push([this._open, this.path, this.flags, this.mode, undefined]);
-
-          this.flush();
-        }
-      }
-    }
+  235: [function (require, module, exports) {
+    arguments[4][108][0].apply(exports, arguments);
   }, {
+    "dup": 108,
     "stream": undefined
   }],
-  158: [function (require, module, exports) {
-    var constants = require('constants');
-
-    var origCwd = process.cwd;
-    var cwd = null;
-    var platform = process.env.GRACEFUL_FS_PLATFORM || process.platform;
-
-    process.cwd = function () {
-      if (!cwd) cwd = origCwd.call(process);
-      return cwd;
-    };
-
-    try {
-      process.cwd();
-    } catch (er) {}
-
-    var chdir = process.chdir;
-
-    process.chdir = function (d) {
-      cwd = null;
-      chdir.call(process, d);
-    };
-
-    module.exports = patch;
-
-    function patch(fs) {
-      // (re-)implement some things that are known busted or missing.
-      // lchmod, broken prior to 0.6.2
-      // back-port the fix here.
-      if (constants.hasOwnProperty('O_SYMLINK') && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-        patchLchmod(fs);
-      } // lutimes implementation, or no-op
-
-
-      if (!fs.lutimes) {
-        patchLutimes(fs);
-      } // https://github.com/isaacs/node-graceful-fs/issues/4
-      // Chown should not fail on einval or eperm if non-root.
-      // It should not fail on enosys ever, as this just indicates
-      // that a fs doesn't support the intended operation.
-
-
-      fs.chown = chownFix(fs.chown);
-      fs.fchown = chownFix(fs.fchown);
-      fs.lchown = chownFix(fs.lchown);
-      fs.chmod = chmodFix(fs.chmod);
-      fs.fchmod = chmodFix(fs.fchmod);
-      fs.lchmod = chmodFix(fs.lchmod);
-      fs.chownSync = chownFixSync(fs.chownSync);
-      fs.fchownSync = chownFixSync(fs.fchownSync);
-      fs.lchownSync = chownFixSync(fs.lchownSync);
-      fs.chmodSync = chmodFixSync(fs.chmodSync);
-      fs.fchmodSync = chmodFixSync(fs.fchmodSync);
-      fs.lchmodSync = chmodFixSync(fs.lchmodSync);
-      fs.stat = statFix(fs.stat);
-      fs.fstat = statFix(fs.fstat);
-      fs.lstat = statFix(fs.lstat);
-      fs.statSync = statFixSync(fs.statSync);
-      fs.fstatSync = statFixSync(fs.fstatSync);
-      fs.lstatSync = statFixSync(fs.lstatSync); // if lchmod/lchown do not exist, then make them no-ops
-
-      if (!fs.lchmod) {
-        fs.lchmod = function (path, mode, cb) {
-          if (cb) process.nextTick(cb);
-        };
-
-        fs.lchmodSync = function () {};
-      }
-
-      if (!fs.lchown) {
-        fs.lchown = function (path, uid, gid, cb) {
-          if (cb) process.nextTick(cb);
-        };
-
-        fs.lchownSync = function () {};
-      } // on Windows, A/V software can lock the directory, causing this
-      // to fail with an EACCES or EPERM if the directory contains newly
-      // created files.  Try again on failure, for up to 60 seconds.
-      // Set the timeout this long because some Windows Anti-Virus, such as Parity
-      // bit9, may lock files for up to a minute, causing npm package install
-      // failures. Also, take care to yield the scheduler. Windows scheduling gives
-      // CPU to a busy looping process, which can cause the program causing the lock
-      // contention to be starved of CPU by node, so the contention doesn't resolve.
-
-
-      if (platform === "win32") {
-        fs.rename = function (fs$rename) {
-          return function (from, to, cb) {
-            var start = Date.now();
-            var backoff = 0;
-            fs$rename(from, to, function CB(er) {
-              if (er && (er.code === "EACCES" || er.code === "EPERM") && Date.now() - start < 60000) {
-                setTimeout(function () {
-                  fs.stat(to, function (stater, st) {
-                    if (stater && stater.code === "ENOENT") fs$rename(from, to, CB);else cb(er);
-                  });
-                }, backoff);
-                if (backoff < 100) backoff += 10;
-                return;
-              }
-
-              if (cb) cb(er);
-            });
-          };
-        }(fs.rename);
-      } // if read() returns EAGAIN, then just try it again.
-
-
-      fs.read = function (fs$read) {
-        function read(fd, buffer, offset, length, position, callback_) {
-          var _callback2;
-
-          if (callback_ && typeof callback_ === 'function') {
-            var eagCounter = 0;
-
-            _callback2 = function callback(er, _, __) {
-              if (er && er.code === 'EAGAIN' && eagCounter < 10) {
-                eagCounter++;
-                return fs$read.call(fs, fd, buffer, offset, length, position, _callback2);
-              }
-
-              callback_.apply(this, arguments);
-            };
-          }
-
-          return fs$read.call(fs, fd, buffer, offset, length, position, _callback2);
-        } // This ensures `util.promisify` works as it does for native `fs.read`.
-
-
-        read.__proto__ = fs$read;
-        return read;
-      }(fs.read);
-
-      fs.readSync = function (fs$readSync) {
-        return function (fd, buffer, offset, length, position) {
-          var eagCounter = 0;
-
-          while (true) {
-            try {
-              return fs$readSync.call(fs, fd, buffer, offset, length, position);
-            } catch (er) {
-              if (er.code === 'EAGAIN' && eagCounter < 10) {
-                eagCounter++;
-                continue;
-              }
-
-              throw er;
-            }
-          }
-        };
-      }(fs.readSync);
-
-      function patchLchmod(fs) {
-        fs.lchmod = function (path, mode, callback) {
-          fs.open(path, constants.O_WRONLY | constants.O_SYMLINK, mode, function (err, fd) {
-            if (err) {
-              if (callback) callback(err);
-              return;
-            } // prefer to return the chmod error, if one occurs,
-            // but still try to close, and report closing errors if they occur.
-
-
-            fs.fchmod(fd, mode, function (err) {
-              fs.close(fd, function (err2) {
-                if (callback) callback(err || err2);
-              });
-            });
-          });
-        };
-
-        fs.lchmodSync = function (path, mode) {
-          var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode); // prefer to return the chmod error, if one occurs,
-          // but still try to close, and report closing errors if they occur.
-
-          var threw = true;
-          var ret;
-
-          try {
-            ret = fs.fchmodSync(fd, mode);
-            threw = false;
-          } finally {
-            if (threw) {
-              try {
-                fs.closeSync(fd);
-              } catch (er) {}
-            } else {
-              fs.closeSync(fd);
-            }
-          }
-
-          return ret;
-        };
-      }
-
-      function patchLutimes(fs) {
-        if (constants.hasOwnProperty("O_SYMLINK")) {
-          fs.lutimes = function (path, at, mt, cb) {
-            fs.open(path, constants.O_SYMLINK, function (er, fd) {
-              if (er) {
-                if (cb) cb(er);
-                return;
-              }
-
-              fs.futimes(fd, at, mt, function (er) {
-                fs.close(fd, function (er2) {
-                  if (cb) cb(er || er2);
-                });
-              });
-            });
-          };
-
-          fs.lutimesSync = function (path, at, mt) {
-            var fd = fs.openSync(path, constants.O_SYMLINK);
-            var ret;
-            var threw = true;
-
-            try {
-              ret = fs.futimesSync(fd, at, mt);
-              threw = false;
-            } finally {
-              if (threw) {
-                try {
-                  fs.closeSync(fd);
-                } catch (er) {}
-              } else {
-                fs.closeSync(fd);
-              }
-            }
-
-            return ret;
-          };
-        } else {
-          fs.lutimes = function (_a, _b, _c, cb) {
-            if (cb) process.nextTick(cb);
-          };
-
-          fs.lutimesSync = function () {};
-        }
-      }
-
-      function chmodFix(orig) {
-        if (!orig) return orig;
-        return function (target, mode, cb) {
-          return orig.call(fs, target, mode, function (er) {
-            if (chownErOk(er)) er = null;
-            if (cb) cb.apply(this, arguments);
-          });
-        };
-      }
-
-      function chmodFixSync(orig) {
-        if (!orig) return orig;
-        return function (target, mode) {
-          try {
-            return orig.call(fs, target, mode);
-          } catch (er) {
-            if (!chownErOk(er)) throw er;
-          }
-        };
-      }
-
-      function chownFix(orig) {
-        if (!orig) return orig;
-        return function (target, uid, gid, cb) {
-          return orig.call(fs, target, uid, gid, function (er) {
-            if (chownErOk(er)) er = null;
-            if (cb) cb.apply(this, arguments);
-          });
-        };
-      }
-
-      function chownFixSync(orig) {
-        if (!orig) return orig;
-        return function (target, uid, gid) {
-          try {
-            return orig.call(fs, target, uid, gid);
-          } catch (er) {
-            if (!chownErOk(er)) throw er;
-          }
-        };
-      }
-
-      function statFix(orig) {
-        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
-        // uid + gid.
-
-        return function (target, options, cb) {
-          if (typeof options === 'function') {
-            cb = options;
-            options = null;
-          }
-
-          function callback(er, stats) {
-            if (stats) {
-              if (stats.uid < 0) stats.uid += 0x100000000;
-              if (stats.gid < 0) stats.gid += 0x100000000;
-            }
-
-            if (cb) cb.apply(this, arguments);
-          }
-
-          return options ? orig.call(fs, target, options, callback) : orig.call(fs, target, callback);
-        };
-      }
-
-      function statFixSync(orig) {
-        if (!orig) return orig; // Older versions of Node erroneously returned signed integers for
-        // uid + gid.
-
-        return function (target, options) {
-          var stats = options ? orig.call(fs, target, options) : orig.call(fs, target);
-          if (stats.uid < 0) stats.uid += 0x100000000;
-          if (stats.gid < 0) stats.gid += 0x100000000;
-          return stats;
-        };
-      } // ENOSYS means that the fs doesn't support the op. Just ignore
-      // that, because it doesn't matter.
-      //
-      // if there's no getuid, or if getuid() is something other
-      // than 0, and the error is EINVAL or EPERM, then just ignore
-      // it.
-      //
-      // This specific case is a silent failure in cp, install, tar,
-      // and most other unix tools that manage permissions.
-      //
-      // When running as root, or if other types of errors are
-      // encountered, then it's strict.
-
-
-      function chownErOk(er) {
-        if (!er) return true;
-        if (er.code === "ENOSYS") return true;
-        var nonroot = !process.getuid || process.getuid() !== 0;
-
-        if (nonroot) {
-          if (er.code === "EINVAL" || er.code === "EPERM") return true;
-        }
-
-        return false;
-      }
-    }
+  236: [function (require, module, exports) {
+    arguments[4][109][0].apply(exports, arguments);
   }, {
-    "constants": undefined
+    "constants": undefined,
+    "dup": 109
   }],
-  159: [function (require, module, exports) {
+  237: [function (require, module, exports) {
     var wrappy = require('wrappy');
 
     var reqs = Object.create(null);
@@ -31559,10 +34905,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return array;
     }
   }, {
-    "once": 285,
-    "wrappy": 298
+    "once": 363,
+    "wrappy": 377
   }],
-  160: [function (require, module, exports) {
+  238: [function (require, module, exports) {
     try {
       var util = require('util');
       /* istanbul ignore next */
@@ -31575,10 +34921,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       module.exports = require('./inherits_browser.js');
     }
   }, {
-    "./inherits_browser.js": 161,
+    "./inherits_browser.js": 239,
     "util": undefined
   }],
-  161: [function (require, module, exports) {
+  239: [function (require, module, exports) {
     if (typeof Object.create === 'function') {
       // implementation from standard node.js 'util' module
       module.exports = function inherits(ctor, superCtor) {
@@ -31609,7 +34955,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     }
   }, {}],
-  162: [function (require, module, exports) {
+  240: [function (require, module, exports) {
     var json = typeof JSON !== 'undefined' ? JSON : require('jsonify');
 
     module.exports = function (obj, opts) {
@@ -31713,160 +35059,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return keys;
     };
   }, {
-    "jsonify": 164
+    "jsonify": 242
   }],
-  163: [function (require, module, exports) {
-    var _fs;
-
-    try {
-      _fs = require('graceful-fs');
-    } catch (_) {
-      _fs = require('fs');
-    }
-
-    function readFile(file, options, callback) {
-      if (callback == null) {
-        callback = options;
-        options = {};
-      }
-
-      if (typeof options === 'string') {
-        options = {
-          encoding: options
-        };
-      }
-
-      options = options || {};
-      var fs = options.fs || _fs;
-      var shouldThrow = true;
-
-      if ('throws' in options) {
-        shouldThrow = options["throws"];
-      }
-
-      fs.readFile(file, options, function (err, data) {
-        if (err) return callback(err);
-        data = stripBom(data);
-        var obj;
-
-        try {
-          obj = JSON.parse(data, options ? options.reviver : null);
-        } catch (err2) {
-          if (shouldThrow) {
-            err2.message = file + ': ' + err2.message;
-            return callback(err2);
-          } else {
-            return callback(null, null);
-          }
-        }
-
-        callback(null, obj);
-      });
-    }
-
-    function readFileSync(file, options) {
-      options = options || {};
-
-      if (typeof options === 'string') {
-        options = {
-          encoding: options
-        };
-      }
-
-      var fs = options.fs || _fs;
-      var shouldThrow = true;
-
-      if ('throws' in options) {
-        shouldThrow = options["throws"];
-      }
-
-      try {
-        var content = fs.readFileSync(file, options);
-        content = stripBom(content);
-        return JSON.parse(content, options.reviver);
-      } catch (err) {
-        if (shouldThrow) {
-          err.message = file + ': ' + err.message;
-          throw err;
-        } else {
-          return null;
-        }
-      }
-    }
-
-    function stringify(obj, options) {
-      var spaces;
-      var EOL = '\n';
-
-      if ((0, _typeof2["default"])(options) === 'object' && options !== null) {
-        if (options.spaces) {
-          spaces = options.spaces;
-        }
-
-        if (options.EOL) {
-          EOL = options.EOL;
-        }
-      }
-
-      var str = JSON.stringify(obj, options ? options.replacer : null, spaces);
-      return str.replace(/\n/g, EOL) + EOL;
-    }
-
-    function writeFile(file, obj, options, callback) {
-      if (callback == null) {
-        callback = options;
-        options = {};
-      }
-
-      options = options || {};
-      var fs = options.fs || _fs;
-      var str = '';
-
-      try {
-        str = stringify(obj, options);
-      } catch (err) {
-        // Need to return whether a callback was passed or not
-        if (callback) callback(err, null);
-        return;
-      }
-
-      fs.writeFile(file, str, options, callback);
-    }
-
-    function writeFileSync(file, obj, options) {
-      options = options || {};
-      var fs = options.fs || _fs;
-      var str = stringify(obj, options); // not sure if fs.writeFileSync returns anything, but just in case
-
-      return fs.writeFileSync(file, str, options);
-    }
-
-    function stripBom(content) {
-      // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
-      if (Buffer.isBuffer(content)) content = content.toString('utf8');
-      content = content.replace(/^\uFEFF/, '');
-      return content;
-    }
-
-    var jsonfile = {
-      readFile: readFile,
-      readFileSync: readFileSync,
-      writeFile: writeFile,
-      writeFileSync: writeFileSync
-    };
-    module.exports = jsonfile;
+  241: [function (require, module, exports) {
+    arguments[4][114][0].apply(exports, arguments);
   }, {
+    "dup": 114,
     "fs": undefined,
-    "graceful-fs": 156
+    "graceful-fs": 234
   }],
-  164: [function (require, module, exports) {
+  242: [function (require, module, exports) {
     exports.parse = require('./lib/parse');
     exports.stringify = require('./lib/stringify');
   }, {
-    "./lib/parse": 165,
-    "./lib/stringify": 166
+    "./lib/parse": 243,
+    "./lib/stringify": 244
   }],
-  165: [function (require, module, exports) {
+  243: [function (require, module, exports) {
     var at,
         // The index of the current character
     ch,
@@ -32162,7 +35371,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }, '') : result;
     };
   }, {}],
-  166: [function (require, module, exports) {
+  244: [function (require, module, exports) {
     var cx = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
         escapable = /[\\\"\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
         gap,
@@ -32316,7 +35525,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     };
   }, {}],
-  167: [function (require, module, exports) {
+  245: [function (require, module, exports) {
     var hashClear = require('./_hashClear'),
         hashDelete = require('./_hashDelete'),
         hashGet = require('./_hashGet'),
@@ -32350,13 +35559,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     Hash.prototype.set = hashSet;
     module.exports = Hash;
   }, {
-    "./_hashClear": 214,
-    "./_hashDelete": 215,
-    "./_hashGet": 216,
-    "./_hashHas": 217,
-    "./_hashSet": 218
+    "./_hashClear": 292,
+    "./_hashDelete": 293,
+    "./_hashGet": 294,
+    "./_hashHas": 295,
+    "./_hashSet": 296
   }],
-  168: [function (require, module, exports) {
+  246: [function (require, module, exports) {
     var listCacheClear = require('./_listCacheClear'),
         listCacheDelete = require('./_listCacheDelete'),
         listCacheGet = require('./_listCacheGet'),
@@ -32390,13 +35599,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     ListCache.prototype.set = listCacheSet;
     module.exports = ListCache;
   }, {
-    "./_listCacheClear": 226,
-    "./_listCacheDelete": 227,
-    "./_listCacheGet": 228,
-    "./_listCacheHas": 229,
-    "./_listCacheSet": 230
+    "./_listCacheClear": 304,
+    "./_listCacheDelete": 305,
+    "./_listCacheGet": 306,
+    "./_listCacheHas": 307,
+    "./_listCacheSet": 308
   }],
-  169: [function (require, module, exports) {
+  247: [function (require, module, exports) {
     var getNative = require('./_getNative'),
         root = require('./_root');
     /* Built-in method references that are verified to be native. */
@@ -32405,10 +35614,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var Map = getNative(root, 'Map');
     module.exports = Map;
   }, {
-    "./_getNative": 210,
-    "./_root": 244
+    "./_getNative": 288,
+    "./_root": 322
   }],
-  170: [function (require, module, exports) {
+  248: [function (require, module, exports) {
     var mapCacheClear = require('./_mapCacheClear'),
         mapCacheDelete = require('./_mapCacheDelete'),
         mapCacheGet = require('./_mapCacheGet'),
@@ -32442,13 +35651,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     MapCache.prototype.set = mapCacheSet;
     module.exports = MapCache;
   }, {
-    "./_mapCacheClear": 231,
-    "./_mapCacheDelete": 232,
-    "./_mapCacheGet": 233,
-    "./_mapCacheHas": 234,
-    "./_mapCacheSet": 235
+    "./_mapCacheClear": 309,
+    "./_mapCacheDelete": 310,
+    "./_mapCacheGet": 311,
+    "./_mapCacheHas": 312,
+    "./_mapCacheSet": 313
   }],
-  171: [function (require, module, exports) {
+  249: [function (require, module, exports) {
     var ListCache = require('./_ListCache'),
         stackClear = require('./_stackClear'),
         stackDelete = require('./_stackDelete'),
@@ -32477,14 +35686,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     Stack.prototype.set = stackSet;
     module.exports = Stack;
   }, {
-    "./_ListCache": 168,
-    "./_stackClear": 248,
-    "./_stackDelete": 249,
-    "./_stackGet": 250,
-    "./_stackHas": 251,
-    "./_stackSet": 252
+    "./_ListCache": 246,
+    "./_stackClear": 326,
+    "./_stackDelete": 327,
+    "./_stackGet": 328,
+    "./_stackHas": 329,
+    "./_stackSet": 330
   }],
-  172: [function (require, module, exports) {
+  250: [function (require, module, exports) {
     var root = require('./_root');
     /** Built-in value references. */
 
@@ -32492,9 +35701,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var _Symbol = root.Symbol;
     module.exports = _Symbol;
   }, {
-    "./_root": 244
+    "./_root": 322
   }],
-  173: [function (require, module, exports) {
+  251: [function (require, module, exports) {
     var root = require('./_root');
     /** Built-in value references. */
 
@@ -32502,9 +35711,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var Uint8Array = root.Uint8Array;
     module.exports = Uint8Array;
   }, {
-    "./_root": 244
+    "./_root": 322
   }],
-  174: [function (require, module, exports) {
+  252: [function (require, module, exports) {
     /**
      * A faster alternative to `Function#apply`, this function invokes `func`
      * with the `this` binding of `thisArg` and the arguments of `args`.
@@ -32535,7 +35744,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = apply;
   }, {}],
-  175: [function (require, module, exports) {
+  253: [function (require, module, exports) {
     var baseTimes = require('./_baseTimes'),
         isArguments = require('./isArguments'),
         isArray = require('./isArray'),
@@ -32582,14 +35791,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = arrayLikeKeys;
   }, {
-    "./_baseTimes": 194,
-    "./_isIndex": 220,
-    "./isArguments": 260,
-    "./isArray": 261,
-    "./isBuffer": 264,
-    "./isTypedArray": 271
+    "./_baseTimes": 272,
+    "./_isIndex": 298,
+    "./isArguments": 338,
+    "./isArray": 339,
+    "./isBuffer": 342,
+    "./isTypedArray": 349
   }],
-  176: [function (require, module, exports) {
+  254: [function (require, module, exports) {
     /**
      * A specialized version of `_.map` for arrays without support for iteratee
      * shorthands.
@@ -32613,7 +35822,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = arrayMap;
   }, {}],
-  177: [function (require, module, exports) {
+  255: [function (require, module, exports) {
     var baseAssignValue = require('./_baseAssignValue'),
         eq = require('./eq');
     /**
@@ -32635,10 +35844,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assignMergeValue;
   }, {
-    "./_baseAssignValue": 180,
-    "./eq": 257
+    "./_baseAssignValue": 258,
+    "./eq": 335
   }],
-  178: [function (require, module, exports) {
+  256: [function (require, module, exports) {
     var baseAssignValue = require('./_baseAssignValue'),
         eq = require('./eq');
     /** Used for built-in method references. */
@@ -32669,10 +35878,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assignValue;
   }, {
-    "./_baseAssignValue": 180,
-    "./eq": 257
+    "./_baseAssignValue": 258,
+    "./eq": 335
   }],
-  179: [function (require, module, exports) {
+  257: [function (require, module, exports) {
     var eq = require('./eq');
     /**
      * Gets the index at which the `key` is found in `array` of key-value pairs.
@@ -32698,9 +35907,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assocIndexOf;
   }, {
-    "./eq": 257
+    "./eq": 335
   }],
-  180: [function (require, module, exports) {
+  258: [function (require, module, exports) {
     var defineProperty = require('./_defineProperty');
     /**
      * The base implementation of `assignValue` and `assignMergeValue` without
@@ -32728,9 +35937,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseAssignValue;
   }, {
-    "./_defineProperty": 207
+    "./_defineProperty": 285
   }],
-  181: [function (require, module, exports) {
+  259: [function (require, module, exports) {
     var isObject = require('./isObject');
     /** Built-in value references. */
 
@@ -32766,9 +35975,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseCreate;
   }, {
-    "./isObject": 267
+    "./isObject": 345
   }],
-  182: [function (require, module, exports) {
+  260: [function (require, module, exports) {
     var createBaseFor = require('./_createBaseFor');
     /**
      * The base implementation of `baseForOwn` which iterates over `object`
@@ -32786,9 +35995,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var baseFor = createBaseFor();
     module.exports = baseFor;
   }, {
-    "./_createBaseFor": 206
+    "./_createBaseFor": 284
   }],
-  183: [function (require, module, exports) {
+  261: [function (require, module, exports) {
     var castPath = require('./_castPath'),
         toKey = require('./_toKey');
     /**
@@ -32815,10 +36024,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseGet;
   }, {
-    "./_castPath": 198,
-    "./_toKey": 254
+    "./_castPath": 276,
+    "./_toKey": 332
   }],
-  184: [function (require, module, exports) {
+  262: [function (require, module, exports) {
     var _Symbol2 = require('./_Symbol'),
         getRawTag = require('./_getRawTag'),
         objectToString = require('./_objectToString');
@@ -32848,11 +36057,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseGetTag;
   }, {
-    "./_Symbol": 172,
-    "./_getRawTag": 212,
-    "./_objectToString": 241
+    "./_Symbol": 250,
+    "./_getRawTag": 290,
+    "./_objectToString": 319
   }],
-  185: [function (require, module, exports) {
+  263: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObjectLike = require('./isObjectLike');
     /** `Object#toString` result references. */
@@ -32873,10 +36082,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsArguments;
   }, {
-    "./_baseGetTag": 184,
-    "./isObjectLike": 268
+    "./_baseGetTag": 262,
+    "./isObjectLike": 346
   }],
-  186: [function (require, module, exports) {
+  264: [function (require, module, exports) {
     var isFunction = require('./isFunction'),
         isMasked = require('./_isMasked'),
         isObject = require('./isObject'),
@@ -32924,12 +36133,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsNative;
   }, {
-    "./_isMasked": 224,
-    "./_toSource": 255,
-    "./isFunction": 265,
-    "./isObject": 267
+    "./_isMasked": 302,
+    "./_toSource": 333,
+    "./isFunction": 343,
+    "./isObject": 345
   }],
-  187: [function (require, module, exports) {
+  265: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isLength = require('./isLength'),
         isObjectLike = require('./isObjectLike');
@@ -32979,11 +36188,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsTypedArray;
   }, {
-    "./_baseGetTag": 184,
-    "./isLength": 266,
-    "./isObjectLike": 268
+    "./_baseGetTag": 262,
+    "./isLength": 344,
+    "./isObjectLike": 346
   }],
-  188: [function (require, module, exports) {
+  266: [function (require, module, exports) {
     var isPrototype = require('./_isPrototype'),
         nativeKeys = require('./_nativeKeys');
     /** Used for built-in method references. */
@@ -33019,10 +36228,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseKeys;
   }, {
-    "./_isPrototype": 225,
-    "./_nativeKeys": 238
+    "./_isPrototype": 303,
+    "./_nativeKeys": 316
   }],
-  189: [function (require, module, exports) {
+  267: [function (require, module, exports) {
     var isObject = require('./isObject'),
         isPrototype = require('./_isPrototype'),
         nativeKeysIn = require('./_nativeKeysIn');
@@ -33060,11 +36269,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseKeysIn;
   }, {
-    "./_isPrototype": 225,
-    "./_nativeKeysIn": 239,
-    "./isObject": 267
+    "./_isPrototype": 303,
+    "./_nativeKeysIn": 317,
+    "./isObject": 345
   }],
-  190: [function (require, module, exports) {
+  268: [function (require, module, exports) {
     var Stack = require('./_Stack'),
         assignMergeValue = require('./_assignMergeValue'),
         baseFor = require('./_baseFor'),
@@ -33109,15 +36318,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseMerge;
   }, {
-    "./_Stack": 171,
-    "./_assignMergeValue": 177,
-    "./_baseFor": 182,
-    "./_baseMergeDeep": 191,
-    "./_safeGet": 245,
-    "./isObject": 267,
-    "./keysIn": 273
+    "./_Stack": 249,
+    "./_assignMergeValue": 255,
+    "./_baseFor": 260,
+    "./_baseMergeDeep": 269,
+    "./_safeGet": 323,
+    "./isObject": 345,
+    "./keysIn": 351
   }],
-  191: [function (require, module, exports) {
+  269: [function (require, module, exports) {
     var assignMergeValue = require('./_assignMergeValue'),
         cloneBuffer = require('./_cloneBuffer'),
         cloneTypedArray = require('./_cloneTypedArray'),
@@ -33208,23 +36417,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseMergeDeep;
   }, {
-    "./_assignMergeValue": 177,
-    "./_cloneBuffer": 200,
-    "./_cloneTypedArray": 201,
-    "./_copyArray": 202,
-    "./_initCloneObject": 219,
-    "./_safeGet": 245,
-    "./isArguments": 260,
-    "./isArray": 261,
-    "./isArrayLikeObject": 263,
-    "./isBuffer": 264,
-    "./isFunction": 265,
-    "./isObject": 267,
-    "./isPlainObject": 269,
-    "./isTypedArray": 271,
-    "./toPlainObject": 279
+    "./_assignMergeValue": 255,
+    "./_cloneBuffer": 278,
+    "./_cloneTypedArray": 279,
+    "./_copyArray": 280,
+    "./_initCloneObject": 297,
+    "./_safeGet": 323,
+    "./isArguments": 338,
+    "./isArray": 339,
+    "./isArrayLikeObject": 341,
+    "./isBuffer": 342,
+    "./isFunction": 343,
+    "./isObject": 345,
+    "./isPlainObject": 347,
+    "./isTypedArray": 349,
+    "./toPlainObject": 357
   }],
-  192: [function (require, module, exports) {
+  270: [function (require, module, exports) {
     var identity = require('./identity'),
         overRest = require('./_overRest'),
         setToString = require('./_setToString');
@@ -33244,11 +36453,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseRest;
   }, {
-    "./_overRest": 243,
-    "./_setToString": 246,
-    "./identity": 259
+    "./_overRest": 321,
+    "./_setToString": 324,
+    "./identity": 337
   }],
-  193: [function (require, module, exports) {
+  271: [function (require, module, exports) {
     var constant = require('./constant'),
         defineProperty = require('./_defineProperty'),
         identity = require('./identity');
@@ -33272,11 +36481,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
     module.exports = baseSetToString;
   }, {
-    "./_defineProperty": 207,
-    "./constant": 256,
-    "./identity": 259
+    "./_defineProperty": 285,
+    "./constant": 334,
+    "./identity": 337
   }],
-  194: [function (require, module, exports) {
+  272: [function (require, module, exports) {
     /**
      * The base implementation of `_.times` without support for iteratee shorthands
      * or max array length checks.
@@ -33299,7 +36508,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseTimes;
   }, {}],
-  195: [function (require, module, exports) {
+  273: [function (require, module, exports) {
     var _Symbol3 = require('./_Symbol'),
         arrayMap = require('./_arrayMap'),
         isArray = require('./isArray'),
@@ -33342,12 +36551,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseToString;
   }, {
-    "./_Symbol": 172,
-    "./_arrayMap": 176,
-    "./isArray": 261,
-    "./isSymbol": 270
+    "./_Symbol": 250,
+    "./_arrayMap": 254,
+    "./isArray": 339,
+    "./isSymbol": 348
   }],
-  196: [function (require, module, exports) {
+  274: [function (require, module, exports) {
     /**
      * The base implementation of `_.unary` without support for storing metadata.
      *
@@ -33363,7 +36572,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseUnary;
   }, {}],
-  197: [function (require, module, exports) {
+  275: [function (require, module, exports) {
     var arrayMap = require('./_arrayMap');
     /**
      * The base implementation of `_.values` and `_.valuesIn` which creates an
@@ -33385,9 +36594,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseValues;
   }, {
-    "./_arrayMap": 176
+    "./_arrayMap": 254
   }],
-  198: [function (require, module, exports) {
+  276: [function (require, module, exports) {
     var isArray = require('./isArray'),
         isKey = require('./_isKey'),
         stringToPath = require('./_stringToPath'),
@@ -33412,12 +36621,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = castPath;
   }, {
-    "./_isKey": 222,
-    "./_stringToPath": 253,
-    "./isArray": 261,
-    "./toString": 280
+    "./_isKey": 300,
+    "./_stringToPath": 331,
+    "./isArray": 339,
+    "./toString": 358
   }],
-  199: [function (require, module, exports) {
+  277: [function (require, module, exports) {
     var Uint8Array = require('./_Uint8Array');
     /**
      * Creates a clone of `arrayBuffer`.
@@ -33436,9 +36645,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneArrayBuffer;
   }, {
-    "./_Uint8Array": 173
+    "./_Uint8Array": 251
   }],
-  200: [function (require, module, exports) {
+  278: [function (require, module, exports) {
     var root = require('./_root');
     /** Detect free variable `exports`. */
 
@@ -33476,9 +36685,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneBuffer;
   }, {
-    "./_root": 244
+    "./_root": 322
   }],
-  201: [function (require, module, exports) {
+  279: [function (require, module, exports) {
     var cloneArrayBuffer = require('./_cloneArrayBuffer');
     /**
      * Creates a clone of `typedArray`.
@@ -33497,9 +36706,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneTypedArray;
   }, {
-    "./_cloneArrayBuffer": 199
+    "./_cloneArrayBuffer": 277
   }],
-  202: [function (require, module, exports) {
+  280: [function (require, module, exports) {
     /**
      * Copies the values of `source` to `array`.
      *
@@ -33522,7 +36731,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copyArray;
   }, {}],
-  203: [function (require, module, exports) {
+  281: [function (require, module, exports) {
     var assignValue = require('./_assignValue'),
         baseAssignValue = require('./_baseAssignValue');
     /**
@@ -33563,10 +36772,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copyObject;
   }, {
-    "./_assignValue": 178,
-    "./_baseAssignValue": 180
+    "./_assignValue": 256,
+    "./_baseAssignValue": 258
   }],
-  204: [function (require, module, exports) {
+  282: [function (require, module, exports) {
     var root = require('./_root');
     /** Used to detect overreaching core-js shims. */
 
@@ -33574,9 +36783,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var coreJsData = root['__core-js_shared__'];
     module.exports = coreJsData;
   }, {
-    "./_root": 244
+    "./_root": 322
   }],
-  205: [function (require, module, exports) {
+  283: [function (require, module, exports) {
     var baseRest = require('./_baseRest'),
         isIterateeCall = require('./_isIterateeCall');
     /**
@@ -33617,10 +36826,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = createAssigner;
   }, {
-    "./_baseRest": 192,
-    "./_isIterateeCall": 221
+    "./_baseRest": 270,
+    "./_isIterateeCall": 299
   }],
-  206: [function (require, module, exports) {
+  284: [function (require, module, exports) {
     /**
      * Creates a base function for methods like `_.forIn` and `_.forOwn`.
      *
@@ -33649,7 +36858,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = createBaseFor;
   }, {}],
-  207: [function (require, module, exports) {
+  285: [function (require, module, exports) {
     var getNative = require('./_getNative');
 
     var defineProperty = function () {
@@ -33662,14 +36871,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = defineProperty;
   }, {
-    "./_getNative": 210
+    "./_getNative": 288
   }],
-  208: [function (require, module, exports) {
+  286: [function (require, module, exports) {
     /** Detect free variable `global` from Node.js. */
     var freeGlobal = (typeof global === "undefined" ? "undefined" : (0, _typeof2["default"])(global)) == 'object' && global && global.Object === Object && global;
     module.exports = freeGlobal;
   }, {}],
-  209: [function (require, module, exports) {
+  287: [function (require, module, exports) {
     var isKeyable = require('./_isKeyable');
     /**
      * Gets the data for `map`.
@@ -33688,9 +36897,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getMapData;
   }, {
-    "./_isKeyable": 223
+    "./_isKeyable": 301
   }],
-  210: [function (require, module, exports) {
+  288: [function (require, module, exports) {
     var baseIsNative = require('./_baseIsNative'),
         getValue = require('./_getValue');
     /**
@@ -33710,10 +36919,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getNative;
   }, {
-    "./_baseIsNative": 186,
-    "./_getValue": 213
+    "./_baseIsNative": 264,
+    "./_getValue": 291
   }],
-  211: [function (require, module, exports) {
+  289: [function (require, module, exports) {
     var overArg = require('./_overArg');
     /** Built-in value references. */
 
@@ -33721,9 +36930,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var getPrototype = overArg(Object.getPrototypeOf, Object);
     module.exports = getPrototype;
   }, {
-    "./_overArg": 242
+    "./_overArg": 320
   }],
-  212: [function (require, module, exports) {
+  290: [function (require, module, exports) {
     var _Symbol4 = require('./_Symbol');
     /** Used for built-in method references. */
 
@@ -33774,9 +36983,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getRawTag;
   }, {
-    "./_Symbol": 172
+    "./_Symbol": 250
   }],
-  213: [function (require, module, exports) {
+  291: [function (require, module, exports) {
     /**
      * Gets the value at `key` of `object`.
      *
@@ -33791,7 +37000,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getValue;
   }, {}],
-  214: [function (require, module, exports) {
+  292: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /**
      * Removes all key-value entries from the hash.
@@ -33809,9 +37018,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashClear;
   }, {
-    "./_nativeCreate": 237
+    "./_nativeCreate": 315
   }],
-  215: [function (require, module, exports) {
+  293: [function (require, module, exports) {
     /**
      * Removes `key` and its value from the hash.
      *
@@ -33830,7 +37039,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashDelete;
   }, {}],
-  216: [function (require, module, exports) {
+  294: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used to stand-in for `undefined` hash values. */
 
@@ -33865,9 +37074,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashGet;
   }, {
-    "./_nativeCreate": 237
+    "./_nativeCreate": 315
   }],
-  217: [function (require, module, exports) {
+  295: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used for built-in method references. */
 
@@ -33893,9 +37102,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashHas;
   }, {
-    "./_nativeCreate": 237
+    "./_nativeCreate": 315
   }],
-  218: [function (require, module, exports) {
+  296: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used to stand-in for `undefined` hash values. */
 
@@ -33921,9 +37130,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashSet;
   }, {
-    "./_nativeCreate": 237
+    "./_nativeCreate": 315
   }],
-  219: [function (require, module, exports) {
+  297: [function (require, module, exports) {
     var baseCreate = require('./_baseCreate'),
         getPrototype = require('./_getPrototype'),
         isPrototype = require('./_isPrototype');
@@ -33942,11 +37151,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = initCloneObject;
   }, {
-    "./_baseCreate": 181,
-    "./_getPrototype": 211,
-    "./_isPrototype": 225
+    "./_baseCreate": 259,
+    "./_getPrototype": 289,
+    "./_isPrototype": 303
   }],
-  220: [function (require, module, exports) {
+  298: [function (require, module, exports) {
     /** Used as references for various `Number` constants. */
     var MAX_SAFE_INTEGER = 9007199254740991;
     /** Used to detect unsigned integer values. */
@@ -33969,7 +37178,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isIndex;
   }, {}],
-  221: [function (require, module, exports) {
+  299: [function (require, module, exports) {
     var eq = require('./eq'),
         isArrayLike = require('./isArrayLike'),
         isIndex = require('./_isIndex'),
@@ -34002,12 +37211,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isIterateeCall;
   }, {
-    "./_isIndex": 220,
-    "./eq": 257,
-    "./isArrayLike": 262,
-    "./isObject": 267
+    "./_isIndex": 298,
+    "./eq": 335,
+    "./isArrayLike": 340,
+    "./isObject": 345
   }],
-  222: [function (require, module, exports) {
+  300: [function (require, module, exports) {
     var isArray = require('./isArray'),
         isSymbol = require('./isSymbol');
     /** Used to match property names within property paths. */
@@ -34040,10 +37249,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isKey;
   }, {
-    "./isArray": 261,
-    "./isSymbol": 270
+    "./isArray": 339,
+    "./isSymbol": 348
   }],
-  223: [function (require, module, exports) {
+  301: [function (require, module, exports) {
     /**
      * Checks if `value` is suitable for use as unique object key.
      *
@@ -34058,7 +37267,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isKeyable;
   }, {}],
-  224: [function (require, module, exports) {
+  302: [function (require, module, exports) {
     var coreJsData = require('./_coreJsData');
     /** Used to detect methods masquerading as native. */
 
@@ -34082,9 +37291,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isMasked;
   }, {
-    "./_coreJsData": 204
+    "./_coreJsData": 282
   }],
-  225: [function (require, module, exports) {
+  303: [function (require, module, exports) {
     /** Used for built-in method references. */
     var objectProto = Object.prototype;
     /**
@@ -34103,7 +37312,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isPrototype;
   }, {}],
-  226: [function (require, module, exports) {
+  304: [function (require, module, exports) {
     /**
      * Removes all key-value entries from the list cache.
      *
@@ -34118,7 +37327,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheClear;
   }, {}],
-  227: [function (require, module, exports) {
+  305: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /** Used for built-in method references. */
 
@@ -34159,9 +37368,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheDelete;
   }, {
-    "./_assocIndexOf": 179
+    "./_assocIndexOf": 257
   }],
-  228: [function (require, module, exports) {
+  306: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Gets the list cache value for `key`.
@@ -34182,9 +37391,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheGet;
   }, {
-    "./_assocIndexOf": 179
+    "./_assocIndexOf": 257
   }],
-  229: [function (require, module, exports) {
+  307: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Checks if a list cache value for `key` exists.
@@ -34203,9 +37412,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheHas;
   }, {
-    "./_assocIndexOf": 179
+    "./_assocIndexOf": 257
   }],
-  230: [function (require, module, exports) {
+  308: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Sets the list cache `key` to `value`.
@@ -34235,9 +37444,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheSet;
   }, {
-    "./_assocIndexOf": 179
+    "./_assocIndexOf": 257
   }],
-  231: [function (require, module, exports) {
+  309: [function (require, module, exports) {
     var Hash = require('./_Hash'),
         ListCache = require('./_ListCache'),
         Map = require('./_Map');
@@ -34261,11 +37470,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheClear;
   }, {
-    "./_Hash": 167,
-    "./_ListCache": 168,
-    "./_Map": 169
+    "./_Hash": 245,
+    "./_ListCache": 246,
+    "./_Map": 247
   }],
-  232: [function (require, module, exports) {
+  310: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Removes `key` and its value from the map.
@@ -34286,9 +37495,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheDelete;
   }, {
-    "./_getMapData": 209
+    "./_getMapData": 287
   }],
-  233: [function (require, module, exports) {
+  311: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Gets the map value for `key`.
@@ -34307,9 +37516,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheGet;
   }, {
-    "./_getMapData": 209
+    "./_getMapData": 287
   }],
-  234: [function (require, module, exports) {
+  312: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Checks if a map value for `key` exists.
@@ -34328,9 +37537,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheHas;
   }, {
-    "./_getMapData": 209
+    "./_getMapData": 287
   }],
-  235: [function (require, module, exports) {
+  313: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Sets the map `key` to `value`.
@@ -34354,9 +37563,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheSet;
   }, {
-    "./_getMapData": 209
+    "./_getMapData": 287
   }],
-  236: [function (require, module, exports) {
+  314: [function (require, module, exports) {
     var memoize = require('./memoize');
     /** Used as the maximum memoize cache size. */
 
@@ -34385,9 +37594,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = memoizeCapped;
   }, {
-    "./memoize": 275
+    "./memoize": 353
   }],
-  237: [function (require, module, exports) {
+  315: [function (require, module, exports) {
     var getNative = require('./_getNative');
     /* Built-in method references that are verified to be native. */
 
@@ -34395,9 +37604,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var nativeCreate = getNative(Object, 'create');
     module.exports = nativeCreate;
   }, {
-    "./_getNative": 210
+    "./_getNative": 288
   }],
-  238: [function (require, module, exports) {
+  316: [function (require, module, exports) {
     var overArg = require('./_overArg');
     /* Built-in method references for those with the same name as other `lodash` methods. */
 
@@ -34405,9 +37614,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var nativeKeys = overArg(Object.keys, Object);
     module.exports = nativeKeys;
   }, {
-    "./_overArg": 242
+    "./_overArg": 320
   }],
-  239: [function (require, module, exports) {
+  317: [function (require, module, exports) {
     /**
      * This function is like
      * [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
@@ -34431,7 +37640,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = nativeKeysIn;
   }, {}],
-  240: [function (require, module, exports) {
+  318: [function (require, module, exports) {
     var freeGlobal = require('./_freeGlobal');
     /** Detect free variable `exports`. */
 
@@ -34464,9 +37673,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = nodeUtil;
   }, {
-    "./_freeGlobal": 208
+    "./_freeGlobal": 286
   }],
-  241: [function (require, module, exports) {
+  319: [function (require, module, exports) {
     /** Used for built-in method references. */
     var objectProto = Object.prototype;
     /**
@@ -34490,7 +37699,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = objectToString;
   }, {}],
-  242: [function (require, module, exports) {
+  320: [function (require, module, exports) {
     /**
      * Creates a unary function that invokes `func` with its argument transformed.
      *
@@ -34507,7 +37716,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = overArg;
   }, {}],
-  243: [function (require, module, exports) {
+  321: [function (require, module, exports) {
     var apply = require('./_apply');
     /* Built-in method references for those with the same name as other `lodash` methods. */
 
@@ -34549,9 +37758,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = overRest;
   }, {
-    "./_apply": 174
+    "./_apply": 252
   }],
-  244: [function (require, module, exports) {
+  322: [function (require, module, exports) {
     var freeGlobal = require('./_freeGlobal');
     /** Detect free variable `self`. */
 
@@ -34562,9 +37771,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var root = freeGlobal || freeSelf || Function('return this')();
     module.exports = root;
   }, {
-    "./_freeGlobal": 208
+    "./_freeGlobal": 286
   }],
-  245: [function (require, module, exports) {
+  323: [function (require, module, exports) {
     /**
      * Gets the value at `key`, unless `key` is "__proto__" or "constructor".
      *
@@ -34587,7 +37796,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = safeGet;
   }, {}],
-  246: [function (require, module, exports) {
+  324: [function (require, module, exports) {
     var baseSetToString = require('./_baseSetToString'),
         shortOut = require('./_shortOut');
     /**
@@ -34603,10 +37812,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var setToString = shortOut(baseSetToString);
     module.exports = setToString;
   }, {
-    "./_baseSetToString": 193,
-    "./_shortOut": 247
+    "./_baseSetToString": 271,
+    "./_shortOut": 325
   }],
-  247: [function (require, module, exports) {
+  325: [function (require, module, exports) {
     /** Used to detect hot functions by number of calls within a span of milliseconds. */
     var HOT_COUNT = 800,
         HOT_SPAN = 16;
@@ -34645,7 +37854,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = shortOut;
   }, {}],
-  248: [function (require, module, exports) {
+  326: [function (require, module, exports) {
     var ListCache = require('./_ListCache');
     /**
      * Removes all key-value entries from the stack.
@@ -34663,9 +37872,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackClear;
   }, {
-    "./_ListCache": 168
+    "./_ListCache": 246
   }],
-  249: [function (require, module, exports) {
+  327: [function (require, module, exports) {
     /**
      * Removes `key` and its value from the stack.
      *
@@ -34684,7 +37893,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackDelete;
   }, {}],
-  250: [function (require, module, exports) {
+  328: [function (require, module, exports) {
     /**
      * Gets the stack value for `key`.
      *
@@ -34700,7 +37909,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackGet;
   }, {}],
-  251: [function (require, module, exports) {
+  329: [function (require, module, exports) {
     /**
      * Checks if a stack value for `key` exists.
      *
@@ -34716,7 +37925,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackHas;
   }, {}],
-  252: [function (require, module, exports) {
+  330: [function (require, module, exports) {
     var ListCache = require('./_ListCache'),
         Map = require('./_Map'),
         MapCache = require('./_MapCache');
@@ -34757,11 +37966,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackSet;
   }, {
-    "./_ListCache": 168,
-    "./_Map": 169,
-    "./_MapCache": 170
+    "./_ListCache": 246,
+    "./_Map": 247,
+    "./_MapCache": 248
   }],
-  253: [function (require, module, exports) {
+  331: [function (require, module, exports) {
     var memoizeCapped = require('./_memoizeCapped');
     /** Used to match property names within property paths. */
 
@@ -34794,9 +38003,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     });
     module.exports = stringToPath;
   }, {
-    "./_memoizeCapped": 236
+    "./_memoizeCapped": 314
   }],
-  254: [function (require, module, exports) {
+  332: [function (require, module, exports) {
     var isSymbol = require('./isSymbol');
     /** Used as references for various `Number` constants. */
 
@@ -34821,9 +38030,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toKey;
   }, {
-    "./isSymbol": 270
+    "./isSymbol": 348
   }],
-  255: [function (require, module, exports) {
+  333: [function (require, module, exports) {
     /** Used for built-in method references. */
     var funcProto = Function.prototype;
     /** Used to resolve the decompiled source of functions. */
@@ -34853,7 +38062,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toSource;
   }, {}],
-  256: [function (require, module, exports) {
+  334: [function (require, module, exports) {
     /**
      * Creates a function that returns `value`.
      *
@@ -34881,7 +38090,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = constant;
   }, {}],
-  257: [function (require, module, exports) {
+  335: [function (require, module, exports) {
     /**
      * Performs a
      * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
@@ -34920,7 +38129,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = eq;
   }, {}],
-  258: [function (require, module, exports) {
+  336: [function (require, module, exports) {
     var baseGet = require('./_baseGet');
     /**
      * Gets the value at `path` of `object`. If the resolved value is
@@ -34956,9 +38165,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = get;
   }, {
-    "./_baseGet": 183
+    "./_baseGet": 261
   }],
-  259: [function (require, module, exports) {
+  337: [function (require, module, exports) {
     /**
      * This method returns the first argument it receives.
      *
@@ -34981,7 +38190,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = identity;
   }, {}],
-  260: [function (require, module, exports) {
+  338: [function (require, module, exports) {
     var baseIsArguments = require('./_baseIsArguments'),
         isObjectLike = require('./isObjectLike');
     /** Used for built-in method references. */
@@ -35020,10 +38229,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
     module.exports = isArguments;
   }, {
-    "./_baseIsArguments": 185,
-    "./isObjectLike": 268
+    "./_baseIsArguments": 263,
+    "./isObjectLike": 346
   }],
-  261: [function (require, module, exports) {
+  339: [function (require, module, exports) {
     /**
      * Checks if `value` is classified as an `Array` object.
      *
@@ -35050,7 +38259,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isArray = Array.isArray;
     module.exports = isArray;
   }, {}],
-  262: [function (require, module, exports) {
+  340: [function (require, module, exports) {
     var isFunction = require('./isFunction'),
         isLength = require('./isLength');
     /**
@@ -35086,10 +38295,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isArrayLike;
   }, {
-    "./isFunction": 265,
-    "./isLength": 266
+    "./isFunction": 343,
+    "./isLength": 344
   }],
-  263: [function (require, module, exports) {
+  341: [function (require, module, exports) {
     var isArrayLike = require('./isArrayLike'),
         isObjectLike = require('./isObjectLike');
     /**
@@ -35125,10 +38334,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isArrayLikeObject;
   }, {
-    "./isArrayLike": 262,
-    "./isObjectLike": 268
+    "./isArrayLike": 340,
+    "./isObjectLike": 346
   }],
-  264: [function (require, module, exports) {
+  342: [function (require, module, exports) {
     var root = require('./_root'),
         stubFalse = require('./stubFalse');
     /** Detect free variable `exports`. */
@@ -35168,10 +38377,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isBuffer = nativeIsBuffer || stubFalse;
     module.exports = isBuffer;
   }, {
-    "./_root": 244,
-    "./stubFalse": 277
+    "./_root": 322,
+    "./stubFalse": 355
   }],
-  265: [function (require, module, exports) {
+  343: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObject = require('./isObject');
     /** `Object#toString` result references. */
@@ -35212,10 +38421,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isFunction;
   }, {
-    "./_baseGetTag": 184,
-    "./isObject": 267
+    "./_baseGetTag": 262,
+    "./isObject": 345
   }],
-  266: [function (require, module, exports) {
+  344: [function (require, module, exports) {
     /** Used as references for various `Number` constants. */
     var MAX_SAFE_INTEGER = 9007199254740991;
     /**
@@ -35251,7 +38460,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isLength;
   }, {}],
-  267: [function (require, module, exports) {
+  345: [function (require, module, exports) {
     /**
      * Checks if `value` is the
      * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
@@ -35284,7 +38493,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isObject;
   }, {}],
-  268: [function (require, module, exports) {
+  346: [function (require, module, exports) {
     /**
      * Checks if `value` is object-like. A value is object-like if it's not `null`
      * and has a `typeof` result of "object".
@@ -35315,7 +38524,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isObjectLike;
   }, {}],
-  269: [function (require, module, exports) {
+  347: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         getPrototype = require('./_getPrototype'),
         isObjectLike = require('./isObjectLike');
@@ -35382,11 +38591,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isPlainObject;
   }, {
-    "./_baseGetTag": 184,
-    "./_getPrototype": 211,
-    "./isObjectLike": 268
+    "./_baseGetTag": 262,
+    "./_getPrototype": 289,
+    "./isObjectLike": 346
   }],
-  270: [function (require, module, exports) {
+  348: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObjectLike = require('./isObjectLike');
     /** `Object#toString` result references. */
@@ -35417,10 +38626,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isSymbol;
   }, {
-    "./_baseGetTag": 184,
-    "./isObjectLike": 268
+    "./_baseGetTag": 262,
+    "./isObjectLike": 346
   }],
-  271: [function (require, module, exports) {
+  349: [function (require, module, exports) {
     var baseIsTypedArray = require('./_baseIsTypedArray'),
         baseUnary = require('./_baseUnary'),
         nodeUtil = require('./_nodeUtil');
@@ -35449,11 +38658,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
     module.exports = isTypedArray;
   }, {
-    "./_baseIsTypedArray": 187,
-    "./_baseUnary": 196,
-    "./_nodeUtil": 240
+    "./_baseIsTypedArray": 265,
+    "./_baseUnary": 274,
+    "./_nodeUtil": 318
   }],
-  272: [function (require, module, exports) {
+  350: [function (require, module, exports) {
     var arrayLikeKeys = require('./_arrayLikeKeys'),
         baseKeys = require('./_baseKeys'),
         isArrayLike = require('./isArrayLike');
@@ -35493,11 +38702,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = keys;
   }, {
-    "./_arrayLikeKeys": 175,
-    "./_baseKeys": 188,
-    "./isArrayLike": 262
+    "./_arrayLikeKeys": 253,
+    "./_baseKeys": 266,
+    "./isArrayLike": 340
   }],
-  273: [function (require, module, exports) {
+  351: [function (require, module, exports) {
     var arrayLikeKeys = require('./_arrayLikeKeys'),
         baseKeysIn = require('./_baseKeysIn'),
         isArrayLike = require('./isArrayLike');
@@ -35532,11 +38741,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = keysIn;
   }, {
-    "./_arrayLikeKeys": 175,
-    "./_baseKeysIn": 189,
-    "./isArrayLike": 262
+    "./_arrayLikeKeys": 253,
+    "./_baseKeysIn": 267,
+    "./isArrayLike": 340
   }],
-  274: [function (require, module, exports) {
+  352: [function (require, module, exports) {
     /**
      * @license
      * Lodash <https://lodash.com/>
@@ -53471,7 +56680,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
     }).call(this);
   }, {}],
-  275: [function (require, module, exports) {
+  353: [function (require, module, exports) {
     var MapCache = require('./_MapCache');
     /** Error message constants. */
 
@@ -53549,9 +56758,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     memoize.Cache = MapCache;
     module.exports = memoize;
   }, {
-    "./_MapCache": 170
+    "./_MapCache": 248
   }],
-  276: [function (require, module, exports) {
+  354: [function (require, module, exports) {
     var baseMerge = require('./_baseMerge'),
         createAssigner = require('./_createAssigner');
     /**
@@ -53592,10 +56801,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     });
     module.exports = merge;
   }, {
-    "./_baseMerge": 190,
-    "./_createAssigner": 205
+    "./_baseMerge": 268,
+    "./_createAssigner": 283
   }],
-  277: [function (require, module, exports) {
+  355: [function (require, module, exports) {
     /**
      * This method returns `false`.
      *
@@ -53615,7 +56824,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stubFalse;
   }, {}],
-  278: [function (require, module, exports) {
+  356: [function (require, module, exports) {
     var arrayMap = require('./_arrayMap'),
         copyArray = require('./_copyArray'),
         isArray = require('./isArray'),
@@ -53652,15 +56861,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toPath;
   }, {
-    "./_arrayMap": 176,
-    "./_copyArray": 202,
-    "./_stringToPath": 253,
-    "./_toKey": 254,
-    "./isArray": 261,
-    "./isSymbol": 270,
-    "./toString": 280
+    "./_arrayMap": 254,
+    "./_copyArray": 280,
+    "./_stringToPath": 331,
+    "./_toKey": 332,
+    "./isArray": 339,
+    "./isSymbol": 348,
+    "./toString": 358
   }],
-  279: [function (require, module, exports) {
+  357: [function (require, module, exports) {
     var copyObject = require('./_copyObject'),
         keysIn = require('./keysIn');
     /**
@@ -53695,10 +56904,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toPlainObject;
   }, {
-    "./_copyObject": 203,
-    "./keysIn": 273
+    "./_copyObject": 281,
+    "./keysIn": 351
   }],
-  280: [function (require, module, exports) {
+  358: [function (require, module, exports) {
     var baseToString = require('./_baseToString');
     /**
      * Converts `value` to a string. An empty string is returned for `null`
@@ -53729,9 +56938,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toString;
   }, {
-    "./_baseToString": 195
+    "./_baseToString": 273
   }],
-  281: [function (require, module, exports) {
+  359: [function (require, module, exports) {
     var baseValues = require('./_baseValues'),
         keys = require('./keys');
     /**
@@ -53768,10 +56977,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = values;
   }, {
-    "./_baseValues": 197,
-    "./keys": 272
+    "./_baseValues": 275,
+    "./keys": 350
   }],
-  282: [function (require, module, exports) {
+  360: [function (require, module, exports) {
     'use strict';
 
     var STREAM = require('stream'),
@@ -53959,7 +57168,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "string_decoder": undefined,
     "util": undefined
   }],
-  283: [function (require, module, exports) {
+  361: [function (require, module, exports) {
     module.exports = minimatch;
     minimatch.Minimatch = Minimatch;
     var path = {
@@ -54864,15 +58073,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
     }
   }, {
-    "brace-expansion": 103,
+    "brace-expansion": 181,
     "path": undefined
   }],
-  284: [function (require, module, exports) {
-    arguments[4][38][0].apply(exports, arguments);
+  362: [function (require, module, exports) {
+    arguments[4][115][0].apply(exports, arguments);
   }, {
-    "dup": 38
+    "dup": 115
   }],
-  285: [function (require, module, exports) {
+  363: [function (require, module, exports) {
     var wrappy = require('wrappy');
 
     module.exports = wrappy(once);
@@ -54916,9 +58125,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return f;
     }
   }, {
-    "wrappy": 298
+    "wrappy": 377
   }],
-  286: [function (require, module, exports) {
+  364: [function (require, module, exports) {
     'use strict';
 
     function posix(path) {
@@ -54939,22 +58148,26 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     module.exports.posix = posix;
     module.exports.win32 = win32;
   }, {}],
-  287: [function (require, module, exports) {
-    arguments[4][39][0].apply(exports, arguments);
+  365: [function (require, module, exports) {
+    arguments[4][116][0].apply(exports, arguments);
   }, {
-    "dup": 39
+    "dup": 116
   }],
-  288: [function (require, module, exports) {
-    arguments[4][40][0].apply(exports, arguments);
-  }, {
-    "./lib/async": 289,
-    "./lib/core": 292,
-    "./lib/sync": 295,
-    "dup": 40
-  }],
-  289: [function (require, module, exports) {
-    var core = require('./core');
+  366: [function (require, module, exports) {
+    var async = require('./lib/async');
 
+    async.core = require('./lib/core');
+    async.isCore = require('./lib/is-core');
+    async.sync = require('./lib/sync');
+    exports = async;
+    module.exports = async;
+  }, {
+    "./lib/async": 367,
+    "./lib/core": 370,
+    "./lib/is-core": 371,
+    "./lib/sync": 374
+  }],
+  367: [function (require, module, exports) {
     var fs = require('fs');
 
     var path = require('path');
@@ -54964,6 +58177,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var nodeModulesPaths = require('./node-modules-paths.js');
 
     var normalizeOptions = require('./normalize-options.js');
+
+    var isCore = require('./is-core');
 
     var defaultIsFile = function isFile(file, cb) {
       fs.stat(file, function (err, stat) {
@@ -55037,7 +58252,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             loadAsDirectory(res, opts["package"], onfile);
           } else loadAsFile(res, opts["package"], onfile);
         } else loadNodeModules(x, basedir, function (err, n, pkg) {
-          if (err) cb(err);else if (core[x]) return cb(null, x);else if (n) {
+          if (err) cb(err);else if (isCore(x)) return cb(null, x);else if (n) {
             return maybeUnwrapSymlink(n, opts, function (err, realN) {
               if (err) {
                 cb(err);
@@ -55119,22 +58334,25 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
 
         if (/[/\\]node_modules[/\\]*$/.test(dir)) return cb(null);
-        var pkgfile = path.join(dir, 'package.json');
-        isFile(pkgfile, function (err, ex) {
-          // on err, ex is false
-          if (!ex) return loadpkg(path.dirname(dir), cb);
-          readFile(pkgfile, function (err, body) {
-            if (err) cb(err);
+        maybeUnwrapSymlink(dir, opts, function (unwrapErr, pkgdir) {
+          if (unwrapErr) return loadpkg(path.dirname(dir), cb);
+          var pkgfile = path.join(pkgdir, 'package.json');
+          isFile(pkgfile, function (err, ex) {
+            // on err, ex is false
+            if (!ex) return loadpkg(path.dirname(dir), cb);
+            readFile(pkgfile, function (err, body) {
+              if (err) cb(err);
 
-            try {
-              var pkg = JSON.parse(body);
-            } catch (jsonErr) {}
+              try {
+                var pkg = JSON.parse(body);
+              } catch (jsonErr) {}
 
-            if (pkg && opts.packageFilter) {
-              pkg = opts.packageFilter(pkg, pkgfile);
-            }
+              if (pkg && opts.packageFilter) {
+                pkg = opts.packageFilter(pkg, pkgfile);
+              }
 
-            cb(null, pkg, dir);
+              cb(null, pkg, dir);
+            });
           });
         });
       }
@@ -55148,47 +58366,50 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           fpkg = opts["package"];
         }
 
-        var pkgfile = path.join(x, 'package.json');
-        isFile(pkgfile, function (err, ex) {
-          if (err) return cb(err);
-          if (!ex) return loadAsFile(path.join(x, 'index'), fpkg, cb);
-          readFile(pkgfile, function (err, body) {
+        maybeUnwrapSymlink(x, opts, function (unwrapErr, pkgdir) {
+          if (unwrapErr) return cb(unwrapErr);
+          var pkgfile = path.join(pkgdir, 'package.json');
+          isFile(pkgfile, function (err, ex) {
             if (err) return cb(err);
+            if (!ex) return loadAsFile(path.join(x, 'index'), fpkg, cb);
+            readFile(pkgfile, function (err, body) {
+              if (err) return cb(err);
 
-            try {
-              var pkg = JSON.parse(body);
-            } catch (jsonErr) {}
+              try {
+                var pkg = JSON.parse(body);
+              } catch (jsonErr) {}
 
-            if (opts.packageFilter) {
-              pkg = opts.packageFilter(pkg, pkgfile);
-            }
-
-            if (pkg.main) {
-              if (typeof pkg.main !== 'string') {
-                var mainError = new TypeError('package “' + pkg.name + '” `main` must be a string');
-                mainError.code = 'INVALID_PACKAGE_MAIN';
-                return cb(mainError);
+              if (pkg && opts.packageFilter) {
+                pkg = opts.packageFilter(pkg, pkgfile);
               }
 
-              if (pkg.main === '.' || pkg.main === './') {
-                pkg.main = 'index';
-              }
+              if (pkg && pkg.main) {
+                if (typeof pkg.main !== 'string') {
+                  var mainError = new TypeError('package “' + pkg.name + '” `main` must be a string');
+                  mainError.code = 'INVALID_PACKAGE_MAIN';
+                  return cb(mainError);
+                }
 
-              loadAsFile(path.resolve(x, pkg.main), pkg, function (err, m, pkg) {
-                if (err) return cb(err);
-                if (m) return cb(null, m, pkg);
-                if (!pkg) return loadAsFile(path.join(x, 'index'), pkg, cb);
-                var dir = path.resolve(x, pkg.main);
-                loadAsDirectory(dir, pkg, function (err, n, pkg) {
+                if (pkg.main === '.' || pkg.main === './') {
+                  pkg.main = 'index';
+                }
+
+                loadAsFile(path.resolve(x, pkg.main), pkg, function (err, m, pkg) {
                   if (err) return cb(err);
-                  if (n) return cb(null, n, pkg);
-                  loadAsFile(path.join(x, 'index'), pkg, cb);
+                  if (m) return cb(null, m, pkg);
+                  if (!pkg) return loadAsFile(path.join(x, 'index'), pkg, cb);
+                  var dir = path.resolve(x, pkg.main);
+                  loadAsDirectory(dir, pkg, function (err, n, pkg) {
+                    if (err) return cb(err);
+                    if (n) return cb(null, n, pkg);
+                    loadAsFile(path.join(x, 'index'), pkg, cb);
+                  });
                 });
-              });
-              return;
-            }
+                return;
+              }
 
-            loadAsFile(path.join(x, '/index'), pkg, cb);
+              loadAsFile(path.join(x, '/index'), pkg, cb);
+            });
           });
         });
       }
@@ -55223,19 +58444,19 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 290,
-    "./core": 292,
-    "./node-modules-paths.js": 293,
-    "./normalize-options.js": 294,
+    "./caller.js": 368,
+    "./is-core": 371,
+    "./node-modules-paths.js": 372,
+    "./normalize-options.js": 373,
     "fs": undefined,
     "path": undefined
   }],
-  290: [function (require, module, exports) {
-    arguments[4][42][0].apply(exports, arguments);
+  368: [function (require, module, exports) {
+    arguments[4][119][0].apply(exports, arguments);
   }, {
-    "dup": 42
+    "dup": 119
   }],
-  291: [function (require, module, exports) {
+  369: [function (require, module, exports) {
     module.exports = {
       "assert": true,
       "async_hooks": ">= 8",
@@ -55307,17 +58528,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       "v8/tools/splaytree": [">= 4.4.0 && < 5", ">= 5.2.0 && < 12"],
       "v8": ">= 1",
       "vm": true,
+      "wasi": ">= 13.4",
       "worker_threads": ">= 11.7",
       "zlib": true
     };
   }, {}],
-  292: [function (require, module, exports) {
-    arguments[4][44][0].apply(exports, arguments);
+  370: [function (require, module, exports) {
+    arguments[4][121][0].apply(exports, arguments);
   }, {
-    "./core.json": 291,
-    "dup": 44
+    "./core.json": 369,
+    "dup": 121
   }],
-  293: [function (require, module, exports) {
+  371: [function (require, module, exports) {
+    var core = require('./core');
+
+    module.exports = function isCore(x) {
+      return Object.prototype.hasOwnProperty.call(core, x);
+    };
+  }, {
+    "./core": 370
+  }],
+  372: [function (require, module, exports) {
     var path = require('path');
 
     var parse = path.parse || require('path-parse');
@@ -55360,15 +58591,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
   }, {
     "path": undefined,
-    "path-parse": 287
+    "path-parse": 365
   }],
-  294: [function (require, module, exports) {
-    arguments[4][46][0].apply(exports, arguments);
+  373: [function (require, module, exports) {
+    arguments[4][123][0].apply(exports, arguments);
   }, {
-    "dup": 46
+    "dup": 123
   }],
-  295: [function (require, module, exports) {
-    var core = require('./core');
+  374: [function (require, module, exports) {
+    var isCore = require('./is-core');
 
     var fs = require('fs');
 
@@ -55437,14 +58668,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         if (x === '..' || x.slice(-1) === '/') res += '/';
         var m = loadAsFileSync(res) || loadAsDirectorySync(res);
         if (m) return maybeUnwrapSymlink(m, opts);
-      } else if (core[x]) {
+      } else if (isCore(x)) {
         return x;
       } else {
         var n = loadNodeModulesSync(x, absoluteStart);
         if (n) return maybeUnwrapSymlink(n, opts);
       }
 
-      if (core[x]) return x;
+      if (isCore(x)) return x;
       var err = new Error("Cannot find module '" + x + "' from '" + parent + "'");
       err.code = 'MODULE_NOT_FOUND';
       throw err;
@@ -55482,7 +58713,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
 
         if (/[/\\]node_modules[/\\]*$/.test(dir)) return;
-        var pkgfile = path.join(dir, 'package.json');
+        var pkgfile = path.join(maybeUnwrapSymlink(dir, opts), 'package.json');
 
         if (!isFile(pkgfile)) {
           return loadpkg(path.dirname(dir));
@@ -55495,7 +58726,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         } catch (jsonErr) {}
 
         if (pkg && opts.packageFilter) {
-          pkg = opts.packageFilter(pkg, dir);
+          // v2 will pass pkgfile
+          pkg = opts.packageFilter(pkg,
+          /*pkgfile,*/
+          dir); // eslint-disable-line spaced-comment
         }
 
         return {
@@ -55505,7 +58739,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
 
       function loadAsDirectorySync(x) {
-        var pkgfile = path.join(x, '/package.json');
+        var pkgfile = path.join(maybeUnwrapSymlink(x, opts), '/package.json');
 
         if (isFile(pkgfile)) {
           try {
@@ -55513,11 +58747,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             var pkg = JSON.parse(body);
           } catch (e) {}
 
-          if (opts.packageFilter) {
-            pkg = opts.packageFilter(pkg, x);
+          if (pkg && opts.packageFilter) {
+            // v2 will pass pkgfile
+            pkg = opts.packageFilter(pkg,
+            /*pkgfile,*/
+            x); // eslint-disable-line spaced-comment
           }
 
-          if (pkg.main) {
+          if (pkg && pkg.main) {
             if (typeof pkg.main !== 'string') {
               var mainError = new TypeError('package “' + pkg.name + '” `main` must be a string');
               mainError.code = 'INVALID_PACKAGE_MAIN';
@@ -55556,54 +58793,24 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 290,
-    "./core": 292,
-    "./node-modules-paths.js": 293,
-    "./normalize-options.js": 294,
+    "./caller.js": 368,
+    "./is-core": 371,
+    "./node-modules-paths.js": 372,
+    "./normalize-options.js": 373,
     "fs": undefined,
     "path": undefined
   }],
-  296: [function (require, module, exports) {
-    arguments[4][64][0].apply(exports, arguments);
+  375: [function (require, module, exports) {
+    arguments[4][142][0].apply(exports, arguments);
   }, {
-    "dup": 64
+    "dup": 142
   }],
-  297: [function (require, module, exports) {
-    'use strict';
-
-    exports.fromCallback = function (fn) {
-      return Object.defineProperty(function () {
-        var _this6 = this,
-            _arguments = arguments;
-
-        if (typeof arguments[arguments.length - 1] === 'function') fn.apply(this, arguments);else {
-          return new Promise(function (resolve, reject) {
-            _arguments[_arguments.length] = function (err, res) {
-              if (err) return reject(err);
-              resolve(res);
-            };
-
-            _arguments.length++;
-            fn.apply(_this6, _arguments);
-          });
-        }
-      }, 'name', {
-        value: fn.name
-      });
-    };
-
-    exports.fromPromise = function (fn) {
-      return Object.defineProperty(function () {
-        var cb = arguments[arguments.length - 1];
-        if (typeof cb !== 'function') return fn.apply(this, arguments);else fn.apply(this, arguments).then(function (r) {
-          return cb(null, r);
-        }, cb);
-      }, 'name', {
-        value: fn.name
-      });
-    };
-  }, {}],
-  298: [function (require, module, exports) {
+  376: [function (require, module, exports) {
+    arguments[4][125][0].apply(exports, arguments);
+  }, {
+    "dup": 125
+  }],
+  377: [function (require, module, exports) {
     // Returns a wrapper function that returns a wrapped callback
     // The wrapper function should do some stuff, and return a
     // presumably different callback function.
@@ -55639,7 +58846,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     }
   }, {}],
-  299: [function (require, module, exports) {
+  378: [function (require, module, exports) {
     module.exports = function (commands, options) {
       if (typeof commands === "string") {
         commands = [commands];
@@ -55899,4 +59106,4 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "bluebird": 4,
     "child_process": undefined
   }]
-}, {}, [65]);
+}, {}, [143]);
