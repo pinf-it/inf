@@ -21,7 +21,6 @@
     "bash.origin.test": "^0.2.0-pre.7",
     "browserify": "^16.5.0",
     "jsonrep": "^0.1.0-pre.1",
-    "puppeteer": "^2.0.0",
     "uglify-js": "^3.7.2"
   },
   "dependencies": {
