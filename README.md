@@ -1,6 +1,8 @@
 inf
 ===
 
+[![CircleCI](https://circleci.com/gh/pinf-it/inf.svg?style=svg)](https://circleci.com/gh/pinf-it/inf)
+
 | Weave aspects with sub components into a namespace and do work to bootstrap an owning component.
 
 `inf` allows for the expansion of many aspects from a singular structure to externalized entities and the reverse contraction as well as the instantiation of a singular structure from multiple perspectives in source and optimized form.
