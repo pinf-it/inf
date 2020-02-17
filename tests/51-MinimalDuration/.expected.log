@@ -1,0 +1,17 @@
+>>>TEST_IGNORE_LINE:\ds$<<<
+-- node --
+Hello World!
+
+-- inf -- (first) --
+Hello World!
+
+-- inf -- (second) --
+Hello World!
+
+-- inf-dist -- (first) --
+Hello World!
+
+-- inf-dist -- (second) --
+Hello World!
+
+---
