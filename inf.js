@@ -1480,7 +1480,12 @@ class Namespace {
             var cwdPath = PATH.join(self.baseDir, filepath);
             if (await FS.existsAsync(cwdPath)) {
                 return cwdPath;
-            }    
+            }
+        } else
+        if (/^\//.test(uri)) {
+            if (await FS.existsAsync(filepath)) {
+                return filepath;
+            }
         }
 
         try {
