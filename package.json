@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf",
-  "version": "0.2.0-pre.11",
+  "version": "0.2.0-pre.12",
   "pm": "npm",
   "bin": {
     "inf": "inf.js"
@@ -33,7 +33,7 @@
     "glob": "^7.1.6",
     "graceful-fs": "^4.2.3",
     "json-stable-stringify": "^1.0.1",
-    "lib.json": "^0.0.6-pre.4",
+    "lib.json": "^0.0.6-pre.5",
     "lodash": "^4.17.15",
     "memorystream": "^0.3.1",
     "minimist": "^1.2.0",
