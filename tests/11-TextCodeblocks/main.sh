@@ -1,7 +1,7 @@
 #!/usr/bin/env bash.origin.script
 
 inf {
-    "# echo": (text (foo) >>>
+    "# echo": (text () >>>
     Hello World
     <<<)
 }

@@ -2,6 +2,21 @@
     "# echo": (text () >>>
     Hello World
     <<<),
+
+    "# echo": (text (INF) >>>
+    INF.LIB.CONSOLE: %%%INF.LIB.CONSOLE%%%
+    <<<),
+
+    "vars #": "../41-RunBashCodeblocks/vars.",
+    "vars # set() greeting": "Hello World",
+    "VARS $": "vars # vars()",
+    "# echo": (text (VARS) >>>
+    Greeting: %%%VARS.greeting%%%
+    <<<),
+    "# stderr": (text (VARS) >>>
+    Greeting: %%%VARS.greeting%%%
+    <<<),
+
     "# echo": (text () >>>
     OK
     <<<)

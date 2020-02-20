@@ -1060,6 +1060,10 @@ require.memoize("/main.js", function (require, exports, module) {
             return Node.WrapInstructionNode(namespace, value);
         }
 
+        self.getValueForVariablePath = async function getValueForVariablePath (path) {
+            return namespace.getValueForVariablePath(path);
+        }
+
         self.badInvocation = badInvocation;
 
         self.isCodeblock = function (value) {
@@ -2176,6 +2180,7 @@ class CodeblockNode extends Node {
         return codeblock.getCode();
     }
 }
+exports.CodeblockNode = CodeblockNode;
 
 class InfNode extends Node {
 
@@ -2183,6 +2188,8 @@ class InfNode extends Node {
         return this.value.toString(vars);
     }
 }
+exports.InfNode = InfNode;
+
 
 class ReferenceNode extends Node {
 
@@ -2212,6 +2219,8 @@ class ReferenceNode extends Node {
         return (this.alias + '#' + this.pointer);
     }
 }
+exports.ReferenceNode = ReferenceNode;
+
 
 class InterfaceReferenceNode extends ReferenceNode {
 
@@ -2242,6 +2251,7 @@ class InterfaceReferenceNode extends ReferenceNode {
         return (':' + this.alias + ':');
     }
 }
+exports.InterfaceReferenceNode = InterfaceReferenceNode;
 
 class ContractReferenceNode extends ReferenceNode {
 
@@ -2268,6 +2278,7 @@ class ContractReferenceNode extends ReferenceNode {
         return ('<' + this.alias + '>');
     }
 }
+exports.ContractReferenceNode = ContractReferenceNode;
 
 class VariablesReferenceNode extends ReferenceNode {
 
@@ -2294,6 +2305,7 @@ class VariablesReferenceNode extends ReferenceNode {
         return (this.alias + '$');
     }
 }
+exports.VariablesReferenceNode = VariablesReferenceNode;
 
 class Processor {
 
