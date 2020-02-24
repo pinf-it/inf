@@ -2583,7 +2583,13 @@ class Processor {
         anchor = Node.WrapInstructionNode(self.namespace, anchor);
         anchor.meta = meta;
         anchor.value = anchor.value.replace(/\s*\+([^\+]+)$/, '');
-        anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
+
+        if (
+            anchor.pointer &&
+            typeof anchor.pointer === 'string'
+        ) {
+            anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
+        }
 
         value = Node.WrapInstructionNode(self.namespace, value);
         value.meta = meta;
