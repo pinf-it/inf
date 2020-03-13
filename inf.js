@@ -2829,6 +2829,7 @@ class Processor {
                     if (typeof self.namespace.mappedNamespaceAliases[key] !== "undefined") {
                         value.value = self.namespace.mappedNamespaceAliases[key];
                     } else {
+                        console.error("self.namespace.mappedAliases", self.namespace.mappedAliases);
                         console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
                         throw new Error(`Alias '${key}' is not mapped in 'self.namespace.mappedAliases' nor 'self.namespace.mappedNamespaceAliases'!`);
                     }

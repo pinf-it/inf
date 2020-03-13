@@ -1,4 +1,3 @@
->>>SKIP_TEST<<<
 filenames [ '.ui.js', '.NOTES.md' ]
 --- 1 ---
 
@@ -56,22 +55,19 @@ Files
     
 ```
 
-## /main.sh (size: 844 bytes)
+## /main.sh (size: 767 bytes)
 
 ```javascript
 #!/usr/bin/env bash.origin.script
 
-
-# Will cause 'Assertion `args[0]->IsString()' failed.' error.
-# TODO: Remove once working reliably.
-echo ">>>SKIP_TEST<<<"
-
+[ ! -e .NOTES.md ] || rm .NOTES.md
 
 inf inf.json
 
 echo '--- 1 ---'
 
 cat .NOTES.md
+rm .NOTES.md
 
 echo '--- 2 ---'
 
@@ -124,7 +120,7 @@ mv -f bundle.inf.js~before bundle.inf.js
 }
 ```
 
-## /reflector.inf.js (size: 6561 bytes)
+## /reflector.inf.js (size: 6573 bytes)
 
 ```javascript
 
@@ -154,7 +150,7 @@ exports.inf = async function (inf) {
                                     val.replaceVariables = false;
                                     return val;
                                 }
-
+            
                                 let filenames = await inf.expandNodeAspectsTo(/^\//, reflectionDir, function (aspect, key) {
 
                                     if (aspect === '/.NOTES') {

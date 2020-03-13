@@ -1,18 +1,13 @@
 #!/usr/bin/env bash.origin.script
 
-
-# Will cause 'Assertion `args[0]->IsString()' failed.' error.
-# TODO: Remove once working reliably.
-echo ">>>SKIP_TEST<<<"
-
-exit 0
-
+[ ! -e .NOTES.md ] || rm .NOTES.md
 
 inf inf.json
 
 echo '--- 1 ---'
 
 cat .NOTES.md
+rm .NOTES.md
 
 echo '--- 2 ---'
 
