@@ -7,6 +7,15 @@ exports.inf = async function (inf) {
 
     return {
 
+        existingValue: function (value) {
+            if (Object.keys(vars).filter(function (name) {
+                return (vars[name] === value);
+            }).length) {
+                return value;
+            }
+            throw new Error(`Value '${value}' does not exist in 'vars'!`);
+        },
+
         invoke: function (pointer, value) {
 
             if (/^set\s/.test(pointer)) {

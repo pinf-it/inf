@@ -2333,6 +2333,9 @@ class Processor {
                     referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
                 }
                 referenceValue.propertyPathMount = _value.propertyPathMount || [];
+                if (referenceValue.pointer) {
+                    referenceValue.pointer = await self.namespace.replaceVariablesInString(referenceValue.pointer);
+                }
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace);
 

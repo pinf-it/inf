@@ -34,7 +34,9 @@ inf {
     "ns @ router #": "./router.",
     "vars # set route": "/",
     "ns @ router # \${ns @ PINF.route}": "\${ns @ PINF.greeting}",
-    "ns @ router # / + 1": "run()",
+    "vars # set runArg": "all",
+    "ns @ router # setPrefix() + 1": "vars # existingValue() \${ns @ PINF.runArg}",
+    "ns @ router # / + 1": "run() \${ns @ PINF.runArg}",
 
     "# echo +5": "---",
 
