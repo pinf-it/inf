@@ -7,9 +7,15 @@ inf
 
 `inf` allows for the expansion of many aspects from a singular structure to externalized entities and the reverse contraction as well as the instantiation of a singular structure from multiple perspectives in source and optimized form.
 
-`inf` uses a *domain specific language* in the form of an **Interface File** to map aliased components into layered namespaces and declare relationships between them. The syntax is JSON compliant and an ordered parser is used to process each document node in the order it was declared.
+`inf` uses a *domain specific language* in the form of an **Interface File** to map aliased components into layered namespaces and declare relationships between them. The syntax is JSON compliant and an ordered parser is used to process each document node in the same sequence as it was declared.
 
 The output is a namespace in the form of a JavaScript object with all nodes resolved, mapped and instanciated as per the `inf` components declared in an `inf.json` file. An intermediate `.~inf.json~infi.log` file containing `\t` and `\n` delimited node instructions for the `inf` structure is also generated.
+
+In theory: The generated namespace object is invoked by choosing one component as a starting point and following established relationships to let the execution travel through the linked tree of referenced nodes.
+
+In practice: The current `inf` acts as an interpreter where a parser feeds an embedded VM with the `.~inf.json~infi.log` file instructions and the VM links and executes the generated namespace object structure.
+
+In future: A `.~inf.json~infci.log` file will be generated which will hold compiled instructions for an optimized `inf` VM to execute where the `inf` VM is a small JavaScript framework that can run on any JavaScript engine.
 
 ### Features
 
@@ -22,20 +28,20 @@ The output is a namespace in the form of a JavaScript object with all nodes reso
   * Supports [codeblock.js](https://github.com/0ink/codeblock.js)
   * Great compile target
   * Default `inf.pinf.it` vocabulary and components for bootstrapping simple projects
-  * Export resolved `inf` component structure and mapped invocation relationships along with optimized invocation handlers to JavaScript
   * Extendable via plugins
   * Comments
   * Unix CLI interface via `inf`
   * Browserifyable
   * Heavily tested
+  * NodeJS API interface
   * TODO:
+    * Export resolved `inf` component structure and mapped invocation relationships along with optimized invocation handlers to JavaScript
     * Layerable
-    * NodeJS API interface
     * Highly optimized runtime structure (RTNamespace)
 
 ### Limitations
 
-  * Cannot merge two `inf.json` files by overlaying them. Use inheritance and runtime customization.
+  * Cannot merge two `inf.json` files by merging them. Use inheritance and runtime customization instead. Overlaying is planned.
   * Cannot use `JSON.parse()` for `inf.json` files as duplicate keys are dropped unless duplicate keys are suffixed with `+<unique>`. Assumes order of keys is preserved.
   * Parsing large instruction files that reference many Components may be slow but the resulting runtime structure (RTNamespace) is fast and small as long as the RTComponents are also optimized.
   * The instructions in an `inf.json` file can be hard to follow. To provide clarity follow a Vocabulary/Schema/Convention for aliases or generate `inf` instructions from a higher level abstraction that matches your domain model more closely ([ccjson](https://github.com/ccjson/ccjson.nodejs) is an example that can generate `inf.js` files as well as represent its runtime structure using RTNamespace & RTComponent).
@@ -120,6 +126,15 @@ Entities
     * Can be serialized to JavaScript.
 
   * **Component** - The `inf` component abstraction that receives an *invocation* whenever the mapped alias is used to set a property or map a relationship.
+
+
+Development
+===========
+
+  npm test
+  npm run test-dist
+
+  npm run build
 
 
 Provenance

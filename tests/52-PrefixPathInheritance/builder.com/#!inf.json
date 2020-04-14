@@ -1,0 +1,10 @@
+#!/usr/bin/env inf
+{
+    "builder/v0 #": "${__DIRNAME__}/builder.",
+
+    ":builder:": "${__DIRNAME__}/builder.",
+
+    "main #": "../main.",
+
+    "main # :builder: set() /builder.js": "console.log('Hello World from Builder');\n"
+}

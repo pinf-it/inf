@@ -1,0 +1,4 @@
+Scripts: {
+    "/builder.js": "BUILT[/dist][/dist]: console.log('Hello World from Builder');\n",
+    "/root.js": "BUILT[][]: console.log('Hello World from Root');\n"
+}

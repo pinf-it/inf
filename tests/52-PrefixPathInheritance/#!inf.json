@@ -1,0 +1,14 @@
+#!/usr/bin/env inf
+{
+    "#": {
+        "/dist": "./builder.com/#!"
+    },
+
+    ":builder:": "/dist @ builder/v0",
+
+    "main #": "./main.",
+
+    "main # :builder: set() /root.js": "console.log('Hello World from Root');\n",
+
+    "main # :builder: showResult()": ""
+}

@@ -28,7 +28,20 @@ const EventEmitter = require("events").EventEmitter;
 const Promise = require("bluebird");
 const ASSERT = require("assert");
 const PATH = require("path");
-const FS = require("fs-extra");
+
+
+const MFS = require("mfs");
+const FS = new MFS.FileFS({
+	lineinfo: true
+});
+
+if (process.env.INF_DEBUG) {
+	FS.on("used-path", function(path, method, meta) {
+		log("[FS] Calling", `${method}()`, "for", `'${path}'`, "from", `${meta.file}:${meta.line}`);
+	});
+}
+
+//const FS = require("fs-extra");
 Promise.promisifyAll(FS);
 FS.existsAsync = function (path) {
     return new Promise(function (resolve) {
@@ -510,6 +523,8 @@ class Component {
             mod.INF = exports;
         }
 
+        const compNamespace = namespace;
+
         let instances = {};
         self.getComponentAliases = function () {
             return Object.keys(instances.component || {});
@@ -521,11 +536,13 @@ class Component {
             }
             return instances[type][alias];
         }
-        self.forAlias = async function (type, alias, namespace, resolvedNamespace) {
+        self.forAlias = async function (type, alias, namespace, resolvedNamespace, options) {
 
             if (!namespace) {
                 throw new Error("'namespace' not set!");
             }
+
+            options = options || {};
 
             if (!instances[type]) {
                 instances[type] = {};
@@ -578,6 +595,7 @@ class Component {
 
 //console.error("init", type, alias, namespace.baseDir);
 
+                pluginInstance.namespace = namespace;
                 pluginInstance.resolvedNamespace = resolvedNamespace;
                 pluginInstance.alias = alias;
 
@@ -595,7 +613,9 @@ class Component {
                         pluginInstance.impl = await adapter.forInstance(namespace, mod[adapterId], {
                             pluginInstance: pluginInstance,
                             componentInitContext: componentInitContext,
-                            alias: alias
+                            alias: alias,
+                            compAlias: options.compAlias || null,
+                            compNamespace: compNamespace
                         });
                     }
                 }
@@ -765,6 +785,7 @@ const LIB = {
     ASSERT: ASSERT,
     PATH: PATH,
     FS: FS,
+    FS_EXTRA: FS,
     STREAM: STREAM,
     GLOB: GLOB,
     CODEBLOCK: CODEBLOCK,
@@ -1353,11 +1374,15 @@ class Namespace {
         let self = this;
 
         if (self.options.resolveInfUri) {
+            const originalUri = uri;
             uri = await self.options.resolveInfUri(uri, self);
+            if (!uri) {
+                throw new Error(`Resolved original uri '${originalUri}' to '${uri}' using 'self.options.resolveInfUri()'!`);
+            }
         }
 
         if (!/(\/|\.|!)$/.test(uri)) {
-            CONSOLE.error("uri", uri);
+            CONSOLE.error("uri:", uri);
             throw new Error(`Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.`);
         }
 
@@ -1367,6 +1392,8 @@ class Namespace {
         }
 
         async function resolveUri (uri) {
+
+//console.error("[inf] URI", self.baseDir, uri);
 
 //        uri = self.flipDomainInUri(uri);
 
@@ -1385,7 +1412,7 @@ class Namespace {
             if (self.lib.js) {
                 try {
                     const resolvedPath = self.lib.js.resolve(filepath);
-
+                    
                     log("resolveInfUri()", "resolvedPath", resolvedPath);
 
                     if (await FS.existsAsync(resolvedPath)) {
@@ -1594,7 +1621,7 @@ class Namespace {
                 return self.aliases[alias];
             }
 
-            throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
+//            throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
         }
 
         log("Map component for uri '" + uri + "' to alias '" + alias + "'");
@@ -1639,34 +1666,60 @@ class Namespace {
             }
             component = self.aliases[uri];
         }
+
+        const nsPrefixAlias = `${(self.anchorPrefix && `${self.anchorPrefix.toString()}:`) || ''}${alias}`;
+
+// console.log("mapInterface", alias, uri, 'nsPrefixAlias:', nsPrefixAlias);
+
         if (component) {
-            if (self.interfaces[alias]) {
-                if (self.interfaces[alias].path === component.path) {
-                    return self.interfaces[alias];
+            if (self.interfaces[nsPrefixAlias]) {
+                if (self.interfaces[nsPrefixAlias].path === component.path) {
+
+// console.log("MAP INTERFACE FOR ALIAS (2)", nsPrefixAlias, 'nsPrefixAlias:', nsPrefixAlias);
+
+                    return self.interfaces[nsPrefixAlias];
                 }
-                throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+                throw new Error("Cannot map interface '" + component.path + "' to alias '" + nsPrefixAlias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
             }
 
-            log("Map interface for component '" + uri + "' to alias '" + alias + "'");
+            log("Map interface for component '" + uri + "' to alias '" + nsPrefixAlias + "'");
 
-            let interfaceComp = Object.create(component.getInstance('component', instanceUri));
+//            let interfaceComp = Object.create(component.getInstance('component', `${instanceUri}:${nsPrefixAlias}`));
             // Cause interface to be re-initialized for the new alias.
-            interfaceComp.$instance = null;
+//            interfaceComp.$instance = null;
 
-            return (self.interfaces[alias] = interfaceComp);
+// console.log('MAP INTERFACE(2)::', alias, 'nsPrefixAlias', nsPrefixAlias);
+
+//console.log("REMAP::::", component.alias);
+
+            const interfaceComp = await component.forAlias('interface', nsPrefixAlias, self, null, {
+                compAlias: component.alias
+            });
+
+// console.log("MAP INTERFACE FOR ALIAS (3)", nsPrefixAlias, 'nsPrefixAlias:', nsPrefixAlias);
+
+            return (self.interfaces[nsPrefixAlias] = interfaceComp);
         }
 
         component = await self.getComponentForUri(uri);
-        if (self.interfaces[alias]) {
-            if (self.interfaces[alias].path === component.path) {
-                return self.interfaces[alias];
+        if (self.interfaces[nsPrefixAlias]) {
+            if (self.interfaces[nsPrefixAlias].path === component.path) {
+
+// console.log("MAP INTERFACE FOR ALIAS (4)", nsPrefixAlias, 'nsPrefixAlias:', nsPrefixAlias);
+
+                return self.interfaces[nsPrefixAlias];
             }
-            throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+            throw new Error("Cannot map interface '" + component.path + "' to alias '" + nsPrefixAlias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
         }
 
-        log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+        log("Map interface for uri '" + uri + "' to alias '" + nsPrefixAlias + "'");
 
-        return (self.interfaces[alias] = await component.forAlias('interface', alias, self));
+// console.log("MAP INTERFACE FOR ALIAS (1)", alias, 'nsPrefixAlias:', nsPrefixAlias);
+
+// console.log('MAP INTERFACE(1)::', alias, 'nsPrefixAlias', nsPrefixAlias);
+
+        self.interfaces[nsPrefixAlias] = await component.forAlias('interface', nsPrefixAlias, self);
+        return self.interfaces[nsPrefixAlias];
     }
 
     async mapContract (anchor, uri) {
@@ -1735,22 +1788,27 @@ class Namespace {
     }
 
     getInterfaceForAlias (alias) {
-        if (!this.interfaces[alias]) {
-            throw new Error(`Interface for alias '${alias}' not mapped!`);
+
+        const nsPrefixAlias = `${(this.anchorPrefix && `${this.anchorPrefix.toString()}:`) || ''}${alias}`;
+
+//console.log("GET INTERFACE FOR ALIAS", alias, 'nsPrefixAlias', nsPrefixAlias);
+
+        if (!this.interfaces[nsPrefixAlias]) {
+            throw new Error(`Interface for alias '${nsPrefixAlias}' not mapped!`);
         }
-        if (!this.interfaces[alias].$instance) {
-            if (!this.interfaces[alias].interface) {
+        if (!this.interfaces[nsPrefixAlias].$instance) {
+            if (!this.interfaces[nsPrefixAlias].interface) {
                 if (
-                    !this.interfaces[alias].contract ||
-                    !this.interfaces[alias].contract[1].impl.interfaceWrapper
+                    !this.interfaces[nsPrefixAlias].contract ||
+                    !this.interfaces[nsPrefixAlias].contract[1].impl.interfaceWrapper
                 ) {
-                    throw new Error(`Interface with alias '${alias}' does not export 'interface()' nor does it's contract provide a wrapper.`);
+                    throw new Error(`Interface with alias '${nsPrefixAlias}' does not export 'interface()' nor does it's contract provide a wrapper.`);
                 }
-                this.interfaces[alias].interface = this.interfaces[alias].contract[1].impl.interfaceWrapper(this.interfaces[alias]);
+                this.interfaces[nsPrefixAlias].interface = this.interfaces[nsPrefixAlias].contract[1].impl.interfaceWrapper(this.interfaces[nsPrefixAlias]);
             }
-            this.interfaces[alias].$instance = this.interfaces[alias].interface.call(null, alias, this.interfaces[alias]);
+            this.interfaces[nsPrefixAlias].$instance = this.interfaces[nsPrefixAlias].interface.call(null, alias, this.interfaces[nsPrefixAlias]);
         }
-        return this.interfaces[alias];
+        return this.interfaces[nsPrefixAlias];
     }
 
     getContractForAlias (alias) {
@@ -3007,7 +3065,9 @@ class Processor {
                             value.contract = _interface[1].contract || null;
                         }
 
-                        value = await (await _interface[1].$instance)(value, anchor.pointer);
+                        value = await (await _interface[1].$instance)(value, anchor.pointer, {
+                            namespace: self.namespace
+                        });
                         if (typeof value === "undefined") {
                             throw new Error(`Value is undefined after processing by local interface '${_interface[0]}'!`);
                         }

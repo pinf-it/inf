@@ -1,9 +1,14 @@
 [readme.com] Init harness with alias: generator/v0 1
 [builder.com] Init harness with alias: builder/v0 1
+[readme.com] Init harness with alias: builder.com:readme 2
+[readme.com] Init harness with alias: builder.com:readme1 3
 [readme.com] Init interface with alias: readme
 [readme.com] generate(): Hello World 1 from builder.com (via interface)
 [readme.com] Init interface with alias: readme1
 [readme.com] generate(): Hello World 2 from builder.com (via interface)
+[readme.com] Init harness with alias: readme 4
+[builder.com] Init harness with alias: builder 2
+[readme.com] Init interface with alias: readme
 [readme.com] generate(): Hello World (via interface)
 [builder.com] Init interface with alias: builder
 [builder.com] build(): Script Source (via interface)

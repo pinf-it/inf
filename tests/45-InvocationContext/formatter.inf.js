@@ -13,6 +13,7 @@ class Formatter {
 
         ASSERT.deepEqual(Object.keys(this), ['_mode', '_infComponent']);
         ASSERT.deepEqual(Object.keys(this._infComponent), [
+            'namespace',
             'resolvedNamespace',
             'alias',
             'impl',
@@ -33,6 +34,7 @@ class Formatter {
 
         ASSERT.deepEqual(Object.keys(this), ['_mode', '_infComponent']);
         ASSERT.deepEqual(Object.keys(this._infComponent), [
+            'namespace',
             'resolvedNamespace',
             'alias',
             'impl',

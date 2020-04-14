@@ -1,4 +1,2 @@
+>>>SKIP_TEST<<<
 >>>TEST_IGNORE_LINE:^>\s<<<
-
-
-Hello World from npm test!

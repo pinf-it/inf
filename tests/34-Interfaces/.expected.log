@@ -9,12 +9,14 @@ Hello World
 HELLO WORLD
 -- 4 --
 Loaded interface harness: uppercase-comp 2
-Loaded interface: to.upper 1 (uppercase-comp:2)
+Loaded interface harness: to.upper 3
+Loaded interface: to.upper 1 (to.upper:3)
 HELLO WORLD
 -- 5 --
-Loaded interface: to.upper2 2 (uppercase-comp:2)
+Loaded interface harness: to.upper2 4
+Loaded interface: to.upper2 1 (to.upper2:4)
 HELLO WORLD
 -- 6 --
-Loaded interface harness: transform.uppercase2 3
-Loaded interface: transform.uppercase2 1 (transform.uppercase2:3)
+Loaded interface harness: transform.uppercase2 5
+Loaded interface: transform.uppercase2 1 (transform.uppercase2:5)
 HELLO WORLD
