@@ -7,11 +7,11 @@ var _get2 = _interopRequireDefault(require("@babel/runtime/helpers/get"));
 
 var _wrapNativeSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/wrapNativeSuper"));
 
+var _assertThisInitialized2 = _interopRequireDefault(require("@babel/runtime/helpers/assertThisInitialized"));
+
 var _possibleConstructorReturn2 = _interopRequireDefault(require("@babel/runtime/helpers/possibleConstructorReturn"));
 
 var _getPrototypeOf2 = _interopRequireDefault(require("@babel/runtime/helpers/getPrototypeOf"));
-
-var _assertThisInitialized2 = _interopRequireDefault(require("@babel/runtime/helpers/assertThisInitialized"));
 
 var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
 
@@ -21,7 +21,13 @@ var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/creat
 
 var _regenerator = _interopRequireDefault(require("@babel/runtime/regenerator"));
 
+var _asyncToGenerator2 = _interopRequireDefault(require("@babel/runtime/helpers/asyncToGenerator"));
+
 var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
+
+function _createSuper(Derived) { return function () { var Super = (0, _getPrototypeOf2["default"])(Derived), result; if (_isNativeReflectConstruct()) { var NewTarget = (0, _getPrototypeOf2["default"])(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return (0, _possibleConstructorReturn2["default"])(this, result); }; }
+
+function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
 
 (function () {
   function r(e, n, t) {
@@ -95,15 +101,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     var Queue = require("./queue");
 
-    var util = require("./util");
-
     function Async() {
       this._customScheduler = false;
       this._isTickUsed = false;
       this._lateQueue = new Queue(16);
       this._normalQueue = new Queue(16);
       this._haveDrainedQueues = false;
-      this._trampolineEnabled = true;
       var self = this;
 
       this.drainQueues = function () {
@@ -122,16 +125,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     Async.prototype.hasCustomScheduler = function () {
       return this._customScheduler;
-    };
-
-    Async.prototype.enableTrampoline = function () {
-      this._trampolineEnabled = true;
-    };
-
-    Async.prototype.disableTrampolineIfNecessary = function () {
-      if (util.hasDevTools) {
-        this._trampolineEnabled = false;
-      }
     };
 
     Async.prototype.haveItemsQueued = function () {
@@ -187,43 +180,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       this._queueTick();
     }
 
-    if (!util.hasDevTools) {
-      Async.prototype.invokeLater = AsyncInvokeLater;
-      Async.prototype.invoke = AsyncInvoke;
-      Async.prototype.settlePromises = AsyncSettlePromises;
-    } else {
-      Async.prototype.invokeLater = function (fn, receiver, arg) {
-        if (this._trampolineEnabled) {
-          AsyncInvokeLater.call(this, fn, receiver, arg);
-        } else {
-          this._schedule(function () {
-            setTimeout(function () {
-              fn.call(receiver, arg);
-            }, 100);
-          });
-        }
-      };
-
-      Async.prototype.invoke = function (fn, receiver, arg) {
-        if (this._trampolineEnabled) {
-          AsyncInvoke.call(this, fn, receiver, arg);
-        } else {
-          this._schedule(function () {
-            fn.call(receiver, arg);
-          });
-        }
-      };
-
-      Async.prototype.settlePromises = function (promise) {
-        if (this._trampolineEnabled) {
-          AsyncSettlePromises.call(this, promise);
-        } else {
-          this._schedule(function () {
-            promise._settlePromises();
-          });
-        }
-      };
-    }
+    Async.prototype.invokeLater = AsyncInvokeLater;
+    Async.prototype.invoke = AsyncInvoke;
+    Async.prototype.settlePromises = AsyncSettlePromises;
 
     function _drainQueue(queue) {
       while (queue.length() > 0) {
@@ -269,8 +228,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     module.exports.firstLineError = firstLineError;
   }, {
     "./queue": 26,
-    "./schedule": 29,
-    "./util": 36
+    "./schedule": 29
   }],
   3: [function (require, module, exports) {
     "use strict";
@@ -823,8 +781,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   9: [function (require, module, exports) {
     "use strict";
 
-    module.exports = function (Promise, Context) {
-      var getDomain = Promise._getDomain;
+    module.exports = function (Promise, Context, enableAsyncHooks, disableAsyncHooks) {
       var async = Promise._async;
 
       var Warning = require("./errors").Warning;
@@ -847,6 +804,35 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       var warnings = !!(util.env("BLUEBIRD_WARNINGS") != 0 && (debugging || util.env("BLUEBIRD_WARNINGS")));
       var longStackTraces = !!(util.env("BLUEBIRD_LONG_STACK_TRACES") != 0 && (debugging || util.env("BLUEBIRD_LONG_STACK_TRACES")));
       var wForgottenReturn = util.env("BLUEBIRD_W_FORGOTTEN_RETURN") != 0 && (warnings || !!util.env("BLUEBIRD_W_FORGOTTEN_RETURN"));
+      var deferUnhandledRejectionCheck;
+
+      (function () {
+        var promises = [];
+
+        function unhandledRejectionCheck() {
+          for (var i = 0; i < promises.length; ++i) {
+            promises[i]._notifyUnhandledRejection();
+          }
+
+          unhandledRejectionClear();
+        }
+
+        function unhandledRejectionClear() {
+          promises.length = 0;
+        }
+
+        deferUnhandledRejectionCheck = function deferUnhandledRejectionCheck(promise) {
+          promises.push(promise);
+          setTimeout(unhandledRejectionCheck, 1);
+        };
+
+        es5.defineProperty(Promise, "_unhandledRejectionCheck", {
+          value: unhandledRejectionCheck
+        });
+        es5.defineProperty(Promise, "_unhandledRejectionClear", {
+          value: unhandledRejectionClear
+        });
+      })();
 
       Promise.prototype.suppressUnhandledRejections = function () {
         var target = this._target();
@@ -859,10 +845,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         this._setRejectionIsUnhandled();
 
-        var self = this;
-        setTimeout(function () {
-          self._notifyUnhandledRejection();
-        }, 1);
+        deferUnhandledRejectionCheck(this);
       };
 
       Promise.prototype._notifyUnhandledRejectionIsHandled = function () {
@@ -922,13 +905,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
 
       Promise.onPossiblyUnhandledRejection = function (fn) {
-        var domain = getDomain();
-        possiblyUnhandledRejection = typeof fn === "function" ? domain === null ? fn : util.domainBind(domain, fn) : undefined;
+        var context = Promise._getContext();
+
+        possiblyUnhandledRejection = util.contextBind(context, fn);
       };
 
       Promise.onUnhandledRejectionHandled = function (fn) {
-        var domain = getDomain();
-        unhandledRejectionHandled = typeof fn === "function" ? domain === null ? fn : util.domainBind(domain, fn) : undefined;
+        var context = Promise._getContext();
+
+        unhandledRejectionHandled = util.contextBind(context, fn);
       };
 
       var disableLongStackTraces = function disableLongStackTraces() {};
@@ -953,7 +938,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             Promise.prototype._attachExtraTrace = Promise_attachExtraTrace;
             Promise.prototype._dereferenceTrace = Promise_dereferenceTrace;
             Context.deactivateLongStackTraces();
-            async.enableTrampoline();
             config.longStackTraces = false;
           };
 
@@ -961,7 +945,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           Promise.prototype._attachExtraTrace = longStackTracesAttachExtraTrace;
           Promise.prototype._dereferenceTrace = longStackTracesDereferenceTrace;
           Context.activateLongStackTraces();
-          async.disableTrampolineIfNecessary();
         }
       };
 
@@ -969,30 +952,70 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return config.longStackTraces && longStackTracesIsSupported();
       };
 
+      var legacyHandlers = {
+        unhandledrejection: {
+          before: function before() {
+            var ret = util.global.onunhandledrejection;
+            util.global.onunhandledrejection = null;
+            return ret;
+          },
+          after: function after(fn) {
+            util.global.onunhandledrejection = fn;
+          }
+        },
+        rejectionhandled: {
+          before: function before() {
+            var ret = util.global.onrejectionhandled;
+            util.global.onrejectionhandled = null;
+            return ret;
+          },
+          after: function after(fn) {
+            util.global.onrejectionhandled = fn;
+          }
+        }
+      };
+
       var fireDomEvent = function () {
+        var dispatch = function dispatch(legacy, e) {
+          if (legacy) {
+            var fn;
+
+            try {
+              fn = legacy.before();
+              return !util.global.dispatchEvent(e);
+            } finally {
+              legacy.after(fn);
+            }
+          } else {
+            return !util.global.dispatchEvent(e);
+          }
+        };
+
         try {
           if (typeof CustomEvent === "function") {
             var event = new CustomEvent("CustomEvent");
             util.global.dispatchEvent(event);
             return function (name, event) {
+              name = name.toLowerCase();
               var eventData = {
                 detail: event,
                 cancelable: true
               };
-              es5.defineProperty(eventData, "promise", {
+              var domEvent = new CustomEvent(name, eventData);
+              es5.defineProperty(domEvent, "promise", {
                 value: event.promise
               });
-              es5.defineProperty(eventData, "reason", {
+              es5.defineProperty(domEvent, "reason", {
                 value: event.reason
               });
-              var domEvent = new CustomEvent(name.toLowerCase(), eventData);
-              return !util.global.dispatchEvent(domEvent);
+              return dispatch(legacyHandlers[name], domEvent);
             };
           } else if (typeof Event === "function") {
             var event = new Event("CustomEvent");
             util.global.dispatchEvent(event);
             return function (name, event) {
-              var domEvent = new Event(name.toLowerCase(), {
+              name = name.toLowerCase();
+              var domEvent = new Event(name, {
                 cancelable: true
               });
               domEvent.detail = event;
@@ -1002,16 +1025,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               es5.defineProperty(domEvent, "reason", {
                 value: event.reason
               });
-              return !util.global.dispatchEvent(domEvent);
+              return dispatch(legacyHandlers[name], domEvent);
             };
           } else {
             var event = document.createEvent("CustomEvent");
             event.initCustomEvent("testingtheevent", false, true, {});
             util.global.dispatchEvent(event);
             return function (name, event) {
+              name = name.toLowerCase();
               var domEvent = document.createEvent("CustomEvent");
-              domEvent.initCustomEvent(name.toLowerCase(), false, true, event);
-              return !util.global.dispatchEvent(domEvent);
+              domEvent.initCustomEvent(name, false, true, event);
+              return dispatch(legacyHandlers[name], domEvent);
             };
           }
         } catch (e) {}
@@ -1142,6 +1166,21 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           } else if (!opts.monitoring && config.monitoring) {
             config.monitoring = false;
             Promise.prototype._fireEvent = defaultFireEvent;
+          }
+        }
+
+        if ("asyncHooks" in opts && util.nodeSupportsAsyncResource) {
+          var prev = config.asyncHooks;
+          var cur = !!opts.asyncHooks;
+
+          if (prev !== cur) {
+            config.asyncHooks = cur;
+
+            if (cur) {
+              enableAsyncHooks();
+            } else {
+              disableAsyncHooks();
+            }
           }
         }
 
@@ -1573,8 +1612,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       function setBounds(firstLineError, lastLineError) {
         if (!longStackTracesIsSupported()) return;
-        var firstStackLines = firstLineError.stack.split("\n");
-        var lastStackLines = lastLineError.stack.split("\n");
+        var firstStackLines = (firstLineError.stack || "").split("\n");
+        var lastStackLines = (lastLineError.stack || "").split("\n");
         var firstIndex = -1;
         var lastIndex = -1;
         var firstFileName;
@@ -1805,10 +1844,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         warnings: warnings,
         longStackTraces: false,
         cancellation: false,
-        monitoring: false
+        monitoring: false,
+        asyncHooks: false
       };
       if (longStackTraces) Promise.longStackTraces();
       return {
+        asyncHooks: function asyncHooks() {
+          return config.asyncHooks;
+        },
         longStackTraces: function longStackTraces() {
           return config.longStackTraces;
         },
@@ -2569,7 +2612,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   17: [function (require, module, exports) {
     "use strict";
 
-    module.exports = function (Promise, PromiseArray, tryConvertToPromise, INTERNAL, async, getDomain) {
+    module.exports = function (Promise, PromiseArray, tryConvertToPromise, INTERNAL, async) {
       var util = require("./util");
 
       var canEvaluate = util.canEvaluate;
@@ -2715,11 +2758,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
               if (!ret._isFateSealed()) {
                 if (holder.asyncNeeded) {
-                  var domain = getDomain();
+                  var context = Promise._getContext();
 
-                  if (domain !== null) {
-                    holder.fn = util.domainBind(domain, holder.fn);
-                  }
+                  holder.fn = util.contextBind(context, holder.fn);
                 }
 
                 ret._setAsyncGuaranteed();
@@ -2752,8 +2793,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "use strict";
 
     module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
-      var getDomain = Promise._getDomain;
-
       var util = require("./util");
 
       var tryCatch = util.tryCatch;
@@ -2765,13 +2804,24 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         this._promise._captureStackTrace();
 
-        var domain = getDomain();
-        this._callback = domain === null ? fn : util.domainBind(domain, fn);
+        var context = Promise._getContext();
+
+        this._callback = util.contextBind(context, fn);
         this._preservedValues = _filter === INTERNAL ? new Array(this.length()) : null;
         this._limit = limit;
         this._inFlight = 0;
         this._queue = [];
         async.invoke(this._asyncInit, this, undefined);
+
+        if (util.isArray(promises)) {
+          for (var i = 0; i < promises.length; ++i) {
+            var maybePromise = promises[i];
+
+            if (maybePromise instanceof Promise) {
+              maybePromise.suppressUnhandledRejections();
+            }
+          }
+        }
       }
 
       util.inherits(MappingPromiseArray, PromiseArray);
@@ -3178,21 +3228,50 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       var util = require("./util");
 
-      var getDomain;
+      util.setReflectHandler(reflectHandler);
 
-      if (util.isNode) {
-        getDomain = function getDomain() {
-          var ret = process.domain;
-          if (ret === undefined) ret = null;
-          return ret;
-        };
-      } else {
-        getDomain = function getDomain() {
+      var getDomain = function getDomain() {
+        var domain = process.domain;
+
+        if (domain === undefined) {
           return null;
-        };
-      }
+        }
 
-      util.notEnumerableProp(Promise, "_getDomain", getDomain);
+        return domain;
+      };
+
+      var getContextDefault = function getContextDefault() {
+        return null;
+      };
+
+      var getContextDomain = function getContextDomain() {
+        return {
+          domain: getDomain(),
+          async: null
+        };
+      };
+
+      var AsyncResource = util.isNode && util.nodeSupportsAsyncResource ? require("async_hooks").AsyncResource : null;
+
+      var getContextAsyncHooks = function getContextAsyncHooks() {
+        return {
+          domain: getDomain(),
+          async: new AsyncResource("Bluebird::Promise")
+        };
+      };
+
+      var getContext = util.isNode ? getContextDomain : getContextDefault;
+      util.notEnumerableProp(Promise, "_getContext", getContext);
+
+      var enableAsyncHooks = function enableAsyncHooks() {
+        getContext = getContextAsyncHooks;
+        util.notEnumerableProp(Promise, "_getContext", getContextAsyncHooks);
+      };
+
+      var disableAsyncHooks = function disableAsyncHooks() {
+        getContext = getContextDomain;
+        util.notEnumerableProp(Promise, "_getContext", getContextDomain);
+      };
 
       var es5 = require("./es5");
 
@@ -3228,7 +3307,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       var createContext = Context.create;
 
-      var debug = require("./debuggability")(Promise, Context);
+      var debug = require("./debuggability")(Promise, Context, enableAsyncHooks, disableAsyncHooks);
 
       var CapturedTrace = debug.CapturedTrace;
 
@@ -3293,6 +3372,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
           catchInstances.length = j;
           fn = arguments[i];
+
+          if (typeof fn !== "function") {
+            throw new TypeError("The last argument to .catch() " + "must be a function, got " + util.toString(fn));
+          }
+
           return this.then(undefined, catchFilter(catchInstances, fn, this));
         }
 
@@ -3448,7 +3532,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           this._fireEvent("promiseChained", this, promise);
         }
 
-        var domain = getDomain();
+        var context = getContext();
 
         if (!((bitField & 50397184) === 0)) {
           var handler,
@@ -3473,13 +3557,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
 
           async.invoke(settler, target, {
-            handler: domain === null ? handler : typeof handler === "function" && util.domainBind(domain, handler),
+            handler: util.contextBind(context, handler),
             promise: promise,
             receiver: receiver,
             value: value
           });
         } else {
-          target._addCallbacks(didFulfill, didReject, promise, receiver, domain);
+          target._addCallbacks(didFulfill, didReject, promise, receiver, context);
         }
 
         return promise;
@@ -3543,7 +3627,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       Promise.prototype._setAsyncGuaranteed = function () {
         if (async.hasCustomScheduler()) return;
-        this._bitField = this._bitField | 134217728;
+        var bitField = this._bitField;
+        this._bitField = bitField | (bitField & 536870912) >> 2 ^ 134217728;
+      };
+
+      Promise.prototype._setNoAsyncGuarantee = function () {
+        this._bitField = (this._bitField | 536870912) & ~134217728;
       };
 
       Promise.prototype._receiverAt = function (index) {
@@ -3599,7 +3688,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         this._addCallbacks(fulfill, reject, promise, receiver, null);
       };
 
-      Promise.prototype._addCallbacks = function (fulfill, reject, promise, receiver, domain) {
+      Promise.prototype._addCallbacks = function (fulfill, reject, promise, receiver, context) {
         var index = this._length();
 
         if (index >= 65535 - 4) {
@@ -3613,11 +3702,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           this._receiver0 = receiver;
 
           if (typeof fulfill === "function") {
-            this._fulfillmentHandler0 = domain === null ? fulfill : util.domainBind(domain, fulfill);
+            this._fulfillmentHandler0 = util.contextBind(context, fulfill);
           }
 
           if (typeof reject === "function") {
-            this._rejectionHandler0 = domain === null ? reject : util.domainBind(domain, reject);
+            this._rejectionHandler0 = util.contextBind(context, reject);
           }
         } else {
           var base = index * 4 - 4;
@@ -3625,11 +3714,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           this[base + 3] = receiver;
 
           if (typeof fulfill === "function") {
-            this[base + 0] = domain === null ? fulfill : util.domainBind(domain, fulfill);
+            this[base + 0] = util.contextBind(context, fulfill);
           }
 
           if (typeof reject === "function") {
-            this[base + 1] = domain === null ? reject : util.domainBind(domain, reject);
+            this[base + 1] = util.contextBind(context, reject);
           }
         }
 
@@ -3672,7 +3761,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
           this._setLength(0);
 
-          this._setFollowee(promise);
+          this._setFollowee(maybePromise);
         } else if ((bitField & 33554432) !== 0) {
           this._fulfill(promise._value());
         } else if ((bitField & 16777216) !== 0) {
@@ -3975,6 +4064,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
       };
 
+      if (typeof Symbol !== "undefined" && Symbol.toStringTag) {
+        es5.defineProperty(Promise.prototype, Symbol.toStringTag, {
+          get: function get() {
+            return "Object";
+          }
+        });
+      }
+
       function deferResolve(v) {
         this.promise._resolveCallback(v);
       }
@@ -4005,20 +4102,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       require("./synchronous_inspection")(Promise);
 
-      require("./join")(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async, getDomain);
+      require("./join")(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async);
 
       Promise.Promise = Promise;
-      Promise.version = "3.5.3";
-
-      require('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
+      Promise.version = "3.7.2";
 
       require('./call_get.js')(Promise);
 
-      require('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
-
-      require('./timers.js')(Promise, INTERNAL, debug);
-
       require('./generators.js')(Promise, apiRejection, INTERNAL, tryConvertToPromise, Proxyable, debug);
+
+      require('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
 
       require('./nodeify.js')(Promise);
 
@@ -4034,11 +4127,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       require('./some.js')(Promise, PromiseArray, apiRejection);
 
-      require('./filter.js')(Promise, INTERNAL);
+      require('./timers.js')(Promise, INTERNAL, debug);
+
+      require('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
+
+      require('./any.js')(Promise);
 
       require('./each.js')(Promise, INTERNAL);
 
-      require('./any.js')(Promise);
+      require('./filter.js')(Promise, INTERNAL);
 
       util.toFastProperties(Promise);
       util.toFastProperties(Promise.prototype);
@@ -4102,7 +4199,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "./thenables": 33,
     "./timers.js": 34,
     "./using.js": 35,
-    "./util": 36
+    "./util": 36,
+    "async_hooks": undefined
   }],
   23: [function (require, module, exports) {
     "use strict";
@@ -4130,6 +4228,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         if (values instanceof Promise) {
           promise._propagateFrom(values, 3);
+
+          values.suppressUnhandledRejections();
         }
 
         promise._setOnCancel(this);
@@ -4902,16 +5002,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "use strict";
 
     module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
-      var getDomain = Promise._getDomain;
-
       var util = require("./util");
 
       var tryCatch = util.tryCatch;
 
       function ReductionPromiseArray(promises, fn, initialValue, _each) {
         this.constructor$(promises);
-        var domain = getDomain();
-        this._fn = domain === null ? fn : util.domainBind(domain, fn);
+
+        var context = Promise._getContext();
+
+        this._fn = util.contextBind(context, fn);
 
         if (initialValue !== undefined) {
           initialValue = Promise.resolve(initialValue);
@@ -4998,6 +5098,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         this._currentCancellable = value;
 
+        for (var j = i; j < length; ++j) {
+          var maybePromise = values[j];
+
+          if (maybePromise instanceof Promise) {
+            maybePromise.suppressUnhandledRejections();
+          }
+        }
+
         if (!value.isRejected()) {
           for (; i < length; ++i) {
             var ctx = {
@@ -5008,6 +5116,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               array: this
             };
             value = value._then(gotAccum, undefined, undefined, ctx, undefined);
+
+            if ((i & 127) === 0) {
+              value._setNoAsyncGuarantee();
+            }
           }
         }
 
@@ -5113,7 +5225,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       schedule = function schedule(fn) {
         nativePromise.then(fn);
       };
-    } else if (typeof MutationObserver !== "undefined" && !(typeof window !== "undefined" && window.navigator && (window.navigator.standalone || window.cordova))) {
+    } else if (typeof MutationObserver !== "undefined" && !(typeof window !== "undefined" && window.navigator && (window.navigator.standalone || window.cordova)) && "classList" in document.documentElement) {
       schedule = function () {
         var div = document.createElement("div");
         var opts = {
@@ -5201,6 +5313,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       Promise.settle = function (promises) {
         debug.deprecated(".settle()", ".reflect()");
+        return new SettledPromiseArray(promises).promise();
+      };
+
+      Promise.allSettled = function (promises) {
         return new SettledPromiseArray(promises).promise();
       };
 
@@ -6288,18 +6404,51 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         try {
           var promise = new Promise(function () {});
 
-          if ({}.toString.call(promise) === "[object Promise]") {
+          if (classString(promise) === "[object Promise]") {
             return Promise;
           }
         } catch (e) {}
       }
     }
 
-    function domainBind(self, cb) {
-      return self.bind(cb);
+    var reflectHandler;
+
+    function contextBind(ctx, cb) {
+      if (ctx === null || typeof cb !== "function" || cb === reflectHandler) {
+        return cb;
+      }
+
+      if (ctx.domain !== null) {
+        cb = ctx.domain.bind(cb);
+      }
+
+      var async = ctx.async;
+
+      if (async !== null) {
+        var old = cb;
+
+        cb = function cb() {
+          var $_len = arguments.length + 2;
+          var args = new Array($_len);
+
+          for (var $_i = 2; $_i < $_len; ++$_i) {
+            args[$_i] = arguments[$_i - 2];
+          }
+
+          ;
+          args[0] = old;
+          args[1] = this;
+          return async.runInAsyncScope.apply(async, args);
+        };
+      }
+
+      return cb;
     }
 
     var ret = {
+      setReflectHandler: function setReflectHandler(fn) {
+        reflectHandler = fn;
+      },
       isClass: isClass,
       isIdentifier: isIdentifier,
       inheritedDataKeys: inheritedDataKeys,
@@ -6326,18 +6475,38 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       markAsOriginatingFromRejection: markAsOriginatingFromRejection,
       classString: classString,
       copyDescriptors: copyDescriptors,
-      hasDevTools: typeof chrome !== "undefined" && chrome && typeof chrome.loadTimes === "function",
       isNode: isNode,
       hasEnvVariables: hasEnvVariables,
       env: env,
       global: globalObject,
       getNativePromise: getNativePromise,
-      domainBind: domainBind
+      contextBind: contextBind
     };
 
     ret.isRecentNode = ret.isNode && function () {
-      var version = process.versions.node.split(".").map(Number);
+      var version;
+
+      if (process.versions && process.versions.node) {
+        version = process.versions.node.split(".").map(Number);
+      } else if (process.version) {
+        version = process.version.split(".").map(Number);
+      }
+
       return version[0] === 0 && version[1] > 10 || version[0] > 0;
+    }();
+
+    ret.nodeSupportsAsyncResource = ret.isNode && function () {
+      var supportsAsync = false;
+
+      try {
+        var res = require("async_hooks").AsyncResource;
+
+        supportsAsync = typeof res.prototype.runInAsyncScope === "function";
+      } catch (e) {
+        supportsAsync = false;
+      }
+
+      return supportsAsync;
     }();
 
     if (ret.isNode) ret.toFastProperties(process);
@@ -6350,7 +6519,8 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = ret;
   }, {
-    "./es5": 13
+    "./es5": 13,
+    "async_hooks": undefined
   }],
   37: [function (require, module, exports) {
     'use strict';
@@ -6359,12 +6529,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       throw new Error("The JavaScript runtime does not support Proxy!");
     }
 
+    var Promise = require("bluebird");
+
     var FS = require("fs-extra");
 
     var PATH = require("path");
 
-    var Promise = require("bluebird");
+    var GLOB = require("glob");
 
+    GLOB.async = Promise.promisify(GLOB);
     var VERBOSE = !!process.env.VERBOSE;
 
     function makeLIBFor(doc, baseDir, parentLib) {
@@ -6373,7 +6546,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
 
       if (typeof doc === 'string') {
-        doc = JSON.parse(doc);
+        try {
+          doc = JSON.parse(doc);
+        } catch (err) {
+          console.error('doc:', doc);
+          throw err;
+        }
       }
 
       var LIB = {};
@@ -6548,7 +6726,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       while (path = paths.pop()) {
         if (FS.existsSync(path) && FS.statSync(path).isFile()) {
-          parentLib = makeLIBFor(FS.readFileSync(path, 'utf8'), PATH.dirname(path), parentLib);
+          try {
+            parentLib = makeLIBFor(FS.readFileSync(path, 'utf8'), PATH.dirname(path), parentLib);
+          } catch (err) {
+            console.error('path:', path);
+            throw err;
+          }
         }
       }
 
@@ -6571,366 +6754,435 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return makeLIBFor(doc, baseDir);
     };
 
-    exports.docFromNodeModules = function _callee(baseDir) {
-      var addPackageForPath, doc, dir, packages;
-      return _regenerator["default"].async(function _callee$(_context2) {
-        while (1) {
-          switch (_context2.prev = _context2.next) {
-            case 0:
-              _context2.prev = 0;
+    exports.docFromNodeModules = /*#__PURE__*/function () {
+      var _ref = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee3(baseDir) {
+        var addPackageForPath, doc;
+        return _regenerator["default"].wrap(function _callee3$(_context3) {
+          while (1) {
+            switch (_context3.prev = _context3.next) {
+              case 0:
+                _context3.prev = 0;
 
-              addPackageForPath = function addPackageForPath(packagePath) {
-                var descriptorPath, descriptor;
-                return _regenerator["default"].async(function addPackageForPath$(_context) {
-                  while (1) {
-                    switch (_context.prev = _context.next) {
-                      case 0:
-                        descriptorPath = PATH.join(packagePath, 'package.json');
-                        _context.prev = 1;
-                        _context.t0 = JSON;
-                        _context.next = 5;
-                        return _regenerator["default"].awrap(FS.readFileSync(descriptorPath, 'utf8'));
+                addPackageForPath = /*#__PURE__*/function () {
+                  var _ref2 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee(packagePath) {
+                    var descriptorPath, descriptor;
+                    return _regenerator["default"].wrap(function _callee$(_context) {
+                      while (1) {
+                        switch (_context.prev = _context.next) {
+                          case 0:
+                            descriptorPath = PATH.join(packagePath, 'package.json');
+                            _context.next = 3;
+                            return FS.exists(descriptorPath);
 
-                      case 5:
-                        _context.t1 = _context.sent;
-                        descriptor = _context.t0.parse.call(_context.t0, _context.t1);
+                          case 3:
+                            if (_context.sent) {
+                              _context.next = 5;
+                              break;
+                            }
 
-                        if (descriptor.bin) {
-                          Object.keys(descriptor.bin).map(function (binName) {
-                            doc.bin[binName] = PATH.relative(baseDir, PATH.join(packagePath, descriptor.bin[binName]));
-                          });
-                        }
+                            return _context.abrupt("return");
 
-                        doc.js[descriptor.name] = PATH.relative(baseDir, packagePath) || '.';
-                        _context.next = 16;
-                        break;
+                          case 5:
+                            _context.prev = 5;
+                            _context.t0 = JSON;
+                            _context.next = 9;
+                            return FS.readFile(descriptorPath, 'utf8');
 
-                      case 11:
-                        _context.prev = 11;
-                        _context.t2 = _context["catch"](1);
+                          case 9:
+                            _context.t1 = _context.sent;
+                            descriptor = _context.t0.parse.call(_context.t0, _context.t1);
 
-                        if (!(_context.t2.code === 'ENOENT')) {
-                          _context.next = 15;
-                          break;
-                        }
+                            if (descriptor.bin) {
+                              Object.keys(descriptor.bin).map(function (binName) {
+                                doc.bin[binName] = PATH.relative(baseDir, PATH.join(packagePath, descriptor.bin[binName]));
+                              });
+                            }
 
-                        return _context.abrupt("return");
+                            doc.js[descriptor.name] = PATH.relative(baseDir, packagePath) || '.';
 
-                      case 15:
-                        throw _context.t2;
-
-                      case 16:
-                      case "end":
-                        return _context.stop();
-                    }
-                  }
-                }, null, null, [[1, 11]]);
-              }; // Add own package.
-
-
-              doc = {
-                'bin': {},
-                'js': {}
-              };
-              _context2.next = 5;
-              return _regenerator["default"].awrap(addPackageForPath(baseDir));
-
-            case 5:
-              // Add dependencies.
-              dir = PATH.join(baseDir, 'node_modules'); // When being installed as a transitive dependency the 'dir' does not exist local to our package.
-              // We need to index our parent packages as npm installs packages as flat as possible.
-
-              if (!FS.existsSync(dir)) {
-                dir = PATH.join(baseDir, '../../node_modules');
-              }
-
-              _context2.next = 9;
-              return _regenerator["default"].awrap(FS.readdir(dir));
-
-            case 9:
-              packages = _context2.sent;
-              _context2.next = 12;
-              return _regenerator["default"].awrap(Promise.all(packages.map(function (name) {
-                return addPackageForPath(PATH.join(dir, name));
-              })));
-
-            case 12:
-              return _context2.abrupt("return", doc);
-
-            case 15:
-              _context2.prev = 15;
-              _context2.t0 = _context2["catch"](0);
-              _context2.t0.message += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
-              _context2.t0.stack += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
-              throw _context2.t0;
-
-            case 20:
-            case "end":
-              return _context2.stop();
-          }
-        }
-      }, null, null, [[0, 15]]);
-    };
-
-    exports.docFromFilepathsInOwnAndParent = function _callee4(baseDir, filepaths, options) {
-      var traverse, _doc, dir, level;
-
-      return _regenerator["default"].async(function _callee4$(_context6) {
-        while (1) {
-          switch (_context6.prev = _context6.next) {
-            case 0:
-              options = options || {};
-              options.lookupDirs = options.lookupDirs || ['']; //console.log("options", options);
-
-              _context6.prev = 2;
-
-              traverse = function traverse(dir) {
-                var path;
-                return _regenerator["default"].async(function traverse$(_context5) {
-                  while (1) {
-                    switch (_context5.prev = _context5.next) {
-                      case 0:
-                        level += 1;
-                        _context5.next = 3;
-                        return _regenerator["default"].awrap(Promise.mapSeries(options.lookupDirs, function _callee3(lookupDir) {
-                          var lookupPath, subdirs, queue;
-                          return _regenerator["default"].async(function _callee3$(_context4) {
-                            while (1) {
-                              switch (_context4.prev = _context4.next) {
-                                case 0:
-                                  lookupPath = PATH.join(dir, lookupDir);
-                                  _context4.next = 3;
-                                  return _regenerator["default"].awrap(FS.exists(lookupPath));
-
-                                case 3:
-                                  if (_context4.sent) {
-                                    _context4.next = 5;
-                                    break;
-                                  }
-
-                                  return _context4.abrupt("return");
-
-                                case 5:
-                                  _context4.next = 7;
-                                  return _regenerator["default"].awrap(FS.readdir(lookupPath));
-
-                                case 7:
-                                  subdirs = _context4.sent;
-                                  queue = Promise.resolve();
-                                  subdirs.forEach(function (subdir) {
-                                    var subUriParts = options.subUri && options.subUri.split("/") || [''];
-
-                                    var _loop = function _loop(i) {
-                                      var subUri = subUriParts.slice(0, i).join('/') || '';
-                                      Object.keys(filepaths).forEach(function (filepath) {
-                                        queue = queue.then(function _callee2() {
-                                          var path, name, descriptorPath, descriptor;
-                                          return _regenerator["default"].async(function _callee2$(_context3) {
-                                            while (1) {
-                                              switch (_context3.prev = _context3.next) {
-                                                case 0:
-                                                  path = PATH.join(dir, lookupDir, subdir, subUri, filepath);
-                                                  _context3.next = 3;
-                                                  return _regenerator["default"].awrap(FS.exists(path));
-
-                                                case 3:
-                                                  if (!_context3.sent) {
-                                                    _context3.next = 15;
-                                                    break;
-                                                  }
-
-                                                  name = PATH.join(subdir, subUri);
-                                                  descriptorPath = PATH.join(dir, lookupDir, subdir, 'package.json');
-                                                  _doc[filepaths[filepath]] = _doc[filepaths[filepath]] || {};
-                                                  _context3.next = 9;
-                                                  return _regenerator["default"].awrap(FS.exists(descriptorPath));
-
-                                                case 9:
-                                                  if (!_context3.sent) {
-                                                    _context3.next = 14;
-                                                    break;
-                                                  }
-
-                                                  _context3.next = 12;
-                                                  return _regenerator["default"].awrap(FS.readJSON(descriptorPath));
-
-                                                case 12:
-                                                  descriptor = _context3.sent;
-
-                                                  if (!subUri && name !== descriptor.name) {
-                                                    if (!_doc[filepaths[filepath]][descriptor.name]) {
-                                                      _doc[filepaths[filepath]][descriptor.name] = PATH.relative(baseDir, path);
-                                                    }
-                                                  }
-
-                                                case 14:
-                                                  if (!_doc[filepaths[filepath]][name]) {
-                                                    _doc[filepaths[filepath]][name] = PATH.relative(baseDir, path);
-                                                  }
-
-                                                case 15:
-                                                case "end":
-                                                  return _context3.stop();
-                                              }
-                                            }
-                                          });
-                                        });
-                                      });
-                                    };
-
-                                    for (var i = subUriParts.length; i >= 0; i--) {
-                                      _loop(i);
-                                    }
-                                  });
-                                  _context4.next = 12;
-                                  return _regenerator["default"].awrap(queue);
-
-                                case 12:
-                                case "end":
-                                  return _context4.stop();
+                            if (descriptor.uid) {
+                              if (!doc.js[descriptor.uid]) {
+                                doc.js[descriptor.uid] = PATH.relative(baseDir, packagePath) || '.';
                               }
                             }
-                          });
-                        }));
 
-                      case 3:
-                        path = PATH.dirname(dir);
+                            _context.next = 21;
+                            break;
 
-                        if (!(path === dir)) {
-                          _context5.next = 6;
-                          break;
+                          case 16:
+                            _context.prev = 16;
+                            _context.t2 = _context["catch"](5);
+
+                            if (!(_context.t2.code === 'ENOENT')) {
+                              _context.next = 20;
+                              break;
+                            }
+
+                            return _context.abrupt("return");
+
+                          case 20:
+                            throw _context.t2;
+
+                          case 21:
+                          case "end":
+                            return _context.stop();
                         }
+                      }
+                    }, _callee, null, [[5, 16]]);
+                  }));
 
-                        return _context5.abrupt("return");
+                  return function addPackageForPath(_x3) {
+                    return _ref2.apply(this, arguments);
+                  };
+                }(); // Add own package.
 
-                      case 6:
-                        if (!(level === options.maxLevels)) {
-                          _context5.next = 8;
-                          break;
+
+                doc = {
+                  'bin': {},
+                  'js': {}
+                };
+                _context3.next = 5;
+                return addPackageForPath(baseDir);
+
+              case 5:
+                _context3.next = 7;
+                return Promise.mapSeries(['/node_modules/*', '/node_modules/*/*'], /*#__PURE__*/function () {
+                  var _ref3 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee2(lookupPath) {
+                    var paths;
+                    return _regenerator["default"].wrap(function _callee2$(_context2) {
+                      while (1) {
+                        switch (_context2.prev = _context2.next) {
+                          case 0:
+                            _context2.next = 2;
+                            return GLOB.async(lookupPath, {
+                              cwd: baseDir,
+                              root: baseDir
+                            });
+
+                          case 2:
+                            paths = _context2.sent;
+                            _context2.next = 5;
+                            return Promise.all(paths.map(function (path) {
+                              return addPackageForPath(path);
+                            }));
+
+                          case 5:
+                          case "end":
+                            return _context2.stop();
                         }
+                      }
+                    }, _callee2);
+                  }));
 
-                        return _context5.abrupt("return");
+                  return function (_x4) {
+                    return _ref3.apply(this, arguments);
+                  };
+                }());
 
-                      case 8:
-                        return _context5.abrupt("return", traverse(path));
+              case 7:
+                return _context3.abrupt("return", doc);
 
-                      case 9:
-                      case "end":
-                        return _context5.stop();
-                    }
-                  }
-                });
-              };
+              case 10:
+                _context3.prev = 10;
+                _context3.t0 = _context3["catch"](0);
+                _context3.t0.message += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
+                _context3.t0.stack += " (while docFromNodeModules baseDir:'".concat(baseDir, "')");
+                throw _context3.t0;
 
-              _doc = {};
-              dir = baseDir;
-              level = 0;
-              _context6.next = 9;
-              return _regenerator["default"].awrap(traverse(baseDir));
-
-            case 9:
-              return _context6.abrupt("return", _doc);
-
-            case 12:
-              _context6.prev = 12;
-              _context6.t0 = _context6["catch"](2);
-              _context6.t0.message += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
-              _context6.t0.stack += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
-              throw _context6.t0;
-
-            case 17:
-            case "end":
-              return _context6.stop();
+              case 15:
+              case "end":
+                return _context3.stop();
+            }
           }
-        }
-      }, null, null, [[2, 12]]);
-    };
+        }, _callee3, null, [[0, 10]]);
+      }));
 
-    if (require.main === module) {
-      var main = function main(args) {
-        var cwd, _doc2, path, _path;
+      return function (_x2) {
+        return _ref.apply(this, arguments);
+      };
+    }();
 
-        return _regenerator["default"].async(function main$(_context7) {
+    exports.docFromFilepathsInOwnAndParent = /*#__PURE__*/function () {
+      var _ref4 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee7(baseDir, filepaths, options) {
+        var traverse, doc, dir, level;
+        return _regenerator["default"].wrap(function _callee7$(_context7) {
           while (1) {
             switch (_context7.prev = _context7.next) {
               case 0:
-                cwd = process.cwd();
+                options = options || {};
+                options.lookupDirs = options.lookupDirs || ['']; //console.log("options", options);
 
-                if ((args.verbose || args.debug) && !process.env.VERBOSE) {
-                  process.env.VERBOSE = "1";
-                }
+                _context7.prev = 2;
 
-                VERBOSE = !!process.env.VERBOSE;
+                traverse = /*#__PURE__*/function () {
+                  var _ref5 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee6(dir) {
+                    var path;
+                    return _regenerator["default"].wrap(function _callee6$(_context6) {
+                      while (1) {
+                        switch (_context6.prev = _context6.next) {
+                          case 0:
+                            level += 1;
+                            _context6.next = 3;
+                            return Promise.mapSeries(options.lookupDirs, /*#__PURE__*/function () {
+                              var _ref6 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee5(lookupDir) {
+                                var lookupPath, subdirs, queue;
+                                return _regenerator["default"].wrap(function _callee5$(_context5) {
+                                  while (1) {
+                                    switch (_context5.prev = _context5.next) {
+                                      case 0:
+                                        lookupPath = "/".concat(lookupDir, "/*").replace(/[\/]+/g, '/');
+                                        _context5.next = 3;
+                                        return GLOB.async(lookupPath, {
+                                          cwd: dir,
+                                          root: dir
+                                        });
 
-                if (args.cwd) {
-                  cwd = PATH.resolve(cwd, args.cwd);
-                  process.chdir(cwd);
-                }
+                                      case 3:
+                                        subdirs = _context5.sent.map(function (path) {
+                                          return path.substring(dir.length + 1);
+                                        });
+                                        queue = Promise.resolve();
+                                        subdirs.forEach(function (subdir) {
+                                          var subUriParts = options.subUri && options.subUri.split("/") || [''];
 
-                if (!(args._.length === 2 && args._[0] === 'from' && args._[1] === 'node_modules')) {
-                  _context7.next = 11;
-                  break;
-                }
+                                          var _loop = function _loop(i) {
+                                            var subUri = subUriParts.slice(0, i).join('/') || '';
+                                            Object.keys(filepaths).forEach(function (filepath) {
+                                              queue = queue.then( /*#__PURE__*/(0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee4() {
+                                                var path, name, descriptorPath, descriptor;
+                                                return _regenerator["default"].wrap(function _callee4$(_context4) {
+                                                  while (1) {
+                                                    switch (_context4.prev = _context4.next) {
+                                                      case 0:
+                                                        path = PATH.join(dir, subdir, subUri, filepath);
+                                                        _context4.next = 3;
+                                                        return FS.exists(path);
 
-                _context7.next = 7;
-                return _regenerator["default"].awrap(exports.docFromNodeModules(cwd));
+                                                      case 3:
+                                                        if (!_context4.sent) {
+                                                          _context4.next = 16;
+                                                          break;
+                                                        }
 
-              case 7:
-                _doc2 = _context7.sent;
-                process.stdout.write(JSON.stringify(_doc2, null, 4));
-                _context7.next = 26;
-                break;
+                                                        name = PATH.join(subdir, subUri);
+                                                        descriptorPath = PATH.join(dir, subdir, 'package.json');
+                                                        doc[filepaths[filepath]] = doc[filepaths[filepath]] || {};
+                                                        _context4.next = 9;
+                                                        return FS.exists(descriptorPath);
 
-              case 11:
-                if (!(args._[0] === 'resolve.bin')) {
-                  _context7.next = 18;
-                  break;
-                }
+                                                      case 9:
+                                                        if (!_context4.sent) {
+                                                          _context4.next = 15;
+                                                          break;
+                                                        }
 
-                path = exports.forBaseDir(process.cwd()).bin.resolve(args._[1]);
+                                                        _context4.next = 12;
+                                                        return FS.readJSON(descriptorPath);
 
-                if (path) {
-                  _context7.next = 15;
-                  break;
-                }
+                                                      case 12:
+                                                        descriptor = _context4.sent;
 
-                throw new Error("ERROR: Could not resolve bin path for '".concat(args._[1], "'"));
+                                                        if (!subUri && name !== descriptor.name) {
+                                                          if (!doc[filepaths[filepath]][descriptor.name]) {
+                                                            doc[filepaths[filepath]][descriptor.name] = PATH.relative(baseDir, path);
+                                                          }
+                                                        }
 
-              case 15:
-                process.stdout.write(path);
-                _context7.next = 26;
-                break;
+                                                        if (descriptor.uid) {
+                                                          if (!doc[filepaths[filepath]][descriptor.uid]) {
+                                                            doc[filepaths[filepath]][descriptor.uid] = PATH.relative(baseDir, path);
+                                                          }
+                                                        }
 
-              case 18:
-                if (!(args._[0] === 'resolve.js')) {
-                  _context7.next = 25;
-                  break;
-                }
+                                                      case 15:
+                                                        if (!doc[filepaths[filepath]][name]) {
+                                                          doc[filepaths[filepath]][name] = PATH.relative(baseDir, path);
+                                                        }
 
-                _path = exports.forBaseDir(process.cwd()).js.resolve(args._[1]);
+                                                      case 16:
+                                                      case "end":
+                                                        return _context4.stop();
+                                                    }
+                                                  }
+                                                }, _callee4);
+                                              })));
+                                            });
+                                          };
 
-                if (_path) {
-                  _context7.next = 22;
-                  break;
-                }
+                                          for (var i = subUriParts.length; i >= 0; i--) {
+                                            _loop(i);
+                                          }
+                                        });
+                                        _context5.next = 8;
+                                        return queue;
 
-                throw new Error("ERROR: Could not resolve js path for '".concat(args._[1], "'"));
+                                      case 8:
+                                      case "end":
+                                        return _context5.stop();
+                                    }
+                                  }
+                                }, _callee5);
+                              }));
 
-              case 22:
-                process.stdout.write(_path);
-                _context7.next = 26;
-                break;
+                              return function (_x9) {
+                                return _ref6.apply(this, arguments);
+                              };
+                            }());
 
-              case 25:
-                throw new Error("[lib.json] ERROR: Command not supported!");
+                          case 3:
+                            path = PATH.dirname(dir);
 
-              case 26:
+                            if (!(path === dir)) {
+                              _context6.next = 6;
+                              break;
+                            }
+
+                            return _context6.abrupt("return");
+
+                          case 6:
+                            if (!(level === options.maxLevels)) {
+                              _context6.next = 8;
+                              break;
+                            }
+
+                            return _context6.abrupt("return");
+
+                          case 8:
+                            return _context6.abrupt("return", traverse(path));
+
+                          case 9:
+                          case "end":
+                            return _context6.stop();
+                        }
+                      }
+                    }, _callee6);
+                  }));
+
+                  return function traverse(_x8) {
+                    return _ref5.apply(this, arguments);
+                  };
+                }();
+
+                doc = {};
+                dir = baseDir;
+                level = 0;
+                _context7.next = 9;
+                return traverse(baseDir);
+
+              case 9:
+                return _context7.abrupt("return", doc);
+
+              case 12:
+                _context7.prev = 12;
+                _context7.t0 = _context7["catch"](2);
+                _context7.t0.message += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
+                _context7.t0.stack += " (while docFromFilepathsInOwnAndParent baseDir:'".concat(baseDir, "')");
+                throw _context7.t0;
+
+              case 17:
               case "end":
                 return _context7.stop();
             }
           }
-        });
+        }, _callee7, null, [[2, 12]]);
+      }));
+
+      return function (_x5, _x6, _x7) {
+        return _ref4.apply(this, arguments);
       };
+    }();
+
+    if (require.main === module) {
+      var main = /*#__PURE__*/function () {
+        var _ref8 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee8(args) {
+          var cwd, doc, path, _path;
+
+          return _regenerator["default"].wrap(function _callee8$(_context8) {
+            while (1) {
+              switch (_context8.prev = _context8.next) {
+                case 0:
+                  cwd = process.cwd();
+
+                  if ((args.verbose || args.debug) && !process.env.VERBOSE) {
+                    process.env.VERBOSE = "1";
+                  }
+
+                  VERBOSE = !!process.env.VERBOSE;
+
+                  if (args.cwd) {
+                    cwd = PATH.resolve(cwd, args.cwd);
+                    process.chdir(cwd);
+                  }
+
+                  if (!(args._.length === 2 && args._[0] === 'from' && args._[1] === 'node_modules')) {
+                    _context8.next = 11;
+                    break;
+                  }
+
+                  _context8.next = 7;
+                  return exports.docFromNodeModules(cwd);
+
+                case 7:
+                  doc = _context8.sent;
+                  process.stdout.write(JSON.stringify(doc, null, 4));
+                  _context8.next = 26;
+                  break;
+
+                case 11:
+                  if (!(args._[0] === 'resolve.bin')) {
+                    _context8.next = 18;
+                    break;
+                  }
+
+                  path = exports.forBaseDir(process.cwd()).bin.resolve(args._[1]);
+
+                  if (path) {
+                    _context8.next = 15;
+                    break;
+                  }
+
+                  throw new Error("ERROR: Could not resolve bin path for '".concat(args._[1], "'"));
+
+                case 15:
+                  process.stdout.write(path);
+                  _context8.next = 26;
+                  break;
+
+                case 18:
+                  if (!(args._[0] === 'resolve.js')) {
+                    _context8.next = 25;
+                    break;
+                  }
+
+                  _path = exports.forBaseDir(process.cwd()).js.resolve(args._[1]);
+
+                  if (_path) {
+                    _context8.next = 22;
+                    break;
+                  }
+
+                  throw new Error("ERROR: Could not resolve js path for '".concat(args._[1], "'"));
+
+                case 22:
+                  process.stdout.write(_path);
+                  _context8.next = 26;
+                  break;
+
+                case 25:
+                  throw new Error("[lib.json] ERROR: Command not supported!");
+
+                case 26:
+                case "end":
+                  return _context8.stop();
+              }
+            }
+          }, _callee8);
+        }));
+
+        return function main(_x10) {
+          return _ref8.apply(this, arguments);
+        };
+      }();
 
       var MINIMIST = require("minimist");
 
@@ -6942,3794 +7194,532 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     }
   }, {
-    "bluebird": 41,
-    "fs-extra": 86,
-    "minimist": 115,
+    "bluebird": 42,
+    "fs-extra": 89,
+    "glob": 116,
+    "minimist": 127,
     "path": undefined,
-    "resolve": 117
+    "resolve": 131
   }],
   38: [function (require, module, exports) {
+    'use strict';
+
+    module.exports = balanced;
+
+    function balanced(a, b, str) {
+      if (a instanceof RegExp) a = maybeMatch(a, str);
+      if (b instanceof RegExp) b = maybeMatch(b, str);
+      var r = range(a, b, str);
+      return r && {
+        start: r[0],
+        end: r[1],
+        pre: str.slice(0, r[0]),
+        body: str.slice(r[0] + a.length, r[1]),
+        post: str.slice(r[1] + b.length)
+      };
+    }
+
+    function maybeMatch(reg, str) {
+      var m = str.match(reg);
+      return m ? m[0] : null;
+    }
+
+    balanced.range = range;
+
+    function range(a, b, str) {
+      var begs, beg, left, right, result;
+      var ai = str.indexOf(a);
+      var bi = str.indexOf(b, ai + 1);
+      var i = ai;
+
+      if (ai >= 0 && bi > 0) {
+        begs = [];
+        left = str.length;
+
+        while (i >= 0 && !result) {
+          if (i == ai) {
+            begs.push(i);
+            ai = str.indexOf(a, i + 1);
+          } else if (begs.length == 1) {
+            result = [begs.pop(), bi];
+          } else {
+            beg = begs.pop();
+
+            if (beg < left) {
+              left = beg;
+              right = bi;
+            }
+
+            bi = str.indexOf(b, i + 1);
+          }
+
+          i = ai < bi && ai >= 0 ? ai : bi;
+        }
+
+        if (begs.length) {
+          result = [left, right];
+        }
+      }
+
+      return result;
+    }
+  }, {}],
+  39: [function (require, module, exports) {
     arguments[4][1][0].apply(exports, arguments);
   }, {
     "dup": 1
   }],
-  39: [function (require, module, exports) {
-    "use strict";
-
-    var firstLineError;
-
-    try {
-      throw new Error();
-    } catch (e) {
-      firstLineError = e;
-    }
-
-    var schedule = require("./schedule");
-
-    var Queue = require("./queue");
-
-    function Async() {
-      this._customScheduler = false;
-      this._isTickUsed = false;
-      this._lateQueue = new Queue(16);
-      this._normalQueue = new Queue(16);
-      this._haveDrainedQueues = false;
-      var self = this;
-
-      this.drainQueues = function () {
-        self._drainQueues();
-      };
-
-      this._schedule = schedule;
-    }
-
-    Async.prototype.setScheduler = function (fn) {
-      var prev = this._schedule;
-      this._schedule = fn;
-      this._customScheduler = true;
-      return prev;
-    };
-
-    Async.prototype.hasCustomScheduler = function () {
-      return this._customScheduler;
-    };
-
-    Async.prototype.haveItemsQueued = function () {
-      return this._isTickUsed || this._haveDrainedQueues;
-    };
-
-    Async.prototype.fatalError = function (e, isNode) {
-      if (isNode) {
-        process.stderr.write("Fatal " + (e instanceof Error ? e.stack : e) + "\n");
-        process.exit(2);
-      } else {
-        this.throwLater(e);
-      }
-    };
-
-    Async.prototype.throwLater = function (fn, arg) {
-      if (arguments.length === 1) {
-        arg = fn;
-
-        fn = function fn() {
-          throw arg;
-        };
-      }
-
-      if (typeof setTimeout !== "undefined") {
-        setTimeout(function () {
-          fn(arg);
-        }, 0);
-      } else try {
-        this._schedule(function () {
-          fn(arg);
-        });
-      } catch (e) {
-        throw new Error("No async scheduler available\n\n    See http://goo.gl/MqrFmX\n");
-      }
-    };
-
-    function AsyncInvokeLater(fn, receiver, arg) {
-      this._lateQueue.push(fn, receiver, arg);
-
-      this._queueTick();
-    }
-
-    function AsyncInvoke(fn, receiver, arg) {
-      this._normalQueue.push(fn, receiver, arg);
-
-      this._queueTick();
-    }
-
-    function AsyncSettlePromises(promise) {
-      this._normalQueue._pushOne(promise);
-
-      this._queueTick();
-    }
-
-    Async.prototype.invokeLater = AsyncInvokeLater;
-    Async.prototype.invoke = AsyncInvoke;
-    Async.prototype.settlePromises = AsyncSettlePromises;
-
-    function _drainQueue(queue) {
-      while (queue.length() > 0) {
-        _drainQueueStep(queue);
-      }
-    }
-
-    function _drainQueueStep(queue) {
-      var fn = queue.shift();
-
-      if (typeof fn !== "function") {
-        fn._settlePromises();
-      } else {
-        var receiver = queue.shift();
-        var arg = queue.shift();
-        fn.call(receiver, arg);
-      }
-    }
-
-    Async.prototype._drainQueues = function () {
-      _drainQueue(this._normalQueue);
-
-      this._reset();
-
-      this._haveDrainedQueues = true;
-
-      _drainQueue(this._lateQueue);
-    };
-
-    Async.prototype._queueTick = function () {
-      if (!this._isTickUsed) {
-        this._isTickUsed = true;
-
-        this._schedule(this.drainQueues);
-      }
-    };
-
-    Async.prototype._reset = function () {
-      this._isTickUsed = false;
-    };
-
-    module.exports = Async;
-    module.exports.firstLineError = firstLineError;
-  }, {
-    "./queue": 63,
-    "./schedule": 66
-  }],
   40: [function (require, module, exports) {
+    arguments[4][2][0].apply(exports, arguments);
+  }, {
+    "./queue": 64,
+    "./schedule": 67,
+    "dup": 2
+  }],
+  41: [function (require, module, exports) {
     arguments[4][3][0].apply(exports, arguments);
   }, {
     "dup": 3
   }],
-  41: [function (require, module, exports) {
+  42: [function (require, module, exports) {
     arguments[4][4][0].apply(exports, arguments);
   }, {
-    "./promise": 59,
+    "./promise": 60,
     "dup": 4
   }],
-  42: [function (require, module, exports) {
+  43: [function (require, module, exports) {
     arguments[4][5][0].apply(exports, arguments);
   }, {
-    "./util": 73,
+    "./util": 74,
     "dup": 5
   }],
-  43: [function (require, module, exports) {
+  44: [function (require, module, exports) {
     arguments[4][6][0].apply(exports, arguments);
   }, {
-    "./util": 73,
+    "./util": 74,
     "dup": 6
   }],
-  44: [function (require, module, exports) {
+  45: [function (require, module, exports) {
     arguments[4][7][0].apply(exports, arguments);
   }, {
-    "./es5": 50,
-    "./util": 73,
+    "./es5": 51,
+    "./util": 74,
     "dup": 7
   }],
-  45: [function (require, module, exports) {
+  46: [function (require, module, exports) {
     arguments[4][8][0].apply(exports, arguments);
   }, {
     "dup": 8
   }],
-  46: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, Context, enableAsyncHooks, disableAsyncHooks) {
-      var async = Promise._async;
-
-      var Warning = require("./errors").Warning;
-
-      var util = require("./util");
-
-      var es5 = require("./es5");
-
-      var canAttachTrace = util.canAttachTrace;
-      var unhandledRejectionHandled;
-      var possiblyUnhandledRejection;
-      var bluebirdFramePattern = /[\\\/]bluebird[\\\/]js[\\\/](release|debug|instrumented)/;
-      var nodeFramePattern = /\((?:timers\.js):\d+:\d+\)/;
-      var parseLinePattern = /[\/<\(](.+?):(\d+):(\d+)\)?\s*$/;
-      var stackFramePattern = null;
-      var formatStack = null;
-      var indentStackFrames = false;
-      var printWarning;
-      var debugging = !!(util.env("BLUEBIRD_DEBUG") != 0 && (false || util.env("BLUEBIRD_DEBUG") || util.env("NODE_ENV") === "development"));
-      var warnings = !!(util.env("BLUEBIRD_WARNINGS") != 0 && (debugging || util.env("BLUEBIRD_WARNINGS")));
-      var longStackTraces = !!(util.env("BLUEBIRD_LONG_STACK_TRACES") != 0 && (debugging || util.env("BLUEBIRD_LONG_STACK_TRACES")));
-      var wForgottenReturn = util.env("BLUEBIRD_W_FORGOTTEN_RETURN") != 0 && (warnings || !!util.env("BLUEBIRD_W_FORGOTTEN_RETURN"));
-      var deferUnhandledRejectionCheck;
-
-      (function () {
-        var promises = [];
-
-        function unhandledRejectionCheck() {
-          for (var i = 0; i < promises.length; ++i) {
-            promises[i]._notifyUnhandledRejection();
-          }
-
-          unhandledRejectionClear();
-        }
-
-        function unhandledRejectionClear() {
-          promises.length = 0;
-        }
-
-        deferUnhandledRejectionCheck = function deferUnhandledRejectionCheck(promise) {
-          promises.push(promise);
-          setTimeout(unhandledRejectionCheck, 1);
-        };
-
-        es5.defineProperty(Promise, "_unhandledRejectionCheck", {
-          value: unhandledRejectionCheck
-        });
-        es5.defineProperty(Promise, "_unhandledRejectionClear", {
-          value: unhandledRejectionClear
-        });
-      })();
-
-      Promise.prototype.suppressUnhandledRejections = function () {
-        var target = this._target();
-
-        target._bitField = target._bitField & ~1048576 | 524288;
-      };
-
-      Promise.prototype._ensurePossibleRejectionHandled = function () {
-        if ((this._bitField & 524288) !== 0) return;
-
-        this._setRejectionIsUnhandled();
-
-        deferUnhandledRejectionCheck(this);
-      };
-
-      Promise.prototype._notifyUnhandledRejectionIsHandled = function () {
-        fireRejectionEvent("rejectionHandled", unhandledRejectionHandled, undefined, this);
-      };
-
-      Promise.prototype._setReturnedNonUndefined = function () {
-        this._bitField = this._bitField | 268435456;
-      };
-
-      Promise.prototype._returnedNonUndefined = function () {
-        return (this._bitField & 268435456) !== 0;
-      };
-
-      Promise.prototype._notifyUnhandledRejection = function () {
-        if (this._isRejectionUnhandled()) {
-          var reason = this._settledValue();
-
-          this._setUnhandledRejectionIsNotified();
-
-          fireRejectionEvent("unhandledRejection", possiblyUnhandledRejection, reason, this);
-        }
-      };
-
-      Promise.prototype._setUnhandledRejectionIsNotified = function () {
-        this._bitField = this._bitField | 262144;
-      };
-
-      Promise.prototype._unsetUnhandledRejectionIsNotified = function () {
-        this._bitField = this._bitField & ~262144;
-      };
-
-      Promise.prototype._isUnhandledRejectionNotified = function () {
-        return (this._bitField & 262144) > 0;
-      };
-
-      Promise.prototype._setRejectionIsUnhandled = function () {
-        this._bitField = this._bitField | 1048576;
-      };
-
-      Promise.prototype._unsetRejectionIsUnhandled = function () {
-        this._bitField = this._bitField & ~1048576;
-
-        if (this._isUnhandledRejectionNotified()) {
-          this._unsetUnhandledRejectionIsNotified();
-
-          this._notifyUnhandledRejectionIsHandled();
-        }
-      };
-
-      Promise.prototype._isRejectionUnhandled = function () {
-        return (this._bitField & 1048576) > 0;
-      };
-
-      Promise.prototype._warn = function (message, shouldUseOwnTrace, promise) {
-        return warn(message, shouldUseOwnTrace, promise || this);
-      };
-
-      Promise.onPossiblyUnhandledRejection = function (fn) {
-        var context = Promise._getContext();
-
-        possiblyUnhandledRejection = util.contextBind(context, fn);
-      };
-
-      Promise.onUnhandledRejectionHandled = function (fn) {
-        var context = Promise._getContext();
-
-        unhandledRejectionHandled = util.contextBind(context, fn);
-      };
-
-      var disableLongStackTraces = function disableLongStackTraces() {};
-
-      Promise.longStackTraces = function () {
-        if (async.haveItemsQueued() && !config.longStackTraces) {
-          throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
-        }
-
-        if (!config.longStackTraces && longStackTracesIsSupported()) {
-          var Promise_captureStackTrace = Promise.prototype._captureStackTrace;
-          var Promise_attachExtraTrace = Promise.prototype._attachExtraTrace;
-          var Promise_dereferenceTrace = Promise.prototype._dereferenceTrace;
-          config.longStackTraces = true;
-
-          disableLongStackTraces = function disableLongStackTraces() {
-            if (async.haveItemsQueued() && !config.longStackTraces) {
-              throw new Error("cannot enable long stack traces after promises have been created\n\n    See http://goo.gl/MqrFmX\n");
-            }
-
-            Promise.prototype._captureStackTrace = Promise_captureStackTrace;
-            Promise.prototype._attachExtraTrace = Promise_attachExtraTrace;
-            Promise.prototype._dereferenceTrace = Promise_dereferenceTrace;
-            Context.deactivateLongStackTraces();
-            config.longStackTraces = false;
-          };
-
-          Promise.prototype._captureStackTrace = longStackTracesCaptureStackTrace;
-          Promise.prototype._attachExtraTrace = longStackTracesAttachExtraTrace;
-          Promise.prototype._dereferenceTrace = longStackTracesDereferenceTrace;
-          Context.activateLongStackTraces();
-        }
-      };
-
-      Promise.hasLongStackTraces = function () {
-        return config.longStackTraces && longStackTracesIsSupported();
-      };
-
-      var legacyHandlers = {
-        unhandledrejection: {
-          before: function before() {
-            var ret = util.global.onunhandledrejection;
-            util.global.onunhandledrejection = null;
-            return ret;
-          },
-          after: function after(fn) {
-            util.global.onunhandledrejection = fn;
-          }
-        },
-        rejectionhandled: {
-          before: function before() {
-            var ret = util.global.onrejectionhandled;
-            util.global.onrejectionhandled = null;
-            return ret;
-          },
-          after: function after(fn) {
-            util.global.onrejectionhandled = fn;
-          }
-        }
-      };
-
-      var fireDomEvent = function () {
-        var dispatch = function dispatch(legacy, e) {
-          if (legacy) {
-            var fn;
-
-            try {
-              fn = legacy.before();
-              return !util.global.dispatchEvent(e);
-            } finally {
-              legacy.after(fn);
-            }
-          } else {
-            return !util.global.dispatchEvent(e);
-          }
-        };
-
-        try {
-          if (typeof CustomEvent === "function") {
-            var event = new CustomEvent("CustomEvent");
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              name = name.toLowerCase();
-              var eventData = {
-                detail: event,
-                cancelable: true
-              };
-              var domEvent = new CustomEvent(name, eventData);
-              es5.defineProperty(domEvent, "promise", {
-                value: event.promise
-              });
-              es5.defineProperty(domEvent, "reason", {
-                value: event.reason
-              });
-              return dispatch(legacyHandlers[name], domEvent);
-            };
-          } else if (typeof Event === "function") {
-            var event = new Event("CustomEvent");
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              name = name.toLowerCase();
-              var domEvent = new Event(name, {
-                cancelable: true
-              });
-              domEvent.detail = event;
-              es5.defineProperty(domEvent, "promise", {
-                value: event.promise
-              });
-              es5.defineProperty(domEvent, "reason", {
-                value: event.reason
-              });
-              return dispatch(legacyHandlers[name], domEvent);
-            };
-          } else {
-            var event = document.createEvent("CustomEvent");
-            event.initCustomEvent("testingtheevent", false, true, {});
-            util.global.dispatchEvent(event);
-            return function (name, event) {
-              name = name.toLowerCase();
-              var domEvent = document.createEvent("CustomEvent");
-              domEvent.initCustomEvent(name, false, true, event);
-              return dispatch(legacyHandlers[name], domEvent);
-            };
-          }
-        } catch (e) {}
-
-        return function () {
-          return false;
-        };
-      }();
-
-      var fireGlobalEvent = function () {
-        if (util.isNode) {
-          return function () {
-            return process.emit.apply(process, arguments);
-          };
-        } else {
-          if (!util.global) {
-            return function () {
-              return false;
-            };
-          }
-
-          return function (name) {
-            var methodName = "on" + name.toLowerCase();
-            var method = util.global[methodName];
-            if (!method) return false;
-            method.apply(util.global, [].slice.call(arguments, 1));
-            return true;
-          };
-        }
-      }();
-
-      function generatePromiseLifecycleEventObject(name, promise) {
-        return {
-          promise: promise
-        };
-      }
-
-      var eventToObjectGenerator = {
-        promiseCreated: generatePromiseLifecycleEventObject,
-        promiseFulfilled: generatePromiseLifecycleEventObject,
-        promiseRejected: generatePromiseLifecycleEventObject,
-        promiseResolved: generatePromiseLifecycleEventObject,
-        promiseCancelled: generatePromiseLifecycleEventObject,
-        promiseChained: function promiseChained(name, promise, child) {
-          return {
-            promise: promise,
-            child: child
-          };
-        },
-        warning: function warning(name, _warning2) {
-          return {
-            warning: _warning2
-          };
-        },
-        unhandledRejection: function unhandledRejection(name, reason, promise) {
-          return {
-            reason: reason,
-            promise: promise
-          };
-        },
-        rejectionHandled: generatePromiseLifecycleEventObject
-      };
-
-      var activeFireEvent = function activeFireEvent(name) {
-        var globalEventFired = false;
-
-        try {
-          globalEventFired = fireGlobalEvent.apply(null, arguments);
-        } catch (e) {
-          async.throwLater(e);
-          globalEventFired = true;
-        }
-
-        var domEventFired = false;
-
-        try {
-          domEventFired = fireDomEvent(name, eventToObjectGenerator[name].apply(null, arguments));
-        } catch (e) {
-          async.throwLater(e);
-          domEventFired = true;
-        }
-
-        return domEventFired || globalEventFired;
-      };
-
-      Promise.config = function (opts) {
-        opts = Object(opts);
-
-        if ("longStackTraces" in opts) {
-          if (opts.longStackTraces) {
-            Promise.longStackTraces();
-          } else if (!opts.longStackTraces && Promise.hasLongStackTraces()) {
-            disableLongStackTraces();
-          }
-        }
-
-        if ("warnings" in opts) {
-          var warningsOption = opts.warnings;
-          config.warnings = !!warningsOption;
-          wForgottenReturn = config.warnings;
-
-          if (util.isObject(warningsOption)) {
-            if ("wForgottenReturn" in warningsOption) {
-              wForgottenReturn = !!warningsOption.wForgottenReturn;
-            }
-          }
-        }
-
-        if ("cancellation" in opts && opts.cancellation && !config.cancellation) {
-          if (async.haveItemsQueued()) {
-            throw new Error("cannot enable cancellation after promises are in use");
-          }
-
-          Promise.prototype._clearCancellationData = cancellationClearCancellationData;
-          Promise.prototype._propagateFrom = cancellationPropagateFrom;
-          Promise.prototype._onCancel = cancellationOnCancel;
-          Promise.prototype._setOnCancel = cancellationSetOnCancel;
-          Promise.prototype._attachCancellationCallback = cancellationAttachCancellationCallback;
-          Promise.prototype._execute = cancellationExecute;
-          _propagateFromFunction2 = cancellationPropagateFrom;
-          config.cancellation = true;
-        }
-
-        if ("monitoring" in opts) {
-          if (opts.monitoring && !config.monitoring) {
-            config.monitoring = true;
-            Promise.prototype._fireEvent = activeFireEvent;
-          } else if (!opts.monitoring && config.monitoring) {
-            config.monitoring = false;
-            Promise.prototype._fireEvent = defaultFireEvent;
-          }
-        }
-
-        if ("asyncHooks" in opts && util.nodeSupportsAsyncResource) {
-          var prev = config.asyncHooks;
-          var cur = !!opts.asyncHooks;
-
-          if (prev !== cur) {
-            config.asyncHooks = cur;
-
-            if (cur) {
-              enableAsyncHooks();
-            } else {
-              disableAsyncHooks();
-            }
-          }
-        }
-
-        return Promise;
-      };
-
-      function defaultFireEvent() {
-        return false;
-      }
-
-      Promise.prototype._fireEvent = defaultFireEvent;
-
-      Promise.prototype._execute = function (executor, resolve, reject) {
-        try {
-          executor(resolve, reject);
-        } catch (e) {
-          return e;
-        }
-      };
-
-      Promise.prototype._onCancel = function () {};
-
-      Promise.prototype._setOnCancel = function (handler) {
-        ;
-      };
-
-      Promise.prototype._attachCancellationCallback = function (onCancel) {
-        ;
-      };
-
-      Promise.prototype._captureStackTrace = function () {};
-
-      Promise.prototype._attachExtraTrace = function () {};
-
-      Promise.prototype._dereferenceTrace = function () {};
-
-      Promise.prototype._clearCancellationData = function () {};
-
-      Promise.prototype._propagateFrom = function (parent, flags) {
-        ;
-        ;
-      };
-
-      function cancellationExecute(executor, resolve, reject) {
-        var promise = this;
-
-        try {
-          executor(resolve, reject, function (onCancel) {
-            if (typeof onCancel !== "function") {
-              throw new TypeError("onCancel must be a function, got: " + util.toString(onCancel));
-            }
-
-            promise._attachCancellationCallback(onCancel);
-          });
-        } catch (e) {
-          return e;
-        }
-      }
-
-      function cancellationAttachCancellationCallback(onCancel) {
-        if (!this._isCancellable()) return this;
-
-        var previousOnCancel = this._onCancel();
-
-        if (previousOnCancel !== undefined) {
-          if (util.isArray(previousOnCancel)) {
-            previousOnCancel.push(onCancel);
-          } else {
-            this._setOnCancel([previousOnCancel, onCancel]);
-          }
-        } else {
-          this._setOnCancel(onCancel);
-        }
-      }
-
-      function cancellationOnCancel() {
-        return this._onCancelField;
-      }
-
-      function cancellationSetOnCancel(onCancel) {
-        this._onCancelField = onCancel;
-      }
-
-      function cancellationClearCancellationData() {
-        this._cancellationParent = undefined;
-        this._onCancelField = undefined;
-      }
-
-      function cancellationPropagateFrom(parent, flags) {
-        if ((flags & 1) !== 0) {
-          this._cancellationParent = parent;
-          var branchesRemainingToCancel = parent._branchesRemainingToCancel;
-
-          if (branchesRemainingToCancel === undefined) {
-            branchesRemainingToCancel = 0;
-          }
-
-          parent._branchesRemainingToCancel = branchesRemainingToCancel + 1;
-        }
-
-        if ((flags & 2) !== 0 && parent._isBound()) {
-          this._setBoundTo(parent._boundTo);
-        }
-      }
-
-      function bindingPropagateFrom(parent, flags) {
-        if ((flags & 2) !== 0 && parent._isBound()) {
-          this._setBoundTo(parent._boundTo);
-        }
-      }
-
-      var _propagateFromFunction2 = bindingPropagateFrom;
-
-      function _boundValueFunction2() {
-        var ret = this._boundTo;
-
-        if (ret !== undefined) {
-          if (ret instanceof Promise) {
-            if (ret.isFulfilled()) {
-              return ret.value();
-            } else {
-              return undefined;
-            }
-          }
-        }
-
-        return ret;
-      }
-
-      function longStackTracesCaptureStackTrace() {
-        this._trace = new CapturedTrace(this._peekContext());
-      }
-
-      function longStackTracesAttachExtraTrace(error, ignoreSelf) {
-        if (canAttachTrace(error)) {
-          var trace = this._trace;
-
-          if (trace !== undefined) {
-            if (ignoreSelf) trace = trace._parent;
-          }
-
-          if (trace !== undefined) {
-            trace.attachExtraTrace(error);
-          } else if (!error.__stackCleaned__) {
-            var parsed = parseStackAndMessage(error);
-            util.notEnumerableProp(error, "stack", parsed.message + "\n" + parsed.stack.join("\n"));
-            util.notEnumerableProp(error, "__stackCleaned__", true);
-          }
-        }
-      }
-
-      function longStackTracesDereferenceTrace() {
-        this._trace = undefined;
-      }
-
-      function checkForgottenReturns(returnValue, promiseCreated, name, promise, parent) {
-        if (returnValue === undefined && promiseCreated !== null && wForgottenReturn) {
-          if (parent !== undefined && parent._returnedNonUndefined()) return;
-          if ((promise._bitField & 65535) === 0) return;
-          if (name) name = name + " ";
-          var handlerLine = "";
-          var creatorLine = "";
-
-          if (promiseCreated._trace) {
-            var traceLines = promiseCreated._trace.stack.split("\n");
-
-            var stack = cleanStack(traceLines);
-
-            for (var i = stack.length - 1; i >= 0; --i) {
-              var line = stack[i];
-
-              if (!nodeFramePattern.test(line)) {
-                var lineMatches = line.match(parseLinePattern);
-
-                if (lineMatches) {
-                  handlerLine = "at " + lineMatches[1] + ":" + lineMatches[2] + ":" + lineMatches[3] + " ";
-                }
-
-                break;
-              }
-            }
-
-            if (stack.length > 0) {
-              var firstUserLine = stack[0];
-
-              for (var i = 0; i < traceLines.length; ++i) {
-                if (traceLines[i] === firstUserLine) {
-                  if (i > 0) {
-                    creatorLine = "\n" + traceLines[i - 1];
-                  }
-
-                  break;
-                }
-              }
-            }
-          }
-
-          var msg = "a promise was created in a " + name + "handler " + handlerLine + "but was not returned from it, " + "see http://goo.gl/rRqMUw" + creatorLine;
-
-          promise._warn(msg, true, promiseCreated);
-        }
-      }
-
-      function deprecated(name, replacement) {
-        var message = name + " is deprecated and will be removed in a future version.";
-        if (replacement) message += " Use " + replacement + " instead.";
-        return warn(message);
-      }
-
-      function warn(message, shouldUseOwnTrace, promise) {
-        if (!config.warnings) return;
-        var warning = new Warning(message);
-        var ctx;
-
-        if (shouldUseOwnTrace) {
-          promise._attachExtraTrace(warning);
-        } else if (config.longStackTraces && (ctx = Promise._peekContext())) {
-          ctx.attachExtraTrace(warning);
-        } else {
-          var parsed = parseStackAndMessage(warning);
-          warning.stack = parsed.message + "\n" + parsed.stack.join("\n");
-        }
-
-        if (!activeFireEvent("warning", warning)) {
-          formatAndLogError(warning, "", true);
-        }
-      }
-
-      function reconstructStack(message, stacks) {
-        for (var i = 0; i < stacks.length - 1; ++i) {
-          stacks[i].push("From previous event:");
-          stacks[i] = stacks[i].join("\n");
-        }
-
-        if (i < stacks.length) {
-          stacks[i] = stacks[i].join("\n");
-        }
-
-        return message + "\n" + stacks.join("\n");
-      }
-
-      function removeDuplicateOrEmptyJumps(stacks) {
-        for (var i = 0; i < stacks.length; ++i) {
-          if (stacks[i].length === 0 || i + 1 < stacks.length && stacks[i][0] === stacks[i + 1][0]) {
-            stacks.splice(i, 1);
-            i--;
-          }
-        }
-      }
-
-      function removeCommonRoots(stacks) {
-        var current = stacks[0];
-
-        for (var i = 1; i < stacks.length; ++i) {
-          var prev = stacks[i];
-          var currentLastIndex = current.length - 1;
-          var currentLastLine = current[currentLastIndex];
-          var commonRootMeetPoint = -1;
-
-          for (var j = prev.length - 1; j >= 0; --j) {
-            if (prev[j] === currentLastLine) {
-              commonRootMeetPoint = j;
-              break;
-            }
-          }
-
-          for (var j = commonRootMeetPoint; j >= 0; --j) {
-            var line = prev[j];
-
-            if (current[currentLastIndex] === line) {
-              current.pop();
-              currentLastIndex--;
-            } else {
-              break;
-            }
-          }
-
-          current = prev;
-        }
-      }
-
-      function cleanStack(stack) {
-        var ret = [];
-
-        for (var i = 0; i < stack.length; ++i) {
-          var line = stack[i];
-          var isTraceLine = "    (No stack trace)" === line || stackFramePattern.test(line);
-          var isInternalFrame = isTraceLine && shouldIgnore(line);
-
-          if (isTraceLine && !isInternalFrame) {
-            if (indentStackFrames && line.charAt(0) !== " ") {
-              line = "    " + line;
-            }
-
-            ret.push(line);
-          }
-        }
-
-        return ret;
-      }
-
-      function stackFramesAsArray(error) {
-        var stack = error.stack.replace(/\s+$/g, "").split("\n");
-
-        for (var i = 0; i < stack.length; ++i) {
-          var line = stack[i];
-
-          if ("    (No stack trace)" === line || stackFramePattern.test(line)) {
-            break;
-          }
-        }
-
-        if (i > 0 && error.name != "SyntaxError") {
-          stack = stack.slice(i);
-        }
-
-        return stack;
-      }
-
-      function parseStackAndMessage(error) {
-        var stack = error.stack;
-        var message = error.toString();
-        stack = typeof stack === "string" && stack.length > 0 ? stackFramesAsArray(error) : ["    (No stack trace)"];
-        return {
-          message: message,
-          stack: error.name == "SyntaxError" ? stack : cleanStack(stack)
-        };
-      }
-
-      function formatAndLogError(error, title, isSoft) {
-        if (typeof console !== "undefined") {
-          var message;
-
-          if (util.isObject(error)) {
-            var stack = error.stack;
-            message = title + formatStack(stack, error);
-          } else {
-            message = title + String(error);
-          }
-
-          if (typeof printWarning === "function") {
-            printWarning(message, isSoft);
-          } else if (typeof console.log === "function" || (0, _typeof2["default"])(console.log) === "object") {
-            console.log(message);
-          }
-        }
-      }
-
-      function fireRejectionEvent(name, localHandler, reason, promise) {
-        var localEventFired = false;
-
-        try {
-          if (typeof localHandler === "function") {
-            localEventFired = true;
-
-            if (name === "rejectionHandled") {
-              localHandler(promise);
-            } else {
-              localHandler(reason, promise);
-            }
-          }
-        } catch (e) {
-          async.throwLater(e);
-        }
-
-        if (name === "unhandledRejection") {
-          if (!activeFireEvent(name, reason, promise) && !localEventFired) {
-            formatAndLogError(reason, "Unhandled rejection ");
-          }
-        } else {
-          activeFireEvent(name, promise);
-        }
-      }
-
-      function formatNonError(obj) {
-        var str;
-
-        if (typeof obj === "function") {
-          str = "[function " + (obj.name || "anonymous") + "]";
-        } else {
-          str = obj && typeof obj.toString === "function" ? obj.toString() : util.toString(obj);
-          var ruselessToString = /\[object [a-zA-Z0-9$_]+\]/;
-
-          if (ruselessToString.test(str)) {
-            try {
-              var newStr = JSON.stringify(obj);
-              str = newStr;
-            } catch (e) {}
-          }
-
-          if (str.length === 0) {
-            str = "(empty array)";
-          }
-        }
-
-        return "(<" + snip(str) + ">, no stack trace)";
-      }
-
-      function snip(str) {
-        var maxChars = 41;
-
-        if (str.length < maxChars) {
-          return str;
-        }
-
-        return str.substr(0, maxChars - 3) + "...";
-      }
-
-      function longStackTracesIsSupported() {
-        return typeof captureStackTrace === "function";
-      }
-
-      var shouldIgnore = function shouldIgnore() {
-        return false;
-      };
-
-      var parseLineInfoRegex = /[\/<\(]([^:\/]+):(\d+):(?:\d+)\)?\s*$/;
-
-      function parseLineInfo(line) {
-        var matches = line.match(parseLineInfoRegex);
-
-        if (matches) {
-          return {
-            fileName: matches[1],
-            line: parseInt(matches[2], 10)
-          };
-        }
-      }
-
-      function setBounds(firstLineError, lastLineError) {
-        if (!longStackTracesIsSupported()) return;
-        var firstStackLines = (firstLineError.stack || "").split("\n");
-        var lastStackLines = (lastLineError.stack || "").split("\n");
-        var firstIndex = -1;
-        var lastIndex = -1;
-        var firstFileName;
-        var lastFileName;
-
-        for (var i = 0; i < firstStackLines.length; ++i) {
-          var result = parseLineInfo(firstStackLines[i]);
-
-          if (result) {
-            firstFileName = result.fileName;
-            firstIndex = result.line;
-            break;
-          }
-        }
-
-        for (var i = 0; i < lastStackLines.length; ++i) {
-          var result = parseLineInfo(lastStackLines[i]);
-
-          if (result) {
-            lastFileName = result.fileName;
-            lastIndex = result.line;
-            break;
-          }
-        }
-
-        if (firstIndex < 0 || lastIndex < 0 || !firstFileName || !lastFileName || firstFileName !== lastFileName || firstIndex >= lastIndex) {
-          return;
-        }
-
-        shouldIgnore = function shouldIgnore(line) {
-          if (bluebirdFramePattern.test(line)) return true;
-          var info = parseLineInfo(line);
-
-          if (info) {
-            if (info.fileName === firstFileName && firstIndex <= info.line && info.line <= lastIndex) {
-              return true;
-            }
-          }
-
-          return false;
-        };
-      }
-
-      function CapturedTrace(parent) {
-        this._parent = parent;
-        this._promisesCreated = 0;
-        var length = this._length = 1 + (parent === undefined ? 0 : parent._length);
-        captureStackTrace(this, CapturedTrace);
-        if (length > 32) this.uncycle();
-      }
-
-      util.inherits(CapturedTrace, Error);
-      Context.CapturedTrace = CapturedTrace;
-
-      CapturedTrace.prototype.uncycle = function () {
-        var length = this._length;
-        if (length < 2) return;
-        var nodes = [];
-        var stackToIndex = {};
-
-        for (var i = 0, node = this; node !== undefined; ++i) {
-          nodes.push(node);
-          node = node._parent;
-        }
-
-        length = this._length = i;
-
-        for (var i = length - 1; i >= 0; --i) {
-          var stack = nodes[i].stack;
-
-          if (stackToIndex[stack] === undefined) {
-            stackToIndex[stack] = i;
-          }
-        }
-
-        for (var i = 0; i < length; ++i) {
-          var currentStack = nodes[i].stack;
-          var index = stackToIndex[currentStack];
-
-          if (index !== undefined && index !== i) {
-            if (index > 0) {
-              nodes[index - 1]._parent = undefined;
-              nodes[index - 1]._length = 1;
-            }
-
-            nodes[i]._parent = undefined;
-            nodes[i]._length = 1;
-            var cycleEdgeNode = i > 0 ? nodes[i - 1] : this;
-
-            if (index < length - 1) {
-              cycleEdgeNode._parent = nodes[index + 1];
-
-              cycleEdgeNode._parent.uncycle();
-
-              cycleEdgeNode._length = cycleEdgeNode._parent._length + 1;
-            } else {
-              cycleEdgeNode._parent = undefined;
-              cycleEdgeNode._length = 1;
-            }
-
-            var currentChildLength = cycleEdgeNode._length + 1;
-
-            for (var j = i - 2; j >= 0; --j) {
-              nodes[j]._length = currentChildLength;
-              currentChildLength++;
-            }
-
-            return;
-          }
-        }
-      };
-
-      CapturedTrace.prototype.attachExtraTrace = function (error) {
-        if (error.__stackCleaned__) return;
-        this.uncycle();
-        var parsed = parseStackAndMessage(error);
-        var message = parsed.message;
-        var stacks = [parsed.stack];
-        var trace = this;
-
-        while (trace !== undefined) {
-          stacks.push(cleanStack(trace.stack.split("\n")));
-          trace = trace._parent;
-        }
-
-        removeCommonRoots(stacks);
-        removeDuplicateOrEmptyJumps(stacks);
-        util.notEnumerableProp(error, "stack", reconstructStack(message, stacks));
-        util.notEnumerableProp(error, "__stackCleaned__", true);
-      };
-
-      var captureStackTrace = function stackDetection() {
-        var v8stackFramePattern = /^\s*at\s*/;
-
-        var v8stackFormatter = function v8stackFormatter(stack, error) {
-          if (typeof stack === "string") return stack;
-
-          if (error.name !== undefined && error.message !== undefined) {
-            return error.toString();
-          }
-
-          return formatNonError(error);
-        };
-
-        if (typeof Error.stackTraceLimit === "number" && typeof Error.captureStackTrace === "function") {
-          Error.stackTraceLimit += 6;
-          stackFramePattern = v8stackFramePattern;
-          formatStack = v8stackFormatter;
-          var captureStackTrace = Error.captureStackTrace;
-
-          shouldIgnore = function shouldIgnore(line) {
-            return bluebirdFramePattern.test(line);
-          };
-
-          return function (receiver, ignoreUntil) {
-            Error.stackTraceLimit += 6;
-            captureStackTrace(receiver, ignoreUntil);
-            Error.stackTraceLimit -= 6;
-          };
-        }
-
-        var err = new Error();
-
-        if (typeof err.stack === "string" && err.stack.split("\n")[0].indexOf("stackDetection@") >= 0) {
-          stackFramePattern = /@/;
-          formatStack = v8stackFormatter;
-          indentStackFrames = true;
-          return function captureStackTrace(o) {
-            o.stack = new Error().stack;
-          };
-        }
-
-        var hasStackAfterThrow;
-
-        try {
-          throw new Error();
-        } catch (e) {
-          hasStackAfterThrow = "stack" in e;
-        }
-
-        if (!("stack" in err) && hasStackAfterThrow && typeof Error.stackTraceLimit === "number") {
-          stackFramePattern = v8stackFramePattern;
-          formatStack = v8stackFormatter;
-          return function captureStackTrace(o) {
-            Error.stackTraceLimit += 6;
-
-            try {
-              throw new Error();
-            } catch (e) {
-              o.stack = e.stack;
-            }
-
-            Error.stackTraceLimit -= 6;
-          };
-        }
-
-        formatStack = function formatStack(stack, error) {
-          if (typeof stack === "string") return stack;
-
-          if (((0, _typeof2["default"])(error) === "object" || typeof error === "function") && error.name !== undefined && error.message !== undefined) {
-            return error.toString();
-          }
-
-          return formatNonError(error);
-        };
-
-        return null;
-      }([]);
-
-      if (typeof console !== "undefined" && typeof console.warn !== "undefined") {
-        printWarning = function printWarning(message) {
-          console.warn(message);
-        };
-
-        if (util.isNode && process.stderr.isTTY) {
-          printWarning = function printWarning(message, isSoft) {
-            var color = isSoft ? "\x1B[33m" : "\x1B[31m";
-            console.warn(color + message + "\x1B[0m\n");
-          };
-        } else if (!util.isNode && typeof new Error().stack === "string") {
-          printWarning = function printWarning(message, isSoft) {
-            console.warn("%c" + message, isSoft ? "color: darkorange" : "color: red");
-          };
-        }
-      }
-
-      var config = {
-        warnings: warnings,
-        longStackTraces: false,
-        cancellation: false,
-        monitoring: false,
-        asyncHooks: false
-      };
-      if (longStackTraces) Promise.longStackTraces();
-      return {
-        asyncHooks: function asyncHooks() {
-          return config.asyncHooks;
-        },
-        longStackTraces: function longStackTraces() {
-          return config.longStackTraces;
-        },
-        warnings: function warnings() {
-          return config.warnings;
-        },
-        cancellation: function cancellation() {
-          return config.cancellation;
-        },
-        monitoring: function monitoring() {
-          return config.monitoring;
-        },
-        propagateFromFunction: function propagateFromFunction() {
-          return _propagateFromFunction2;
-        },
-        boundValueFunction: function boundValueFunction() {
-          return _boundValueFunction2;
-        },
-        checkForgottenReturns: checkForgottenReturns,
-        setBounds: setBounds,
-        warn: warn,
-        deprecated: deprecated,
-        CapturedTrace: CapturedTrace,
-        fireDomEvent: fireDomEvent,
-        fireGlobalEvent: fireGlobalEvent
-      };
-    };
-  }, {
-    "./errors": 49,
-    "./es5": 50,
-    "./util": 73
-  }],
   47: [function (require, module, exports) {
+    arguments[4][9][0].apply(exports, arguments);
+  }, {
+    "./errors": 50,
+    "./es5": 51,
+    "./util": 74,
+    "dup": 9
+  }],
+  48: [function (require, module, exports) {
     arguments[4][10][0].apply(exports, arguments);
   }, {
     "dup": 10
   }],
-  48: [function (require, module, exports) {
+  49: [function (require, module, exports) {
     arguments[4][11][0].apply(exports, arguments);
   }, {
     "dup": 11
   }],
-  49: [function (require, module, exports) {
+  50: [function (require, module, exports) {
     arguments[4][12][0].apply(exports, arguments);
   }, {
-    "./es5": 50,
-    "./util": 73,
+    "./es5": 51,
+    "./util": 74,
     "dup": 12
   }],
-  50: [function (require, module, exports) {
+  51: [function (require, module, exports) {
     arguments[4][13][0].apply(exports, arguments);
   }, {
     "dup": 13
   }],
-  51: [function (require, module, exports) {
+  52: [function (require, module, exports) {
     arguments[4][14][0].apply(exports, arguments);
   }, {
     "dup": 14
   }],
-  52: [function (require, module, exports) {
+  53: [function (require, module, exports) {
     arguments[4][15][0].apply(exports, arguments);
   }, {
-    "./catch_filter": 44,
-    "./util": 73,
+    "./catch_filter": 45,
+    "./util": 74,
     "dup": 15
   }],
-  53: [function (require, module, exports) {
+  54: [function (require, module, exports) {
     arguments[4][16][0].apply(exports, arguments);
   }, {
-    "./errors": 49,
-    "./util": 73,
+    "./errors": 50,
+    "./util": 74,
     "dup": 16
   }],
-  54: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, PromiseArray, tryConvertToPromise, INTERNAL, async) {
-      var util = require("./util");
-
-      var canEvaluate = util.canEvaluate;
-      var tryCatch = util.tryCatch;
-      var errorObj = util.errorObj;
-      var reject;
-
-      if (!false) {
-        if (canEvaluate) {
-          var thenCallback = function thenCallback(i) {
-            return new Function("value", "holder", "                             \n\
-            'use strict';                                                    \n\
-            holder.pIndex = value;                                           \n\
-            holder.checkFulfillment(this);                                   \n\
-            ".replace(/Index/g, i));
-          };
-
-          var promiseSetter = function promiseSetter(i) {
-            return new Function("promise", "holder", "                           \n\
-            'use strict';                                                    \n\
-            holder.pIndex = promise;                                         \n\
-            ".replace(/Index/g, i));
-          };
-
-          var generateHolderClass = function generateHolderClass(total) {
-            var props = new Array(total);
-
-            for (var i = 0; i < props.length; ++i) {
-              props[i] = "this.p" + (i + 1);
-            }
-
-            var assignment = props.join(" = ") + " = null;";
-            var cancellationCode = "var promise;\n" + props.map(function (prop) {
-              return "                                                         \n\
-                promise = " + prop + ";                                      \n\
-                if (promise instanceof Promise) {                            \n\
-                    promise.cancel();                                        \n\
-                }                                                            \n\
-            ";
-            }).join("\n");
-            var passedArguments = props.join(", ");
-            var name = "Holder$" + total;
-            var code = "return function(tryCatch, errorObj, Promise, async) {    \n\
-            'use strict';                                                    \n\
-            function [TheName](fn) {                                         \n\
-                [TheProperties]                                              \n\
-                this.fn = fn;                                                \n\
-                this.asyncNeeded = true;                                     \n\
-                this.now = 0;                                                \n\
-            }                                                                \n\
-                                                                             \n\
-            [TheName].prototype._callFunction = function(promise) {          \n\
-                promise._pushContext();                                      \n\
-                var ret = tryCatch(this.fn)([ThePassedArguments]);           \n\
-                promise._popContext();                                       \n\
-                if (ret === errorObj) {                                      \n\
-                    promise._rejectCallback(ret.e, false);                   \n\
-                } else {                                                     \n\
-                    promise._resolveCallback(ret);                           \n\
-                }                                                            \n\
-            };                                                               \n\
-                                                                             \n\
-            [TheName].prototype.checkFulfillment = function(promise) {       \n\
-                var now = ++this.now;                                        \n\
-                if (now === [TheTotal]) {                                    \n\
-                    if (this.asyncNeeded) {                                  \n\
-                        async.invoke(this._callFunction, this, promise);     \n\
-                    } else {                                                 \n\
-                        this._callFunction(promise);                         \n\
-                    }                                                        \n\
-                                                                             \n\
-                }                                                            \n\
-            };                                                               \n\
-                                                                             \n\
-            [TheName].prototype._resultCancelled = function() {              \n\
-                [CancellationCode]                                           \n\
-            };                                                               \n\
-                                                                             \n\
-            return [TheName];                                                \n\
-        }(tryCatch, errorObj, Promise, async);                               \n\
-        ";
-            code = code.replace(/\[TheName\]/g, name).replace(/\[TheTotal\]/g, total).replace(/\[ThePassedArguments\]/g, passedArguments).replace(/\[TheProperties\]/g, assignment).replace(/\[CancellationCode\]/g, cancellationCode);
-            return new Function("tryCatch", "errorObj", "Promise", "async", code)(tryCatch, errorObj, Promise, async);
-          };
-
-          var holderClasses = [];
-          var thenCallbacks = [];
-          var promiseSetters = [];
-
-          for (var i = 0; i < 8; ++i) {
-            holderClasses.push(generateHolderClass(i + 1));
-            thenCallbacks.push(thenCallback(i + 1));
-            promiseSetters.push(promiseSetter(i + 1));
-          }
-
-          reject = function reject(reason) {
-            this._reject(reason);
-          };
-        }
-      }
-
-      Promise.join = function () {
-        var last = arguments.length - 1;
-        var fn;
-
-        if (last > 0 && typeof arguments[last] === "function") {
-          fn = arguments[last];
-
-          if (!false) {
-            if (last <= 8 && canEvaluate) {
-              var ret = new Promise(INTERNAL);
-
-              ret._captureStackTrace();
-
-              var HolderClass = holderClasses[last - 1];
-              var holder = new HolderClass(fn);
-              var callbacks = thenCallbacks;
-
-              for (var i = 0; i < last; ++i) {
-                var maybePromise = tryConvertToPromise(arguments[i], ret);
-
-                if (maybePromise instanceof Promise) {
-                  maybePromise = maybePromise._target();
-                  var bitField = maybePromise._bitField;
-                  ;
-
-                  if ((bitField & 50397184) === 0) {
-                    maybePromise._then(callbacks[i], reject, undefined, ret, holder);
-
-                    promiseSetters[i](maybePromise, holder);
-                    holder.asyncNeeded = false;
-                  } else if ((bitField & 33554432) !== 0) {
-                    callbacks[i].call(ret, maybePromise._value(), holder);
-                  } else if ((bitField & 16777216) !== 0) {
-                    ret._reject(maybePromise._reason());
-                  } else {
-                    ret._cancel();
-                  }
-                } else {
-                  callbacks[i].call(ret, maybePromise, holder);
-                }
-              }
-
-              if (!ret._isFateSealed()) {
-                if (holder.asyncNeeded) {
-                  var context = Promise._getContext();
-
-                  holder.fn = util.contextBind(context, holder.fn);
-                }
-
-                ret._setAsyncGuaranteed();
-
-                ret._setOnCancel(holder);
-              }
-
-              return ret;
-            }
-          }
-        }
-
-        var $_len = arguments.length;
-        var args = new Array($_len);
-
-        for (var $_i = 0; $_i < $_len; ++$_i) {
-          args[$_i] = arguments[$_i];
-        }
-
-        ;
-        if (fn) args.pop();
-        var ret = new PromiseArray(args).promise();
-        return fn !== undefined ? ret.spread(fn) : ret;
-      };
-    };
-  }, {
-    "./util": 73
-  }],
   55: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
-      var util = require("./util");
-
-      var tryCatch = util.tryCatch;
-      var errorObj = util.errorObj;
-      var async = Promise._async;
-
-      function MappingPromiseArray(promises, fn, limit, _filter) {
-        this.constructor$(promises);
-
-        this._promise._captureStackTrace();
-
-        var context = Promise._getContext();
-
-        this._callback = util.contextBind(context, fn);
-        this._preservedValues = _filter === INTERNAL ? new Array(this.length()) : null;
-        this._limit = limit;
-        this._inFlight = 0;
-        this._queue = [];
-        async.invoke(this._asyncInit, this, undefined);
-
-        if (util.isArray(promises)) {
-          for (var i = 0; i < promises.length; ++i) {
-            var maybePromise = promises[i];
-
-            if (maybePromise instanceof Promise) {
-              maybePromise.suppressUnhandledRejections();
-            }
-          }
-        }
-      }
-
-      util.inherits(MappingPromiseArray, PromiseArray);
-
-      MappingPromiseArray.prototype._asyncInit = function () {
-        this._init$(undefined, -2);
-      };
-
-      MappingPromiseArray.prototype._init = function () {};
-
-      MappingPromiseArray.prototype._promiseFulfilled = function (value, index) {
-        var values = this._values;
-        var length = this.length();
-        var preservedValues = this._preservedValues;
-        var limit = this._limit;
-
-        if (index < 0) {
-          index = index * -1 - 1;
-          values[index] = value;
-
-          if (limit >= 1) {
-            this._inFlight--;
-
-            this._drainQueue();
-
-            if (this._isResolved()) return true;
-          }
-        } else {
-          if (limit >= 1 && this._inFlight >= limit) {
-            values[index] = value;
-
-            this._queue.push(index);
-
-            return false;
-          }
-
-          if (preservedValues !== null) preservedValues[index] = value;
-          var promise = this._promise;
-          var callback = this._callback;
-
-          var receiver = promise._boundValue();
-
-          promise._pushContext();
-
-          var ret = tryCatch(callback).call(receiver, value, index, length);
-
-          var promiseCreated = promise._popContext();
-
-          debug.checkForgottenReturns(ret, promiseCreated, preservedValues !== null ? "Promise.filter" : "Promise.map", promise);
-
-          if (ret === errorObj) {
-            this._reject(ret.e);
-
-            return true;
-          }
-
-          var maybePromise = tryConvertToPromise(ret, this._promise);
-
-          if (maybePromise instanceof Promise) {
-            maybePromise = maybePromise._target();
-            var bitField = maybePromise._bitField;
-            ;
-
-            if ((bitField & 50397184) === 0) {
-              if (limit >= 1) this._inFlight++;
-              values[index] = maybePromise;
-
-              maybePromise._proxy(this, (index + 1) * -1);
-
-              return false;
-            } else if ((bitField & 33554432) !== 0) {
-              ret = maybePromise._value();
-            } else if ((bitField & 16777216) !== 0) {
-              this._reject(maybePromise._reason());
-
-              return true;
-            } else {
-              this._cancel();
-
-              return true;
-            }
-          }
-
-          values[index] = ret;
-        }
-
-        var totalResolved = ++this._totalResolved;
-
-        if (totalResolved >= length) {
-          if (preservedValues !== null) {
-            this._filter(values, preservedValues);
-          } else {
-            this._resolve(values);
-          }
-
-          return true;
-        }
-
-        return false;
-      };
-
-      MappingPromiseArray.prototype._drainQueue = function () {
-        var queue = this._queue;
-        var limit = this._limit;
-        var values = this._values;
-
-        while (queue.length > 0 && this._inFlight < limit) {
-          if (this._isResolved()) return;
-          var index = queue.pop();
-
-          this._promiseFulfilled(values[index], index);
-        }
-      };
-
-      MappingPromiseArray.prototype._filter = function (booleans, values) {
-        var len = values.length;
-        var ret = new Array(len);
-        var j = 0;
-
-        for (var i = 0; i < len; ++i) {
-          if (booleans[i]) ret[j++] = values[i];
-        }
-
-        ret.length = j;
-
-        this._resolve(ret);
-      };
-
-      MappingPromiseArray.prototype.preservedValues = function () {
-        return this._preservedValues;
-      };
-
-      function map(promises, fn, options, _filter) {
-        if (typeof fn !== "function") {
-          return apiRejection("expecting a function but got " + util.classString(fn));
-        }
-
-        var limit = 0;
-
-        if (options !== undefined) {
-          if ((0, _typeof2["default"])(options) === "object" && options !== null) {
-            if (typeof options.concurrency !== "number") {
-              return Promise.reject(new TypeError("'concurrency' must be a number but it is " + util.classString(options.concurrency)));
-            }
-
-            limit = options.concurrency;
-          } else {
-            return Promise.reject(new TypeError("options argument must be an object but it is " + util.classString(options)));
-          }
-        }
-
-        limit = typeof limit === "number" && isFinite(limit) && limit >= 1 ? limit : 0;
-        return new MappingPromiseArray(promises, fn, limit, _filter).promise();
-      }
-
-      Promise.prototype.map = function (fn, options) {
-        return map(this, fn, options, null);
-      };
-
-      Promise.map = function (promises, fn, options, _filter) {
-        return map(promises, fn, options, _filter);
-      };
-    };
+    arguments[4][17][0].apply(exports, arguments);
   }, {
-    "./util": 73
+    "./util": 74,
+    "dup": 17
   }],
   56: [function (require, module, exports) {
-    arguments[4][19][0].apply(exports, arguments);
+    arguments[4][18][0].apply(exports, arguments);
   }, {
-    "./util": 73,
-    "dup": 19
+    "./util": 74,
+    "dup": 18
   }],
   57: [function (require, module, exports) {
-    arguments[4][20][0].apply(exports, arguments);
+    arguments[4][19][0].apply(exports, arguments);
   }, {
-    "./errors": 49,
-    "./es5": 50,
-    "./util": 73,
-    "dup": 20
+    "./util": 74,
+    "dup": 19
   }],
   58: [function (require, module, exports) {
-    arguments[4][21][0].apply(exports, arguments);
+    arguments[4][20][0].apply(exports, arguments);
   }, {
-    "./util": 73,
-    "dup": 21
+    "./errors": 50,
+    "./es5": 51,
+    "./util": 74,
+    "dup": 20
   }],
   59: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function () {
-      var makeSelfResolutionError = function makeSelfResolutionError() {
-        return new TypeError("circular promise resolution chain\n\n    See http://goo.gl/MqrFmX\n");
-      };
-
-      var reflectHandler = function reflectHandler() {
-        return new Promise.PromiseInspection(this._target());
-      };
-
-      var apiRejection = function apiRejection(msg) {
-        return Promise.reject(new TypeError(msg));
-      };
-
-      function Proxyable() {}
-
-      var UNDEFINED_BINDING = {};
-
-      var util = require("./util");
-
-      util.setReflectHandler(reflectHandler);
-
-      var getDomain = function getDomain() {
-        var domain = process.domain;
-
-        if (domain === undefined) {
-          return null;
-        }
-
-        return domain;
-      };
-
-      var getContextDefault = function getContextDefault() {
-        return null;
-      };
-
-      var getContextDomain = function getContextDomain() {
-        return {
-          domain: getDomain(),
-          async: null
-        };
-      };
-
-      var AsyncResource = util.isNode && util.nodeSupportsAsyncResource ? require("async_hooks").AsyncResource : null;
-
-      var getContextAsyncHooks = function getContextAsyncHooks() {
-        return {
-          domain: getDomain(),
-          async: new AsyncResource("Bluebird::Promise")
-        };
-      };
-
-      var getContext = util.isNode ? getContextDomain : getContextDefault;
-      util.notEnumerableProp(Promise, "_getContext", getContext);
-
-      var enableAsyncHooks = function enableAsyncHooks() {
-        getContext = getContextAsyncHooks;
-        util.notEnumerableProp(Promise, "_getContext", getContextAsyncHooks);
-      };
-
-      var disableAsyncHooks = function disableAsyncHooks() {
-        getContext = getContextDomain;
-        util.notEnumerableProp(Promise, "_getContext", getContextDomain);
-      };
-
-      var es5 = require("./es5");
-
-      var Async = require("./async");
-
-      var async = new Async();
-      es5.defineProperty(Promise, "_async", {
-        value: async
-      });
-
-      var errors = require("./errors");
-
-      var TypeError = Promise.TypeError = errors.TypeError;
-      Promise.RangeError = errors.RangeError;
-      var CancellationError = Promise.CancellationError = errors.CancellationError;
-      Promise.TimeoutError = errors.TimeoutError;
-      Promise.OperationalError = errors.OperationalError;
-      Promise.RejectionError = errors.OperationalError;
-      Promise.AggregateError = errors.AggregateError;
-
-      var INTERNAL = function INTERNAL() {};
-
-      var APPLY = {};
-      var NEXT_FILTER = {};
-
-      var tryConvertToPromise = require("./thenables")(Promise, INTERNAL);
-
-      var PromiseArray = require("./promise_array")(Promise, INTERNAL, tryConvertToPromise, apiRejection, Proxyable);
-
-      var Context = require("./context")(Promise);
-      /*jshint unused:false*/
-
-
-      var createContext = Context.create;
-
-      var debug = require("./debuggability")(Promise, Context, enableAsyncHooks, disableAsyncHooks);
-
-      var CapturedTrace = debug.CapturedTrace;
-
-      var PassThroughHandlerContext = require("./finally")(Promise, tryConvertToPromise, NEXT_FILTER);
-
-      var catchFilter = require("./catch_filter")(NEXT_FILTER);
-
-      var nodebackForPromise = require("./nodeback");
-
-      var errorObj = util.errorObj;
-      var tryCatch = util.tryCatch;
-
-      function check(self, executor) {
-        if (self == null || self.constructor !== Promise) {
-          throw new TypeError("the promise constructor cannot be invoked directly\n\n    See http://goo.gl/MqrFmX\n");
-        }
-
-        if (typeof executor !== "function") {
-          throw new TypeError("expecting a function but got " + util.classString(executor));
-        }
-      }
-
-      function Promise(executor) {
-        if (executor !== INTERNAL) {
-          check(this, executor);
-        }
-
-        this._bitField = 0;
-        this._fulfillmentHandler0 = undefined;
-        this._rejectionHandler0 = undefined;
-        this._promise0 = undefined;
-        this._receiver0 = undefined;
-
-        this._resolveFromExecutor(executor);
-
-        this._promiseCreated();
-
-        this._fireEvent("promiseCreated", this);
-      }
-
-      Promise.prototype.toString = function () {
-        return "[object Promise]";
-      };
-
-      Promise.prototype.caught = Promise.prototype["catch"] = function (fn) {
-        var len = arguments.length;
-
-        if (len > 1) {
-          var catchInstances = new Array(len - 1),
-              j = 0,
-              i;
-
-          for (i = 0; i < len - 1; ++i) {
-            var item = arguments[i];
-
-            if (util.isObject(item)) {
-              catchInstances[j++] = item;
-            } else {
-              return apiRejection("Catch statement predicate: " + "expecting an object but got " + util.classString(item));
-            }
-          }
-
-          catchInstances.length = j;
-          fn = arguments[i];
-
-          if (typeof fn !== "function") {
-            throw new TypeError("The last argument to .catch() " + "must be a function, got " + util.toString(fn));
-          }
-
-          return this.then(undefined, catchFilter(catchInstances, fn, this));
-        }
-
-        return this.then(undefined, fn);
-      };
-
-      Promise.prototype.reflect = function () {
-        return this._then(reflectHandler, reflectHandler, undefined, this, undefined);
-      };
-
-      Promise.prototype.then = function (didFulfill, didReject) {
-        if (debug.warnings() && arguments.length > 0 && typeof didFulfill !== "function" && typeof didReject !== "function") {
-          var msg = ".then() only accepts functions but was passed: " + util.classString(didFulfill);
-
-          if (arguments.length > 1) {
-            msg += ", " + util.classString(didReject);
-          }
-
-          this._warn(msg);
-        }
-
-        return this._then(didFulfill, didReject, undefined, undefined, undefined);
-      };
-
-      Promise.prototype.done = function (didFulfill, didReject) {
-        var promise = this._then(didFulfill, didReject, undefined, undefined, undefined);
-
-        promise._setIsFinal();
-      };
-
-      Promise.prototype.spread = function (fn) {
-        if (typeof fn !== "function") {
-          return apiRejection("expecting a function but got " + util.classString(fn));
-        }
-
-        return this.all()._then(fn, undefined, undefined, APPLY, undefined);
-      };
-
-      Promise.prototype.toJSON = function () {
-        var ret = {
-          isFulfilled: false,
-          isRejected: false,
-          fulfillmentValue: undefined,
-          rejectionReason: undefined
-        };
-
-        if (this.isFulfilled()) {
-          ret.fulfillmentValue = this.value();
-          ret.isFulfilled = true;
-        } else if (this.isRejected()) {
-          ret.rejectionReason = this.reason();
-          ret.isRejected = true;
-        }
-
-        return ret;
-      };
-
-      Promise.prototype.all = function () {
-        if (arguments.length > 0) {
-          this._warn(".all() was passed arguments but it does not take any");
-        }
-
-        return new PromiseArray(this).promise();
-      };
-
-      Promise.prototype.error = function (fn) {
-        return this.caught(util.originatesFromRejection, fn);
-      };
-
-      Promise.getNewLibraryCopy = module.exports;
-
-      Promise.is = function (val) {
-        return val instanceof Promise;
-      };
-
-      Promise.fromNode = Promise.fromCallback = function (fn) {
-        var ret = new Promise(INTERNAL);
-
-        ret._captureStackTrace();
-
-        var multiArgs = arguments.length > 1 ? !!Object(arguments[1]).multiArgs : false;
-        var result = tryCatch(fn)(nodebackForPromise(ret, multiArgs));
-
-        if (result === errorObj) {
-          ret._rejectCallback(result.e, true);
-        }
-
-        if (!ret._isFateSealed()) ret._setAsyncGuaranteed();
-        return ret;
-      };
-
-      Promise.all = function (promises) {
-        return new PromiseArray(promises).promise();
-      };
-
-      Promise.cast = function (obj) {
-        var ret = tryConvertToPromise(obj);
-
-        if (!(ret instanceof Promise)) {
-          ret = new Promise(INTERNAL);
-
-          ret._captureStackTrace();
-
-          ret._setFulfilled();
-
-          ret._rejectionHandler0 = obj;
-        }
-
-        return ret;
-      };
-
-      Promise.resolve = Promise.fulfilled = Promise.cast;
-
-      Promise.reject = Promise.rejected = function (reason) {
-        var ret = new Promise(INTERNAL);
-
-        ret._captureStackTrace();
-
-        ret._rejectCallback(reason, true);
-
-        return ret;
-      };
-
-      Promise.setScheduler = function (fn) {
-        if (typeof fn !== "function") {
-          throw new TypeError("expecting a function but got " + util.classString(fn));
-        }
-
-        return async.setScheduler(fn);
-      };
-
-      Promise.prototype._then = function (didFulfill, didReject, _, receiver, internalData) {
-        var haveInternalData = internalData !== undefined;
-        var promise = haveInternalData ? internalData : new Promise(INTERNAL);
-
-        var target = this._target();
-
-        var bitField = target._bitField;
-
-        if (!haveInternalData) {
-          promise._propagateFrom(this, 3);
-
-          promise._captureStackTrace();
-
-          if (receiver === undefined && (this._bitField & 2097152) !== 0) {
-            if (!((bitField & 50397184) === 0)) {
-              receiver = this._boundValue();
-            } else {
-              receiver = target === this ? undefined : this._boundTo;
-            }
-          }
-
-          this._fireEvent("promiseChained", this, promise);
-        }
-
-        var context = getContext();
-
-        if (!((bitField & 50397184) === 0)) {
-          var handler,
-              value,
-              settler = target._settlePromiseCtx;
-
-          if ((bitField & 33554432) !== 0) {
-            value = target._rejectionHandler0;
-            handler = didFulfill;
-          } else if ((bitField & 16777216) !== 0) {
-            value = target._fulfillmentHandler0;
-            handler = didReject;
-
-            target._unsetRejectionIsUnhandled();
-          } else {
-            settler = target._settlePromiseLateCancellationObserver;
-            value = new CancellationError("late cancellation observer");
-
-            target._attachExtraTrace(value);
-
-            handler = didReject;
-          }
-
-          async.invoke(settler, target, {
-            handler: util.contextBind(context, handler),
-            promise: promise,
-            receiver: receiver,
-            value: value
-          });
-        } else {
-          target._addCallbacks(didFulfill, didReject, promise, receiver, context);
-        }
-
-        return promise;
-      };
-
-      Promise.prototype._length = function () {
-        return this._bitField & 65535;
-      };
-
-      Promise.prototype._isFateSealed = function () {
-        return (this._bitField & 117506048) !== 0;
-      };
-
-      Promise.prototype._isFollowing = function () {
-        return (this._bitField & 67108864) === 67108864;
-      };
-
-      Promise.prototype._setLength = function (len) {
-        this._bitField = this._bitField & -65536 | len & 65535;
-      };
-
-      Promise.prototype._setFulfilled = function () {
-        this._bitField = this._bitField | 33554432;
-
-        this._fireEvent("promiseFulfilled", this);
-      };
-
-      Promise.prototype._setRejected = function () {
-        this._bitField = this._bitField | 16777216;
-
-        this._fireEvent("promiseRejected", this);
-      };
-
-      Promise.prototype._setFollowing = function () {
-        this._bitField = this._bitField | 67108864;
-
-        this._fireEvent("promiseResolved", this);
-      };
-
-      Promise.prototype._setIsFinal = function () {
-        this._bitField = this._bitField | 4194304;
-      };
-
-      Promise.prototype._isFinal = function () {
-        return (this._bitField & 4194304) > 0;
-      };
-
-      Promise.prototype._unsetCancelled = function () {
-        this._bitField = this._bitField & ~65536;
-      };
-
-      Promise.prototype._setCancelled = function () {
-        this._bitField = this._bitField | 65536;
-
-        this._fireEvent("promiseCancelled", this);
-      };
-
-      Promise.prototype._setWillBeCancelled = function () {
-        this._bitField = this._bitField | 8388608;
-      };
-
-      Promise.prototype._setAsyncGuaranteed = function () {
-        if (async.hasCustomScheduler()) return;
-        var bitField = this._bitField;
-        this._bitField = bitField | (bitField & 536870912) >> 2 ^ 134217728;
-      };
-
-      Promise.prototype._setNoAsyncGuarantee = function () {
-        this._bitField = (this._bitField | 536870912) & ~134217728;
-      };
-
-      Promise.prototype._receiverAt = function (index) {
-        var ret = index === 0 ? this._receiver0 : this[index * 4 - 4 + 3];
-
-        if (ret === UNDEFINED_BINDING) {
-          return undefined;
-        } else if (ret === undefined && this._isBound()) {
-          return this._boundValue();
-        }
-
-        return ret;
-      };
-
-      Promise.prototype._promiseAt = function (index) {
-        return this[index * 4 - 4 + 2];
-      };
-
-      Promise.prototype._fulfillmentHandlerAt = function (index) {
-        return this[index * 4 - 4 + 0];
-      };
-
-      Promise.prototype._rejectionHandlerAt = function (index) {
-        return this[index * 4 - 4 + 1];
-      };
-
-      Promise.prototype._boundValue = function () {};
-
-      Promise.prototype._migrateCallback0 = function (follower) {
-        var bitField = follower._bitField;
-        var fulfill = follower._fulfillmentHandler0;
-        var reject = follower._rejectionHandler0;
-        var promise = follower._promise0;
-
-        var receiver = follower._receiverAt(0);
-
-        if (receiver === undefined) receiver = UNDEFINED_BINDING;
-
-        this._addCallbacks(fulfill, reject, promise, receiver, null);
-      };
-
-      Promise.prototype._migrateCallbackAt = function (follower, index) {
-        var fulfill = follower._fulfillmentHandlerAt(index);
-
-        var reject = follower._rejectionHandlerAt(index);
-
-        var promise = follower._promiseAt(index);
-
-        var receiver = follower._receiverAt(index);
-
-        if (receiver === undefined) receiver = UNDEFINED_BINDING;
-
-        this._addCallbacks(fulfill, reject, promise, receiver, null);
-      };
-
-      Promise.prototype._addCallbacks = function (fulfill, reject, promise, receiver, context) {
-        var index = this._length();
-
-        if (index >= 65535 - 4) {
-          index = 0;
-
-          this._setLength(0);
-        }
-
-        if (index === 0) {
-          this._promise0 = promise;
-          this._receiver0 = receiver;
-
-          if (typeof fulfill === "function") {
-            this._fulfillmentHandler0 = util.contextBind(context, fulfill);
-          }
-
-          if (typeof reject === "function") {
-            this._rejectionHandler0 = util.contextBind(context, reject);
-          }
-        } else {
-          var base = index * 4 - 4;
-          this[base + 2] = promise;
-          this[base + 3] = receiver;
-
-          if (typeof fulfill === "function") {
-            this[base + 0] = util.contextBind(context, fulfill);
-          }
-
-          if (typeof reject === "function") {
-            this[base + 1] = util.contextBind(context, reject);
-          }
-        }
-
-        this._setLength(index + 1);
-
-        return index;
-      };
-
-      Promise.prototype._proxy = function (proxyable, arg) {
-        this._addCallbacks(undefined, undefined, arg, proxyable, null);
-      };
-
-      Promise.prototype._resolveCallback = function (value, shouldBind) {
-        if ((this._bitField & 117506048) !== 0) return;
-        if (value === this) return this._rejectCallback(makeSelfResolutionError(), false);
-        var maybePromise = tryConvertToPromise(value, this);
-        if (!(maybePromise instanceof Promise)) return this._fulfill(value);
-        if (shouldBind) this._propagateFrom(maybePromise, 2);
-
-        var promise = maybePromise._target();
-
-        if (promise === this) {
-          this._reject(makeSelfResolutionError());
-
-          return;
-        }
-
-        var bitField = promise._bitField;
-
-        if ((bitField & 50397184) === 0) {
-          var len = this._length();
-
-          if (len > 0) promise._migrateCallback0(this);
-
-          for (var i = 1; i < len; ++i) {
-            promise._migrateCallbackAt(this, i);
-          }
-
-          this._setFollowing();
-
-          this._setLength(0);
-
-          this._setFollowee(maybePromise);
-        } else if ((bitField & 33554432) !== 0) {
-          this._fulfill(promise._value());
-        } else if ((bitField & 16777216) !== 0) {
-          this._reject(promise._reason());
-        } else {
-          var reason = new CancellationError("late cancellation observer");
-
-          promise._attachExtraTrace(reason);
-
-          this._reject(reason);
-        }
-      };
-
-      Promise.prototype._rejectCallback = function (reason, synchronous, ignoreNonErrorWarnings) {
-        var trace = util.ensureErrorObject(reason);
-        var hasStack = trace === reason;
-
-        if (!hasStack && !ignoreNonErrorWarnings && debug.warnings()) {
-          var message = "a promise was rejected with a non-error: " + util.classString(reason);
-
-          this._warn(message, true);
-        }
-
-        this._attachExtraTrace(trace, synchronous ? hasStack : false);
-
-        this._reject(reason);
-      };
-
-      Promise.prototype._resolveFromExecutor = function (executor) {
-        if (executor === INTERNAL) return;
-        var promise = this;
-
-        this._captureStackTrace();
-
-        this._pushContext();
-
-        var synchronous = true;
-
-        var r = this._execute(executor, function (value) {
-          promise._resolveCallback(value);
-        }, function (reason) {
-          promise._rejectCallback(reason, synchronous);
-        });
-
-        synchronous = false;
-
-        this._popContext();
-
-        if (r !== undefined) {
-          promise._rejectCallback(r, true);
-        }
-      };
-
-      Promise.prototype._settlePromiseFromHandler = function (handler, receiver, value, promise) {
-        var bitField = promise._bitField;
-        if ((bitField & 65536) !== 0) return;
-
-        promise._pushContext();
-
-        var x;
-
-        if (receiver === APPLY) {
-          if (!value || typeof value.length !== "number") {
-            x = errorObj;
-            x.e = new TypeError("cannot .spread() a non-array: " + util.classString(value));
-          } else {
-            x = tryCatch(handler).apply(this._boundValue(), value);
-          }
-        } else {
-          x = tryCatch(handler).call(receiver, value);
-        }
-
-        var promiseCreated = promise._popContext();
-
-        bitField = promise._bitField;
-        if ((bitField & 65536) !== 0) return;
-
-        if (x === NEXT_FILTER) {
-          promise._reject(value);
-        } else if (x === errorObj) {
-          promise._rejectCallback(x.e, false);
-        } else {
-          debug.checkForgottenReturns(x, promiseCreated, "", promise, this);
-
-          promise._resolveCallback(x);
-        }
-      };
-
-      Promise.prototype._target = function () {
-        var ret = this;
-
-        while (ret._isFollowing()) {
-          ret = ret._followee();
-        }
-
-        return ret;
-      };
-
-      Promise.prototype._followee = function () {
-        return this._rejectionHandler0;
-      };
-
-      Promise.prototype._setFollowee = function (promise) {
-        this._rejectionHandler0 = promise;
-      };
-
-      Promise.prototype._settlePromise = function (promise, handler, receiver, value) {
-        var isPromise = promise instanceof Promise;
-        var bitField = this._bitField;
-        var asyncGuaranteed = (bitField & 134217728) !== 0;
-
-        if ((bitField & 65536) !== 0) {
-          if (isPromise) promise._invokeInternalOnCancel();
-
-          if (receiver instanceof PassThroughHandlerContext && receiver.isFinallyHandler()) {
-            receiver.cancelPromise = promise;
-
-            if (tryCatch(handler).call(receiver, value) === errorObj) {
-              promise._reject(errorObj.e);
-            }
-          } else if (handler === reflectHandler) {
-            promise._fulfill(reflectHandler.call(receiver));
-          } else if (receiver instanceof Proxyable) {
-            receiver._promiseCancelled(promise);
-          } else if (isPromise || promise instanceof PromiseArray) {
-            promise._cancel();
-          } else {
-            receiver.cancel();
-          }
-        } else if (typeof handler === "function") {
-          if (!isPromise) {
-            handler.call(receiver, value, promise);
-          } else {
-            if (asyncGuaranteed) promise._setAsyncGuaranteed();
-
-            this._settlePromiseFromHandler(handler, receiver, value, promise);
-          }
-        } else if (receiver instanceof Proxyable) {
-          if (!receiver._isResolved()) {
-            if ((bitField & 33554432) !== 0) {
-              receiver._promiseFulfilled(value, promise);
-            } else {
-              receiver._promiseRejected(value, promise);
-            }
-          }
-        } else if (isPromise) {
-          if (asyncGuaranteed) promise._setAsyncGuaranteed();
-
-          if ((bitField & 33554432) !== 0) {
-            promise._fulfill(value);
-          } else {
-            promise._reject(value);
-          }
-        }
-      };
-
-      Promise.prototype._settlePromiseLateCancellationObserver = function (ctx) {
-        var handler = ctx.handler;
-        var promise = ctx.promise;
-        var receiver = ctx.receiver;
-        var value = ctx.value;
-
-        if (typeof handler === "function") {
-          if (!(promise instanceof Promise)) {
-            handler.call(receiver, value, promise);
-          } else {
-            this._settlePromiseFromHandler(handler, receiver, value, promise);
-          }
-        } else if (promise instanceof Promise) {
-          promise._reject(value);
-        }
-      };
-
-      Promise.prototype._settlePromiseCtx = function (ctx) {
-        this._settlePromise(ctx.promise, ctx.handler, ctx.receiver, ctx.value);
-      };
-
-      Promise.prototype._settlePromise0 = function (handler, value, bitField) {
-        var promise = this._promise0;
-
-        var receiver = this._receiverAt(0);
-
-        this._promise0 = undefined;
-        this._receiver0 = undefined;
-
-        this._settlePromise(promise, handler, receiver, value);
-      };
-
-      Promise.prototype._clearCallbackDataAtIndex = function (index) {
-        var base = index * 4 - 4;
-        this[base + 2] = this[base + 3] = this[base + 0] = this[base + 1] = undefined;
-      };
-
-      Promise.prototype._fulfill = function (value) {
-        var bitField = this._bitField;
-        if ((bitField & 117506048) >>> 16) return;
-
-        if (value === this) {
-          var err = makeSelfResolutionError();
-
-          this._attachExtraTrace(err);
-
-          return this._reject(err);
-        }
-
-        this._setFulfilled();
-
-        this._rejectionHandler0 = value;
-
-        if ((bitField & 65535) > 0) {
-          if ((bitField & 134217728) !== 0) {
-            this._settlePromises();
-          } else {
-            async.settlePromises(this);
-          }
-
-          this._dereferenceTrace();
-        }
-      };
-
-      Promise.prototype._reject = function (reason) {
-        var bitField = this._bitField;
-        if ((bitField & 117506048) >>> 16) return;
-
-        this._setRejected();
-
-        this._fulfillmentHandler0 = reason;
-
-        if (this._isFinal()) {
-          return async.fatalError(reason, util.isNode);
-        }
-
-        if ((bitField & 65535) > 0) {
-          async.settlePromises(this);
-        } else {
-          this._ensurePossibleRejectionHandled();
-        }
-      };
-
-      Promise.prototype._fulfillPromises = function (len, value) {
-        for (var i = 1; i < len; i++) {
-          var handler = this._fulfillmentHandlerAt(i);
-
-          var promise = this._promiseAt(i);
-
-          var receiver = this._receiverAt(i);
-
-          this._clearCallbackDataAtIndex(i);
-
-          this._settlePromise(promise, handler, receiver, value);
-        }
-      };
-
-      Promise.prototype._rejectPromises = function (len, reason) {
-        for (var i = 1; i < len; i++) {
-          var handler = this._rejectionHandlerAt(i);
-
-          var promise = this._promiseAt(i);
-
-          var receiver = this._receiverAt(i);
-
-          this._clearCallbackDataAtIndex(i);
-
-          this._settlePromise(promise, handler, receiver, reason);
-        }
-      };
-
-      Promise.prototype._settlePromises = function () {
-        var bitField = this._bitField;
-        var len = bitField & 65535;
-
-        if (len > 0) {
-          if ((bitField & 16842752) !== 0) {
-            var reason = this._fulfillmentHandler0;
-
-            this._settlePromise0(this._rejectionHandler0, reason, bitField);
-
-            this._rejectPromises(len, reason);
-          } else {
-            var value = this._rejectionHandler0;
-
-            this._settlePromise0(this._fulfillmentHandler0, value, bitField);
-
-            this._fulfillPromises(len, value);
-          }
-
-          this._setLength(0);
-        }
-
-        this._clearCancellationData();
-      };
-
-      Promise.prototype._settledValue = function () {
-        var bitField = this._bitField;
-
-        if ((bitField & 33554432) !== 0) {
-          return this._rejectionHandler0;
-        } else if ((bitField & 16777216) !== 0) {
-          return this._fulfillmentHandler0;
-        }
-      };
-
-      if (typeof Symbol !== "undefined" && Symbol.toStringTag) {
-        es5.defineProperty(Promise.prototype, Symbol.toStringTag, {
-          get: function get() {
-            return "Object";
-          }
-        });
-      }
-
-      function deferResolve(v) {
-        this.promise._resolveCallback(v);
-      }
-
-      function deferReject(v) {
-        this.promise._rejectCallback(v, false);
-      }
-
-      Promise.defer = Promise.pending = function () {
-        debug.deprecated("Promise.defer", "new Promise");
-        var promise = new Promise(INTERNAL);
-        return {
-          promise: promise,
-          resolve: deferResolve,
-          reject: deferReject
-        };
-      };
-
-      util.notEnumerableProp(Promise, "_makeSelfResolutionError", makeSelfResolutionError);
-
-      require("./method")(Promise, INTERNAL, tryConvertToPromise, apiRejection, debug);
-
-      require("./bind")(Promise, INTERNAL, tryConvertToPromise, debug);
-
-      require("./cancel")(Promise, PromiseArray, apiRejection, debug);
-
-      require("./direct_resolve")(Promise);
-
-      require("./synchronous_inspection")(Promise);
-
-      require("./join")(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async);
-
-      Promise.Promise = Promise;
-      Promise.version = "3.7.2";
-
-      require('./call_get.js')(Promise);
-
-      require('./generators.js')(Promise, apiRejection, INTERNAL, tryConvertToPromise, Proxyable, debug);
-
-      require('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
-
-      require('./nodeify.js')(Promise);
-
-      require('./promisify.js')(Promise, INTERNAL);
-
-      require('./props.js')(Promise, PromiseArray, tryConvertToPromise, apiRejection);
-
-      require('./race.js')(Promise, INTERNAL, tryConvertToPromise, apiRejection);
-
-      require('./reduce.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
-
-      require('./settle.js')(Promise, PromiseArray, debug);
-
-      require('./some.js')(Promise, PromiseArray, apiRejection);
-
-      require('./timers.js')(Promise, INTERNAL, debug);
-
-      require('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
-
-      require('./any.js')(Promise);
-
-      require('./each.js')(Promise, INTERNAL);
-
-      require('./filter.js')(Promise, INTERNAL);
-
-      util.toFastProperties(Promise);
-      util.toFastProperties(Promise.prototype);
-
-      function fillTypes(value) {
-        var p = new Promise(INTERNAL);
-        p._fulfillmentHandler0 = value;
-        p._rejectionHandler0 = value;
-        p._promise0 = value;
-        p._receiver0 = value;
-      } // Complete slack tracking, opt out of field-type tracking and           
-      // stabilize map                                                         
-
-
-      fillTypes({
-        a: 1
-      });
-      fillTypes({
-        b: 2
-      });
-      fillTypes({
-        c: 3
-      });
-      fillTypes(1);
-      fillTypes(function () {});
-      fillTypes(undefined);
-      fillTypes(false);
-      fillTypes(new Promise(INTERNAL));
-      debug.setBounds(Async.firstLineError, util.lastLineError);
-      return Promise;
-    };
+    arguments[4][21][0].apply(exports, arguments);
   }, {
-    "./any.js": 38,
-    "./async": 39,
-    "./bind": 40,
-    "./call_get.js": 42,
-    "./cancel": 43,
-    "./catch_filter": 44,
-    "./context": 45,
-    "./debuggability": 46,
-    "./direct_resolve": 47,
-    "./each.js": 48,
-    "./errors": 49,
-    "./es5": 50,
-    "./filter.js": 51,
-    "./finally": 52,
-    "./generators.js": 53,
-    "./join": 54,
-    "./map.js": 55,
-    "./method": 56,
-    "./nodeback": 57,
-    "./nodeify.js": 58,
-    "./promise_array": 60,
-    "./promisify.js": 61,
-    "./props.js": 62,
-    "./race.js": 64,
-    "./reduce.js": 65,
-    "./settle.js": 67,
-    "./some.js": 68,
-    "./synchronous_inspection": 69,
-    "./thenables": 70,
-    "./timers.js": 71,
-    "./using.js": 72,
-    "./util": 73,
-    "async_hooks": undefined
+    "./util": 74,
+    "dup": 21
   }],
   60: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, INTERNAL, tryConvertToPromise, apiRejection, Proxyable) {
-      var util = require("./util");
-
-      var isArray = util.isArray;
-
-      function toResolutionValue(val) {
-        switch (val) {
-          case -2:
-            return [];
-
-          case -3:
-            return {};
-
-          case -6:
-            return new Map();
-        }
-      }
-
-      function PromiseArray(values) {
-        var promise = this._promise = new Promise(INTERNAL);
-
-        if (values instanceof Promise) {
-          promise._propagateFrom(values, 3);
-
-          values.suppressUnhandledRejections();
-        }
-
-        promise._setOnCancel(this);
-
-        this._values = values;
-        this._length = 0;
-        this._totalResolved = 0;
-
-        this._init(undefined, -2);
-      }
-
-      util.inherits(PromiseArray, Proxyable);
-
-      PromiseArray.prototype.length = function () {
-        return this._length;
-      };
-
-      PromiseArray.prototype.promise = function () {
-        return this._promise;
-      };
-
-      PromiseArray.prototype._init = function init(_, resolveValueIfEmpty) {
-        var values = tryConvertToPromise(this._values, this._promise);
-
-        if (values instanceof Promise) {
-          values = values._target();
-          var bitField = values._bitField;
-          ;
-          this._values = values;
-
-          if ((bitField & 50397184) === 0) {
-            this._promise._setAsyncGuaranteed();
-
-            return values._then(init, this._reject, undefined, this, resolveValueIfEmpty);
-          } else if ((bitField & 33554432) !== 0) {
-            values = values._value();
-          } else if ((bitField & 16777216) !== 0) {
-            return this._reject(values._reason());
-          } else {
-            return this._cancel();
-          }
-        }
-
-        values = util.asArray(values);
-
-        if (values === null) {
-          var err = apiRejection("expecting an array or an iterable object but got " + util.classString(values)).reason();
-
-          this._promise._rejectCallback(err, false);
-
-          return;
-        }
-
-        if (values.length === 0) {
-          if (resolveValueIfEmpty === -5) {
-            this._resolveEmptyArray();
-          } else {
-            this._resolve(toResolutionValue(resolveValueIfEmpty));
-          }
-
-          return;
-        }
-
-        this._iterate(values);
-      };
-
-      PromiseArray.prototype._iterate = function (values) {
-        var len = this.getActualLength(values.length);
-        this._length = len;
-        this._values = this.shouldCopyValues() ? new Array(len) : this._values;
-        var result = this._promise;
-        var isResolved = false;
-        var bitField = null;
-
-        for (var i = 0; i < len; ++i) {
-          var maybePromise = tryConvertToPromise(values[i], result);
-
-          if (maybePromise instanceof Promise) {
-            maybePromise = maybePromise._target();
-            bitField = maybePromise._bitField;
-          } else {
-            bitField = null;
-          }
-
-          if (isResolved) {
-            if (bitField !== null) {
-              maybePromise.suppressUnhandledRejections();
-            }
-          } else if (bitField !== null) {
-            if ((bitField & 50397184) === 0) {
-              maybePromise._proxy(this, i);
-
-              this._values[i] = maybePromise;
-            } else if ((bitField & 33554432) !== 0) {
-              isResolved = this._promiseFulfilled(maybePromise._value(), i);
-            } else if ((bitField & 16777216) !== 0) {
-              isResolved = this._promiseRejected(maybePromise._reason(), i);
-            } else {
-              isResolved = this._promiseCancelled(i);
-            }
-          } else {
-            isResolved = this._promiseFulfilled(maybePromise, i);
-          }
-        }
-
-        if (!isResolved) result._setAsyncGuaranteed();
-      };
-
-      PromiseArray.prototype._isResolved = function () {
-        return this._values === null;
-      };
-
-      PromiseArray.prototype._resolve = function (value) {
-        this._values = null;
-
-        this._promise._fulfill(value);
-      };
-
-      PromiseArray.prototype._cancel = function () {
-        if (this._isResolved() || !this._promise._isCancellable()) return;
-        this._values = null;
-
-        this._promise._cancel();
-      };
-
-      PromiseArray.prototype._reject = function (reason) {
-        this._values = null;
-
-        this._promise._rejectCallback(reason, false);
-      };
-
-      PromiseArray.prototype._promiseFulfilled = function (value, index) {
-        this._values[index] = value;
-        var totalResolved = ++this._totalResolved;
-
-        if (totalResolved >= this._length) {
-          this._resolve(this._values);
-
-          return true;
-        }
-
-        return false;
-      };
-
-      PromiseArray.prototype._promiseCancelled = function () {
-        this._cancel();
-
-        return true;
-      };
-
-      PromiseArray.prototype._promiseRejected = function (reason) {
-        this._totalResolved++;
-
-        this._reject(reason);
-
-        return true;
-      };
-
-      PromiseArray.prototype._resultCancelled = function () {
-        if (this._isResolved()) return;
-        var values = this._values;
-
-        this._cancel();
-
-        if (values instanceof Promise) {
-          values.cancel();
-        } else {
-          for (var i = 0; i < values.length; ++i) {
-            if (values[i] instanceof Promise) {
-              values[i].cancel();
-            }
-          }
-        }
-      };
-
-      PromiseArray.prototype.shouldCopyValues = function () {
-        return true;
-      };
-
-      PromiseArray.prototype.getActualLength = function (len) {
-        return len;
-      };
-
-      return PromiseArray;
-    };
+    arguments[4][22][0].apply(exports, arguments);
   }, {
-    "./util": 73
+    "./any.js": 39,
+    "./async": 40,
+    "./bind": 41,
+    "./call_get.js": 43,
+    "./cancel": 44,
+    "./catch_filter": 45,
+    "./context": 46,
+    "./debuggability": 47,
+    "./direct_resolve": 48,
+    "./each.js": 49,
+    "./errors": 50,
+    "./es5": 51,
+    "./filter.js": 52,
+    "./finally": 53,
+    "./generators.js": 54,
+    "./join": 55,
+    "./map.js": 56,
+    "./method": 57,
+    "./nodeback": 58,
+    "./nodeify.js": 59,
+    "./promise_array": 61,
+    "./promisify.js": 62,
+    "./props.js": 63,
+    "./race.js": 65,
+    "./reduce.js": 66,
+    "./settle.js": 68,
+    "./some.js": 69,
+    "./synchronous_inspection": 70,
+    "./thenables": 71,
+    "./timers.js": 72,
+    "./using.js": 73,
+    "./util": 74,
+    "async_hooks": undefined,
+    "dup": 22
   }],
   61: [function (require, module, exports) {
-    arguments[4][24][0].apply(exports, arguments);
+    arguments[4][23][0].apply(exports, arguments);
   }, {
-    "./errors": 49,
-    "./nodeback": 57,
-    "./util": 73,
-    "dup": 24
+    "./util": 74,
+    "dup": 23
   }],
   62: [function (require, module, exports) {
-    arguments[4][25][0].apply(exports, arguments);
+    arguments[4][24][0].apply(exports, arguments);
   }, {
-    "./es5": 50,
-    "./util": 73,
-    "dup": 25
+    "./errors": 50,
+    "./nodeback": 58,
+    "./util": 74,
+    "dup": 24
   }],
   63: [function (require, module, exports) {
+    arguments[4][25][0].apply(exports, arguments);
+  }, {
+    "./es5": 51,
+    "./util": 74,
+    "dup": 25
+  }],
+  64: [function (require, module, exports) {
     arguments[4][26][0].apply(exports, arguments);
   }, {
     "dup": 26
   }],
-  64: [function (require, module, exports) {
+  65: [function (require, module, exports) {
     arguments[4][27][0].apply(exports, arguments);
   }, {
-    "./util": 73,
+    "./util": 74,
     "dup": 27
   }],
-  65: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug) {
-      var util = require("./util");
-
-      var tryCatch = util.tryCatch;
-
-      function ReductionPromiseArray(promises, fn, initialValue, _each) {
-        this.constructor$(promises);
-
-        var context = Promise._getContext();
-
-        this._fn = util.contextBind(context, fn);
-
-        if (initialValue !== undefined) {
-          initialValue = Promise.resolve(initialValue);
-
-          initialValue._attachCancellationCallback(this);
-        }
-
-        this._initialValue = initialValue;
-        this._currentCancellable = null;
-
-        if (_each === INTERNAL) {
-          this._eachValues = Array(this._length);
-        } else if (_each === 0) {
-          this._eachValues = null;
-        } else {
-          this._eachValues = undefined;
-        }
-
-        this._promise._captureStackTrace();
-
-        this._init$(undefined, -5);
-      }
-
-      util.inherits(ReductionPromiseArray, PromiseArray);
-
-      ReductionPromiseArray.prototype._gotAccum = function (accum) {
-        if (this._eachValues !== undefined && this._eachValues !== null && accum !== INTERNAL) {
-          this._eachValues.push(accum);
-        }
-      };
-
-      ReductionPromiseArray.prototype._eachComplete = function (value) {
-        if (this._eachValues !== null) {
-          this._eachValues.push(value);
-        }
-
-        return this._eachValues;
-      };
-
-      ReductionPromiseArray.prototype._init = function () {};
-
-      ReductionPromiseArray.prototype._resolveEmptyArray = function () {
-        this._resolve(this._eachValues !== undefined ? this._eachValues : this._initialValue);
-      };
-
-      ReductionPromiseArray.prototype.shouldCopyValues = function () {
-        return false;
-      };
-
-      ReductionPromiseArray.prototype._resolve = function (value) {
-        this._promise._resolveCallback(value);
-
-        this._values = null;
-      };
-
-      ReductionPromiseArray.prototype._resultCancelled = function (sender) {
-        if (sender === this._initialValue) return this._cancel();
-        if (this._isResolved()) return;
-
-        this._resultCancelled$();
-
-        if (this._currentCancellable instanceof Promise) {
-          this._currentCancellable.cancel();
-        }
-
-        if (this._initialValue instanceof Promise) {
-          this._initialValue.cancel();
-        }
-      };
-
-      ReductionPromiseArray.prototype._iterate = function (values) {
-        this._values = values;
-        var value;
-        var i;
-        var length = values.length;
-
-        if (this._initialValue !== undefined) {
-          value = this._initialValue;
-          i = 0;
-        } else {
-          value = Promise.resolve(values[0]);
-          i = 1;
-        }
-
-        this._currentCancellable = value;
-
-        for (var j = i; j < length; ++j) {
-          var maybePromise = values[j];
-
-          if (maybePromise instanceof Promise) {
-            maybePromise.suppressUnhandledRejections();
-          }
-        }
-
-        if (!value.isRejected()) {
-          for (; i < length; ++i) {
-            var ctx = {
-              accum: null,
-              value: values[i],
-              index: i,
-              length: length,
-              array: this
-            };
-            value = value._then(gotAccum, undefined, undefined, ctx, undefined);
-
-            if ((i & 127) === 0) {
-              value._setNoAsyncGuarantee();
-            }
-          }
-        }
-
-        if (this._eachValues !== undefined) {
-          value = value._then(this._eachComplete, undefined, undefined, this, undefined);
-        }
-
-        value._then(completed, completed, undefined, value, this);
-      };
-
-      Promise.prototype.reduce = function (fn, initialValue) {
-        return reduce(this, fn, initialValue, null);
-      };
-
-      Promise.reduce = function (promises, fn, initialValue, _each) {
-        return reduce(promises, fn, initialValue, _each);
-      };
-
-      function completed(valueOrReason, array) {
-        if (this.isFulfilled()) {
-          array._resolve(valueOrReason);
-        } else {
-          array._reject(valueOrReason);
-        }
-      }
-
-      function reduce(promises, fn, initialValue, _each) {
-        if (typeof fn !== "function") {
-          return apiRejection("expecting a function but got " + util.classString(fn));
-        }
-
-        var array = new ReductionPromiseArray(promises, fn, initialValue, _each);
-        return array.promise();
-      }
-
-      function gotAccum(accum) {
-        this.accum = accum;
-
-        this.array._gotAccum(accum);
-
-        var value = tryConvertToPromise(this.value, this.array._promise);
-
-        if (value instanceof Promise) {
-          this.array._currentCancellable = value;
-          return value._then(gotValue, undefined, undefined, this, undefined);
-        } else {
-          return gotValue.call(this, value);
-        }
-      }
-
-      function gotValue(value) {
-        var array = this.array;
-        var promise = array._promise;
-        var fn = tryCatch(array._fn);
-
-        promise._pushContext();
-
-        var ret;
-
-        if (array._eachValues !== undefined) {
-          ret = fn.call(promise._boundValue(), value, this.index, this.length);
-        } else {
-          ret = fn.call(promise._boundValue(), this.accum, value, this.index, this.length);
-        }
-
-        if (ret instanceof Promise) {
-          array._currentCancellable = ret;
-        }
-
-        var promiseCreated = promise._popContext();
-
-        debug.checkForgottenReturns(ret, promiseCreated, array._eachValues !== undefined ? "Promise.each" : "Promise.reduce", promise);
-        return ret;
-      }
-    };
-  }, {
-    "./util": 73
-  }],
   66: [function (require, module, exports) {
-    "use strict";
-
-    var util = require("./util");
-
-    var schedule;
-
-    var noAsyncScheduler = function noAsyncScheduler() {
-      throw new Error("No async scheduler available\n\n    See http://goo.gl/MqrFmX\n");
-    };
-
-    var NativePromise = util.getNativePromise();
-
-    if (util.isNode && typeof MutationObserver === "undefined") {
-      var GlobalSetImmediate = global.setImmediate;
-      var ProcessNextTick = process.nextTick;
-      schedule = util.isRecentNode ? function (fn) {
-        GlobalSetImmediate.call(global, fn);
-      } : function (fn) {
-        ProcessNextTick.call(process, fn);
-      };
-    } else if (typeof NativePromise === "function" && typeof NativePromise.resolve === "function") {
-      var nativePromise = NativePromise.resolve();
-
-      schedule = function schedule(fn) {
-        nativePromise.then(fn);
-      };
-    } else if (typeof MutationObserver !== "undefined" && !(typeof window !== "undefined" && window.navigator && (window.navigator.standalone || window.cordova)) && "classList" in document.documentElement) {
-      schedule = function () {
-        var div = document.createElement("div");
-        var opts = {
-          attributes: true
-        };
-        var toggleScheduled = false;
-        var div2 = document.createElement("div");
-        var o2 = new MutationObserver(function () {
-          div.classList.toggle("foo");
-          toggleScheduled = false;
-        });
-        o2.observe(div2, opts);
-
-        var scheduleToggle = function scheduleToggle() {
-          if (toggleScheduled) return;
-          toggleScheduled = true;
-          div2.classList.toggle("foo");
-        };
-
-        return function schedule(fn) {
-          var o = new MutationObserver(function () {
-            o.disconnect();
-            fn();
-          });
-          o.observe(div, opts);
-          scheduleToggle();
-        };
-      }();
-    } else if (typeof setImmediate !== "undefined") {
-      schedule = function schedule(fn) {
-        setImmediate(fn);
-      };
-    } else if (typeof setTimeout !== "undefined") {
-      schedule = function schedule(fn) {
-        setTimeout(fn, 0);
-      };
-    } else {
-      schedule = noAsyncScheduler;
-    }
-
-    module.exports = schedule;
+    arguments[4][28][0].apply(exports, arguments);
   }, {
-    "./util": 73
+    "./util": 74,
+    "dup": 28
   }],
   67: [function (require, module, exports) {
-    "use strict";
-
-    module.exports = function (Promise, PromiseArray, debug) {
-      var PromiseInspection = Promise.PromiseInspection;
-
-      var util = require("./util");
-
-      function SettledPromiseArray(values) {
-        this.constructor$(values);
-      }
-
-      util.inherits(SettledPromiseArray, PromiseArray);
-
-      SettledPromiseArray.prototype._promiseResolved = function (index, inspection) {
-        this._values[index] = inspection;
-        var totalResolved = ++this._totalResolved;
-
-        if (totalResolved >= this._length) {
-          this._resolve(this._values);
-
-          return true;
-        }
-
-        return false;
-      };
-
-      SettledPromiseArray.prototype._promiseFulfilled = function (value, index) {
-        var ret = new PromiseInspection();
-        ret._bitField = 33554432;
-        ret._settledValueField = value;
-        return this._promiseResolved(index, ret);
-      };
-
-      SettledPromiseArray.prototype._promiseRejected = function (reason, index) {
-        var ret = new PromiseInspection();
-        ret._bitField = 16777216;
-        ret._settledValueField = reason;
-        return this._promiseResolved(index, ret);
-      };
-
-      Promise.settle = function (promises) {
-        debug.deprecated(".settle()", ".reflect()");
-        return new SettledPromiseArray(promises).promise();
-      };
-
-      Promise.allSettled = function (promises) {
-        return new SettledPromiseArray(promises).promise();
-      };
-
-      Promise.prototype.settle = function () {
-        return Promise.settle(this);
-      };
-    };
+    arguments[4][29][0].apply(exports, arguments);
   }, {
-    "./util": 73
+    "./util": 74,
+    "dup": 29
   }],
   68: [function (require, module, exports) {
-    arguments[4][31][0].apply(exports, arguments);
+    arguments[4][30][0].apply(exports, arguments);
   }, {
-    "./errors": 49,
-    "./util": 73,
-    "dup": 31
+    "./util": 74,
+    "dup": 30
   }],
   69: [function (require, module, exports) {
+    arguments[4][31][0].apply(exports, arguments);
+  }, {
+    "./errors": 50,
+    "./util": 74,
+    "dup": 31
+  }],
+  70: [function (require, module, exports) {
     arguments[4][32][0].apply(exports, arguments);
   }, {
     "dup": 32
   }],
-  70: [function (require, module, exports) {
+  71: [function (require, module, exports) {
     arguments[4][33][0].apply(exports, arguments);
   }, {
-    "./util": 73,
+    "./util": 74,
     "dup": 33
   }],
-  71: [function (require, module, exports) {
+  72: [function (require, module, exports) {
     arguments[4][34][0].apply(exports, arguments);
   }, {
-    "./util": 73,
+    "./util": 74,
     "dup": 34
   }],
-  72: [function (require, module, exports) {
+  73: [function (require, module, exports) {
     arguments[4][35][0].apply(exports, arguments);
   }, {
-    "./errors": 49,
-    "./util": 73,
+    "./errors": 50,
+    "./util": 74,
     "dup": 35
   }],
-  73: [function (require, module, exports) {
-    "use strict";
-
-    var es5 = require("./es5");
-
-    var canEvaluate = typeof navigator == "undefined";
-    var errorObj = {
-      e: {}
-    };
-    var tryCatchTarget;
-    var globalObject = typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : this !== undefined ? this : null;
-
-    function tryCatcher() {
-      try {
-        var target = tryCatchTarget;
-        tryCatchTarget = null;
-        return target.apply(this, arguments);
-      } catch (e) {
-        errorObj.e = e;
-        return errorObj;
-      }
-    }
-
-    function tryCatch(fn) {
-      tryCatchTarget = fn;
-      return tryCatcher;
-    }
-
-    var inherits = function inherits(Child, Parent) {
-      var hasProp = {}.hasOwnProperty;
-
-      function T() {
-        this.constructor = Child;
-        this.constructor$ = Parent;
-
-        for (var propertyName in Parent.prototype) {
-          if (hasProp.call(Parent.prototype, propertyName) && propertyName.charAt(propertyName.length - 1) !== "$") {
-            this[propertyName + "$"] = Parent.prototype[propertyName];
-          }
-        }
-      }
-
-      T.prototype = Parent.prototype;
-      Child.prototype = new T();
-      return Child.prototype;
-    };
-
-    function isPrimitive(val) {
-      return val == null || val === true || val === false || typeof val === "string" || typeof val === "number";
-    }
-
-    function isObject(value) {
-      return typeof value === "function" || (0, _typeof2["default"])(value) === "object" && value !== null;
-    }
-
-    function maybeWrapAsError(maybeError) {
-      if (!isPrimitive(maybeError)) return maybeError;
-      return new Error(safeToString(maybeError));
-    }
-
-    function withAppended(target, appendee) {
-      var len = target.length;
-      var ret = new Array(len + 1);
-      var i;
-
-      for (i = 0; i < len; ++i) {
-        ret[i] = target[i];
-      }
-
-      ret[i] = appendee;
-      return ret;
-    }
-
-    function getDataPropertyOrDefault(obj, key, defaultValue) {
-      if (es5.isES5) {
-        var desc = Object.getOwnPropertyDescriptor(obj, key);
-
-        if (desc != null) {
-          return desc.get == null && desc.set == null ? desc.value : defaultValue;
-        }
-      } else {
-        return {}.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
-      }
-    }
-
-    function notEnumerableProp(obj, name, value) {
-      if (isPrimitive(obj)) return obj;
-      var descriptor = {
-        value: value,
-        configurable: true,
-        enumerable: false,
-        writable: true
-      };
-      es5.defineProperty(obj, name, descriptor);
-      return obj;
-    }
-
-    function thrower(r) {
-      throw r;
-    }
-
-    var inheritedDataKeys = function () {
-      var excludedPrototypes = [Array.prototype, Object.prototype, Function.prototype];
-
-      var isExcludedProto = function isExcludedProto(val) {
-        for (var i = 0; i < excludedPrototypes.length; ++i) {
-          if (excludedPrototypes[i] === val) {
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      if (es5.isES5) {
-        var getKeys = Object.getOwnPropertyNames;
-        return function (obj) {
-          var ret = [];
-          var visitedKeys = Object.create(null);
-
-          while (obj != null && !isExcludedProto(obj)) {
-            var keys;
-
-            try {
-              keys = getKeys(obj);
-            } catch (e) {
-              return ret;
-            }
-
-            for (var i = 0; i < keys.length; ++i) {
-              var key = keys[i];
-              if (visitedKeys[key]) continue;
-              visitedKeys[key] = true;
-              var desc = Object.getOwnPropertyDescriptor(obj, key);
-
-              if (desc != null && desc.get == null && desc.set == null) {
-                ret.push(key);
-              }
-            }
-
-            obj = es5.getPrototypeOf(obj);
-          }
-
-          return ret;
-        };
-      } else {
-        var hasProp = {}.hasOwnProperty;
-        return function (obj) {
-          if (isExcludedProto(obj)) return [];
-          var ret = [];
-          /*jshint forin:false */
-
-          enumeration: for (var key in obj) {
-            if (hasProp.call(obj, key)) {
-              ret.push(key);
-            } else {
-              for (var i = 0; i < excludedPrototypes.length; ++i) {
-                if (hasProp.call(excludedPrototypes[i], key)) {
-                  continue enumeration;
-                }
-              }
-
-              ret.push(key);
-            }
-          }
-
-          return ret;
-        };
-      }
-    }();
-
-    var thisAssignmentPattern = /this\s*\.\s*\S+\s*=/;
-
-    function isClass(fn) {
-      try {
-        if (typeof fn === "function") {
-          var keys = es5.names(fn.prototype);
-          var hasMethods = es5.isES5 && keys.length > 1;
-          var hasMethodsOtherThanConstructor = keys.length > 0 && !(keys.length === 1 && keys[0] === "constructor");
-          var hasThisAssignmentAndStaticMethods = thisAssignmentPattern.test(fn + "") && es5.names(fn).length > 0;
-
-          if (hasMethods || hasMethodsOtherThanConstructor || hasThisAssignmentAndStaticMethods) {
-            return true;
-          }
-        }
-
-        return false;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    function toFastProperties(obj) {
-      /*jshint -W027,-W055,-W031*/
-      function FakeConstructor() {}
-
-      FakeConstructor.prototype = obj;
-      var receiver = new FakeConstructor();
-
-      function ic() {
-        return (0, _typeof2["default"])(receiver.foo);
-      }
-
-      ic();
-      ic();
-      return obj;
-      eval(obj);
-    }
-
-    var rident = /^[a-z$_][a-z$_0-9]*$/i;
-
-    function isIdentifier(str) {
-      return rident.test(str);
-    }
-
-    function filledRange(count, prefix, suffix) {
-      var ret = new Array(count);
-
-      for (var i = 0; i < count; ++i) {
-        ret[i] = prefix + i + suffix;
-      }
-
-      return ret;
-    }
-
-    function safeToString(obj) {
-      try {
-        return obj + "";
-      } catch (e) {
-        return "[no string representation]";
-      }
-    }
-
-    function isError(obj) {
-      return obj instanceof Error || obj !== null && (0, _typeof2["default"])(obj) === "object" && typeof obj.message === "string" && typeof obj.name === "string";
-    }
-
-    function markAsOriginatingFromRejection(e) {
-      try {
-        notEnumerableProp(e, "isOperational", true);
-      } catch (ignore) {}
-    }
-
-    function originatesFromRejection(e) {
-      if (e == null) return false;
-      return e instanceof Error["__BluebirdErrorTypes__"].OperationalError || e["isOperational"] === true;
-    }
-
-    function canAttachTrace(obj) {
-      return isError(obj) && es5.propertyIsWritable(obj, "stack");
-    }
-
-    var ensureErrorObject = function () {
-      if (!("stack" in new Error())) {
-        return function (value) {
-          if (canAttachTrace(value)) return value;
-
-          try {
-            throw new Error(safeToString(value));
-          } catch (err) {
-            return err;
-          }
-        };
-      } else {
-        return function (value) {
-          if (canAttachTrace(value)) return value;
-          return new Error(safeToString(value));
-        };
-      }
-    }();
-
-    function classString(obj) {
-      return {}.toString.call(obj);
-    }
-
-    function copyDescriptors(from, to, filter) {
-      var keys = es5.names(from);
-
-      for (var i = 0; i < keys.length; ++i) {
-        var key = keys[i];
-
-        if (filter(key)) {
-          try {
-            es5.defineProperty(to, key, es5.getDescriptor(from, key));
-          } catch (ignore) {}
-        }
-      }
-    }
-
-    var asArray = function asArray(v) {
-      if (es5.isArray(v)) {
-        return v;
-      }
-
-      return null;
-    };
-
-    if (typeof Symbol !== "undefined" && Symbol.iterator) {
-      var ArrayFrom = typeof Array.from === "function" ? function (v) {
-        return Array.from(v);
-      } : function (v) {
-        var ret = [];
-        var it = v[Symbol.iterator]();
-        var itResult;
-
-        while (!(itResult = it.next()).done) {
-          ret.push(itResult.value);
-        }
-
-        return ret;
-      };
-
-      asArray = function asArray(v) {
-        if (es5.isArray(v)) {
-          return v;
-        } else if (v != null && typeof v[Symbol.iterator] === "function") {
-          return ArrayFrom(v);
-        }
-
-        return null;
-      };
-    }
-
-    var isNode = typeof process !== "undefined" && classString(process).toLowerCase() === "[object process]";
-    var hasEnvVariables = typeof process !== "undefined" && typeof process.env !== "undefined";
-
-    function env(key) {
-      return hasEnvVariables ? process.env[key] : undefined;
-    }
-
-    function getNativePromise() {
-      if (typeof Promise === "function") {
-        try {
-          var promise = new Promise(function () {});
-
-          if (classString(promise) === "[object Promise]") {
-            return Promise;
-          }
-        } catch (e) {}
-      }
-    }
-
-    var reflectHandler;
-
-    function contextBind(ctx, cb) {
-      if (ctx === null || typeof cb !== "function" || cb === reflectHandler) {
-        return cb;
-      }
-
-      if (ctx.domain !== null) {
-        cb = ctx.domain.bind(cb);
-      }
-
-      var async = ctx.async;
-
-      if (async !== null) {
-        var old = cb;
-
-        cb = function cb() {
-          var $_len = arguments.length + 2;
-          var args = new Array($_len);
-
-          for (var $_i = 2; $_i < $_len; ++$_i) {
-            args[$_i] = arguments[$_i - 2];
-          }
-
-          ;
-          args[0] = old;
-          args[1] = this;
-          return async.runInAsyncScope.apply(async, args);
-        };
-      }
-
-      return cb;
-    }
-
-    var ret = {
-      setReflectHandler: function setReflectHandler(fn) {
-        reflectHandler = fn;
-      },
-      isClass: isClass,
-      isIdentifier: isIdentifier,
-      inheritedDataKeys: inheritedDataKeys,
-      getDataPropertyOrDefault: getDataPropertyOrDefault,
-      thrower: thrower,
-      isArray: es5.isArray,
-      asArray: asArray,
-      notEnumerableProp: notEnumerableProp,
-      isPrimitive: isPrimitive,
-      isObject: isObject,
-      isError: isError,
-      canEvaluate: canEvaluate,
-      errorObj: errorObj,
-      tryCatch: tryCatch,
-      inherits: inherits,
-      withAppended: withAppended,
-      maybeWrapAsError: maybeWrapAsError,
-      toFastProperties: toFastProperties,
-      filledRange: filledRange,
-      toString: safeToString,
-      canAttachTrace: canAttachTrace,
-      ensureErrorObject: ensureErrorObject,
-      originatesFromRejection: originatesFromRejection,
-      markAsOriginatingFromRejection: markAsOriginatingFromRejection,
-      classString: classString,
-      copyDescriptors: copyDescriptors,
-      isNode: isNode,
-      hasEnvVariables: hasEnvVariables,
-      env: env,
-      global: globalObject,
-      getNativePromise: getNativePromise,
-      contextBind: contextBind
-    };
-
-    ret.isRecentNode = ret.isNode && function () {
-      var version;
-
-      if (process.versions && process.versions.node) {
-        version = process.versions.node.split(".").map(Number);
-      } else if (process.version) {
-        version = process.version.split(".").map(Number);
-      }
-
-      return version[0] === 0 && version[1] > 10 || version[0] > 0;
-    }();
-
-    ret.nodeSupportsAsyncResource = ret.isNode && function () {
-      var supportsAsync = false;
-
-      try {
-        var res = require("async_hooks").AsyncResource;
-
-        supportsAsync = typeof res.prototype.runInAsyncScope === "function";
-      } catch (e) {
-        supportsAsync = false;
-      }
-
-      return supportsAsync;
-    }();
-
-    if (ret.isNode) ret.toFastProperties(process);
-
-    try {
-      throw new Error();
-    } catch (e) {
-      ret.lastLineError = e;
-    }
-
-    module.exports = ret;
-  }, {
-    "./es5": 50,
-    "async_hooks": undefined
-  }],
   74: [function (require, module, exports) {
+    arguments[4][36][0].apply(exports, arguments);
+  }, {
+    "./es5": 51,
+    "async_hooks": undefined,
+    "dup": 36
+  }],
+  75: [function (require, module, exports) {
+    var concatMap = require('concat-map');
+
+    var balanced = require('balanced-match');
+
+    module.exports = expandTop;
+    var escSlash = '\0SLASH' + Math.random() + '\0';
+    var escOpen = '\0OPEN' + Math.random() + '\0';
+    var escClose = '\0CLOSE' + Math.random() + '\0';
+    var escComma = '\0COMMA' + Math.random() + '\0';
+    var escPeriod = '\0PERIOD' + Math.random() + '\0';
+
+    function numeric(str) {
+      return parseInt(str, 10) == str ? parseInt(str, 10) : str.charCodeAt(0);
+    }
+
+    function escapeBraces(str) {
+      return str.split('\\\\').join(escSlash).split('\\{').join(escOpen).split('\\}').join(escClose).split('\\,').join(escComma).split('\\.').join(escPeriod);
+    }
+
+    function unescapeBraces(str) {
+      return str.split(escSlash).join('\\').split(escOpen).join('{').split(escClose).join('}').split(escComma).join(',').split(escPeriod).join('.');
+    } // Basically just str.split(","), but handling cases
+    // where we have nested braced sections, which should be
+    // treated as individual members, like {a,{b,c},d}
+
+
+    function parseCommaParts(str) {
+      if (!str) return [''];
+      var parts = [];
+      var m = balanced('{', '}', str);
+      if (!m) return str.split(',');
+      var pre = m.pre;
+      var body = m.body;
+      var post = m.post;
+      var p = pre.split(',');
+      p[p.length - 1] += '{' + body + '}';
+      var postParts = parseCommaParts(post);
+
+      if (post.length) {
+        p[p.length - 1] += postParts.shift();
+        p.push.apply(p, postParts);
+      }
+
+      parts.push.apply(parts, p);
+      return parts;
+    }
+
+    function expandTop(str) {
+      if (!str) return []; // I don't know why Bash 4.3 does this, but it does.
+      // Anything starting with {} will have the first two bytes preserved
+      // but *only* at the top level, so {},a}b will not expand to anything,
+      // but a{},b}c will be expanded to [a}c,abc].
+      // One could argue that this is a bug in Bash, but since the goal of
+      // this module is to match Bash's rules, we escape a leading {}
+
+      if (str.substr(0, 2) === '{}') {
+        str = '\\{\\}' + str.substr(2);
+      }
+
+      return expand(escapeBraces(str), true).map(unescapeBraces);
+    }
+
+    function identity(e) {
+      return e;
+    }
+
+    function embrace(str) {
+      return '{' + str + '}';
+    }
+
+    function isPadded(el) {
+      return /^-?0\d/.test(el);
+    }
+
+    function lte(i, y) {
+      return i <= y;
+    }
+
+    function gte(i, y) {
+      return i >= y;
+    }
+
+    function expand(str, isTop) {
+      var expansions = [];
+      var m = balanced('{', '}', str);
+      if (!m || /\$$/.test(m.pre)) return [str];
+      var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
+      var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
+      var isSequence = isNumericSequence || isAlphaSequence;
+      var isOptions = m.body.indexOf(',') >= 0;
+
+      if (!isSequence && !isOptions) {
+        // {a},b}
+        if (m.post.match(/,.*\}/)) {
+          str = m.pre + '{' + m.body + escClose + m.post;
+          return expand(str);
+        }
+
+        return [str];
+      }
+
+      var n;
+
+      if (isSequence) {
+        n = m.body.split(/\.\./);
+      } else {
+        n = parseCommaParts(m.body);
+
+        if (n.length === 1) {
+          // x{{a,b}}y ==> x{a}y x{b}y
+          n = expand(n[0], false).map(embrace);
+
+          if (n.length === 1) {
+            var post = m.post.length ? expand(m.post, false) : [''];
+            return post.map(function (p) {
+              return m.pre + n[0] + p;
+            });
+          }
+        }
+      } // at this point, n is the parts, and we know it's not a comma set
+      // with a single entry.
+      // no need to expand pre, since it is guaranteed to be free of brace-sets
+
+
+      var pre = m.pre;
+      var post = m.post.length ? expand(m.post, false) : [''];
+      var N;
+
+      if (isSequence) {
+        var x = numeric(n[0]);
+        var y = numeric(n[1]);
+        var width = Math.max(n[0].length, n[1].length);
+        var incr = n.length == 3 ? Math.abs(numeric(n[2])) : 1;
+        var test = lte;
+        var reverse = y < x;
+
+        if (reverse) {
+          incr *= -1;
+          test = gte;
+        }
+
+        var pad = n.some(isPadded);
+        N = [];
+
+        for (var i = x; test(i, y); i += incr) {
+          var c;
+
+          if (isAlphaSequence) {
+            c = String.fromCharCode(i);
+            if (c === '\\') c = '';
+          } else {
+            c = String(i);
+
+            if (pad) {
+              var need = width - c.length;
+
+              if (need > 0) {
+                var z = new Array(need + 1).join('0');
+                if (i < 0) c = '-' + z + c.slice(1);else c = z + c;
+              }
+            }
+          }
+
+          N.push(c);
+        }
+      } else {
+        N = concatMap(n, function (el) {
+          return expand(el, false);
+        });
+      }
+
+      for (var j = 0; j < N.length; j++) {
+        for (var k = 0; k < post.length; k++) {
+          var expansion = pre + N[j] + post[k];
+          if (!isTop || isSequence || expansion) expansions.push(expansion);
+        }
+      }
+
+      return expansions;
+    }
+  }, {
+    "balanced-match": 38,
+    "concat-map": 76
+  }],
+  76: [function (require, module, exports) {
+    module.exports = function (xs, fn) {
+      var res = [];
+
+      for (var i = 0; i < xs.length; i++) {
+        var x = fn(xs[i], i);
+        if (isArray(x)) res.push.apply(res, x);else res.push(x);
+      }
+
+      return res;
+    };
+
+    var isArray = Array.isArray || function (xs) {
+      return Object.prototype.toString.call(xs) === '[object Array]';
+    };
+  }, {}],
+  77: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -10914,23 +7904,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copySync;
   }, {
-    "../mkdirs": 91,
-    "../util/buffer": 103,
-    "../util/stat": 104,
-    "../util/utimes.js": 105,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../util/buffer": 106,
+    "../util/stat": 107,
+    "../util/utimes.js": 108,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  75: [function (require, module, exports) {
+  78: [function (require, module, exports) {
     'use strict';
 
     module.exports = {
       copySync: require('./copy-sync')
     };
   }, {
-    "./copy-sync": 74
+    "./copy-sync": 77
   }],
-  76: [function (require, module, exports) {
+  79: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -11166,14 +8156,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copy;
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "../util/stat": 104,
-    "../util/utimes": 105,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "../util/stat": 107,
+    "../util/utimes": 108,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  77: [function (require, module, exports) {
+  80: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11182,10 +8172,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       copy: u(require('./copy'))
     };
   }, {
-    "./copy": 76,
-    "universalify": 125
+    "./copy": 79,
+    "universalify": 139
   }],
-  78: [function (require, module, exports) {
+  81: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11241,13 +8231,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       emptydir: emptyDir
     };
   }, {
-    "../mkdirs": 91,
-    "../remove": 101,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../remove": 104,
+    "graceful-fs": 110,
     "path": undefined,
-    "universalify": 125
+    "universalify": 139
   }],
-  79: [function (require, module, exports) {
+  82: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11305,13 +8295,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       createFileSync: createFileSync
     };
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "graceful-fs": 110,
     "path": undefined,
-    "universalify": 125
+    "universalify": 139
   }],
-  80: [function (require, module, exports) {
+  83: [function (require, module, exports) {
     'use strict';
 
     var file = require('./file');
@@ -11338,11 +8328,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       ensureSymlinkSync: symlink.createSymlinkSync
     };
   }, {
-    "./file": 79,
-    "./link": 81,
-    "./symlink": 84
+    "./file": 82,
+    "./link": 84,
+    "./symlink": 87
   }],
-  81: [function (require, module, exports) {
+  84: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11408,13 +8398,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       createLinkSync: createLinkSync
     };
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "graceful-fs": 110,
     "path": undefined,
-    "universalify": 125
+    "universalify": 139
   }],
-  82: [function (require, module, exports) {
+  85: [function (require, module, exports) {
     'use strict';
 
     var path = require('path');
@@ -11522,11 +8512,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       symlinkPathsSync: symlinkPathsSync
     };
   }, {
-    "../path-exists": 100,
-    "graceful-fs": 107,
+    "../path-exists": 103,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  83: [function (require, module, exports) {
+  86: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -11560,9 +8550,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       symlinkTypeSync: symlinkTypeSync
     };
   }, {
-    "graceful-fs": 107
+    "graceful-fs": 110
   }],
-  84: [function (require, module, exports) {
+  87: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11631,15 +8621,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       createSymlinkSync: createSymlinkSync
     };
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "./symlink-paths": 82,
-    "./symlink-type": 83,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "./symlink-paths": 85,
+    "./symlink-type": 86,
+    "graceful-fs": 110,
     "path": undefined,
-    "universalify": 125
+    "universalify": 139
   }],
-  85: [function (require, module, exports) {
+  88: [function (require, module, exports) {
     'use strict'; // This is adapted from https://github.com/normalize/mz
     // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
 
@@ -11727,10 +8717,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       exports.realpath["native"] = u(fs.realpath["native"]);
     }
   }, {
-    "graceful-fs": 107,
-    "universalify": 125
+    "graceful-fs": 110,
+    "universalify": 139
   }],
-  86: [function (require, module, exports) {
+  89: [function (require, module, exports) {
     'use strict';
 
     module.exports = Object.assign({}, // Export promiseified graceful-fs:
@@ -11748,21 +8738,21 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     }
   }, {
-    "./copy": 77,
-    "./copy-sync": 75,
-    "./empty": 78,
-    "./ensure": 80,
-    "./fs": 85,
-    "./json": 87,
-    "./mkdirs": 91,
-    "./move": 97,
-    "./move-sync": 95,
-    "./output": 99,
-    "./path-exists": 100,
-    "./remove": 101,
+    "./copy": 80,
+    "./copy-sync": 78,
+    "./empty": 81,
+    "./ensure": 83,
+    "./fs": 88,
+    "./json": 90,
+    "./mkdirs": 94,
+    "./move": 100,
+    "./move-sync": 98,
+    "./output": 102,
+    "./path-exists": 103,
+    "./remove": 104,
     "fs": undefined
   }],
-  87: [function (require, module, exports) {
+  90: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11780,12 +8770,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     jsonFile.readJSONSync = jsonFile.readJsonSync;
     module.exports = jsonFile;
   }, {
-    "./jsonfile": 88,
-    "./output-json": 90,
-    "./output-json-sync": 89,
-    "universalify": 125
+    "./jsonfile": 91,
+    "./output-json": 93,
+    "./output-json-sync": 92,
+    "universalify": 139
   }],
-  88: [function (require, module, exports) {
+  91: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11800,10 +8790,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       writeJsonSync: jsonFile.writeFileSync
     };
   }, {
-    "jsonfile": 114,
-    "universalify": 125
+    "jsonfile": 125,
+    "universalify": 139
   }],
-  89: [function (require, module, exports) {
+  92: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -11826,12 +8816,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = outputJsonSync;
   }, {
-    "../mkdirs": 91,
-    "./jsonfile": 88,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "./jsonfile": 91,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  90: [function (require, module, exports) {
+  93: [function (require, module, exports) {
     'use strict';
 
     var path = require('path');
@@ -11861,12 +8851,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = outputJson;
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "./jsonfile": 88,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "./jsonfile": 91,
     "path": undefined
   }],
-  91: [function (require, module, exports) {
+  94: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -11885,11 +8875,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       ensureDirSync: mkdirsSync
     };
   }, {
-    "./mkdirs": 93,
-    "./mkdirs-sync": 92,
-    "universalify": 125
+    "./mkdirs": 96,
+    "./mkdirs-sync": 95,
+    "universalify": 139
   }],
-  92: [function (require, module, exports) {
+  95: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -11951,11 +8941,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mkdirsSync;
   }, {
-    "./win32": 94,
-    "graceful-fs": 107,
+    "./win32": 97,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  93: [function (require, module, exports) {
+  96: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12024,11 +9014,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mkdirs;
   }, {
-    "./win32": 94,
-    "graceful-fs": 107,
+    "./win32": 97,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  94: [function (require, module, exports) {
+  97: [function (require, module, exports) {
     'use strict';
 
     var path = require('path'); // get drive on windows
@@ -12057,16 +9047,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "path": undefined
   }],
-  95: [function (require, module, exports) {
+  98: [function (require, module, exports) {
     'use strict';
 
     module.exports = {
       moveSync: require('./move-sync')
     };
   }, {
-    "./move-sync": 96
+    "./move-sync": 99
   }],
-  96: [function (require, module, exports) {
+  99: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12123,14 +9113,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = moveSync;
   }, {
-    "../copy-sync": 75,
-    "../mkdirs": 91,
-    "../remove": 101,
-    "../util/stat": 104,
-    "graceful-fs": 107,
+    "../copy-sync": 78,
+    "../mkdirs": 94,
+    "../remove": 104,
+    "../util/stat": 107,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  97: [function (require, module, exports) {
+  100: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -12139,10 +9129,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       move: u(require('./move'))
     };
   }, {
-    "./move": 98,
-    "universalify": 125
+    "./move": 101,
+    "universalify": 139
   }],
-  98: [function (require, module, exports) {
+  101: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12215,15 +9205,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = move;
   }, {
-    "../copy": 77,
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "../remove": 101,
-    "../util/stat": 104,
-    "graceful-fs": 107,
+    "../copy": 80,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "../remove": 104,
+    "../util/stat": 107,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  99: [function (require, module, exports) {
+  102: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -12273,13 +9263,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       outputFileSync: outputFileSync
     };
   }, {
-    "../mkdirs": 91,
-    "../path-exists": 100,
-    "graceful-fs": 107,
+    "../mkdirs": 94,
+    "../path-exists": 103,
+    "graceful-fs": 110,
     "path": undefined,
-    "universalify": 125
+    "universalify": 139
   }],
-  100: [function (require, module, exports) {
+  103: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromPromise;
@@ -12299,10 +9289,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       pathExistsSync: fs.existsSync
     };
   }, {
-    "../fs": 85,
-    "universalify": 125
+    "../fs": 88,
+    "universalify": 139
   }],
-  101: [function (require, module, exports) {
+  104: [function (require, module, exports) {
     'use strict';
 
     var u = require('universalify').fromCallback;
@@ -12314,10 +9304,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       removeSync: rimraf.sync
     };
   }, {
-    "./rimraf": 102,
-    "universalify": 125
+    "./rimraf": 105,
+    "universalify": 139
   }],
-  102: [function (require, module, exports) {
+  105: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12632,10 +9622,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     rimraf.sync = rimrafSync;
   }, {
     "assert": undefined,
-    "graceful-fs": 107,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  103: [function (require, module, exports) {
+  106: [function (require, module, exports) {
     'use strict';
     /* eslint-disable node/no-deprecated-api */
 
@@ -12651,7 +9641,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return new Buffer(size);
     };
   }, {}],
-  104: [function (require, module, exports) {
+  107: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12891,10 +9881,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       isSrcSubdir: isSrcSubdir
     };
   }, {
-    "graceful-fs": 107,
+    "graceful-fs": 110,
     "path": undefined
   }],
-  105: [function (require, module, exports) {
+  108: [function (require, module, exports) {
     'use strict';
 
     var fs = require('graceful-fs');
@@ -12975,11 +9965,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       utimesMillisSync: utimesMillisSync
     };
   }, {
-    "graceful-fs": 107,
+    "graceful-fs": 110,
     "os": undefined,
     "path": undefined
   }],
-  106: [function (require, module, exports) {
+  109: [function (require, module, exports) {
     'use strict';
 
     module.exports = clone;
@@ -12995,7 +9985,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return copy;
     }
   }, {}],
-  107: [function (require, module, exports) {
+  110: [function (require, module, exports) {
     var fs = require('fs');
 
     var polyfills = require('./polyfills.js');
@@ -13315,14 +10305,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     }
   }, {
-    "./clone.js": 106,
-    "./legacy-streams.js": 108,
-    "./polyfills.js": 109,
+    "./clone.js": 109,
+    "./legacy-streams.js": 111,
+    "./polyfills.js": 112,
     "assert": undefined,
     "fs": undefined,
     "util": undefined
   }],
-  108: [function (require, module, exports) {
+  111: [function (require, module, exports) {
     var Stream = require('stream').Stream;
 
     module.exports = legacy;
@@ -13444,7 +10434,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "stream": undefined
   }],
-  109: [function (require, module, exports) {
+  112: [function (require, module, exports) {
     var constants = require('constants');
 
     var origCwd = process.cwd;
@@ -13788,12 +10778,1756 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "constants": undefined
   }],
-  110: [function (require, module, exports) {
-    arguments[4][106][0].apply(exports, arguments);
+  113: [function (require, module, exports) {
+    module.exports = realpath;
+    realpath.realpath = realpath;
+    realpath.sync = realpathSync;
+    realpath.realpathSync = realpathSync;
+    realpath.monkeypatch = monkeypatch;
+    realpath.unmonkeypatch = unmonkeypatch;
+
+    var fs = require('fs');
+
+    var origRealpath = fs.realpath;
+    var origRealpathSync = fs.realpathSync;
+    var version = process.version;
+    var ok = /^v[0-5]\./.test(version);
+
+    var old = require('./old.js');
+
+    function newError(er) {
+      return er && er.syscall === 'realpath' && (er.code === 'ELOOP' || er.code === 'ENOMEM' || er.code === 'ENAMETOOLONG');
+    }
+
+    function realpath(p, cache, cb) {
+      if (ok) {
+        return origRealpath(p, cache, cb);
+      }
+
+      if (typeof cache === 'function') {
+        cb = cache;
+        cache = null;
+      }
+
+      origRealpath(p, cache, function (er, result) {
+        if (newError(er)) {
+          old.realpath(p, cache, cb);
+        } else {
+          cb(er, result);
+        }
+      });
+    }
+
+    function realpathSync(p, cache) {
+      if (ok) {
+        return origRealpathSync(p, cache);
+      }
+
+      try {
+        return origRealpathSync(p, cache);
+      } catch (er) {
+        if (newError(er)) {
+          return old.realpathSync(p, cache);
+        } else {
+          throw er;
+        }
+      }
+    }
+
+    function monkeypatch() {
+      fs.realpath = realpath;
+      fs.realpathSync = realpathSync;
+    }
+
+    function unmonkeypatch() {
+      fs.realpath = origRealpath;
+      fs.realpathSync = origRealpathSync;
+    }
   }, {
-    "dup": 106
+    "./old.js": 114,
+    "fs": undefined
   }],
-  111: [function (require, module, exports) {
+  114: [function (require, module, exports) {
+    // Copyright Joyent, Inc. and other Node contributors.
+    //
+    // Permission is hereby granted, free of charge, to any person obtaining a
+    // copy of this software and associated documentation files (the
+    // "Software"), to deal in the Software without restriction, including
+    // without limitation the rights to use, copy, modify, merge, publish,
+    // distribute, sublicense, and/or sell copies of the Software, and to permit
+    // persons to whom the Software is furnished to do so, subject to the
+    // following conditions:
+    //
+    // The above copyright notice and this permission notice shall be included
+    // in all copies or substantial portions of the Software.
+    //
+    // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    // OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    // NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    // USE OR OTHER DEALINGS IN THE SOFTWARE.
+    var pathModule = require('path');
+
+    var isWindows = process.platform === 'win32';
+
+    var fs = require('fs'); // JavaScript implementation of realpath, ported from node pre-v6
+
+
+    var DEBUG = process.env.NODE_DEBUG && /fs/.test(process.env.NODE_DEBUG);
+
+    function rethrow() {
+      // Only enable in debug mode. A backtrace uses ~1000 bytes of heap space and
+      // is fairly slow to generate.
+      var callback;
+
+      if (DEBUG) {
+        var backtrace = new Error();
+        callback = debugCallback;
+      } else callback = missingCallback;
+
+      return callback;
+
+      function debugCallback(err) {
+        if (err) {
+          backtrace.message = err.message;
+          err = backtrace;
+          missingCallback(err);
+        }
+      }
+
+      function missingCallback(err) {
+        if (err) {
+          if (process.throwDeprecation) throw err; // Forgot a callback but don't know where? Use NODE_DEBUG=fs
+          else if (!process.noDeprecation) {
+              var msg = 'fs: missing callback ' + (err.stack || err.message);
+              if (process.traceDeprecation) console.trace(msg);else console.error(msg);
+            }
+        }
+      }
+    }
+
+    function maybeCallback(cb) {
+      return typeof cb === 'function' ? cb : rethrow();
+    }
+
+    var normalize = pathModule.normalize; // Regexp that finds the next partion of a (partial) path
+    // result is [base_with_slash, base], e.g. ['somedir/', 'somedir']
+
+    if (isWindows) {
+      var nextPartRe = /(.*?)(?:[\/\\]+|$)/g;
+    } else {
+      var nextPartRe = /(.*?)(?:[\/]+|$)/g;
+    } // Regex to find the device root, including trailing slash. E.g. 'c:\\'.
+
+
+    if (isWindows) {
+      var splitRootRe = /^(?:[a-zA-Z]:|[\\\/]{2}[^\\\/]+[\\\/][^\\\/]+)?[\\\/]*/;
+    } else {
+      var splitRootRe = /^[\/]*/;
+    }
+
+    exports.realpathSync = function realpathSync(p, cache) {
+      // make p is absolute
+      p = pathModule.resolve(p);
+
+      if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
+        return cache[p];
+      }
+
+      var original = p,
+          seenLinks = {},
+          knownHard = {}; // current character position in p
+
+      var pos; // the partial path so far, including a trailing slash if any
+
+      var current; // the partial path without a trailing slash (except when pointing at a root)
+
+      var base; // the partial path scanned in the previous round, with slash
+
+      var previous;
+      start();
+
+      function start() {
+        // Skip over roots
+        var m = splitRootRe.exec(p);
+        pos = m[0].length;
+        current = m[0];
+        base = m[0];
+        previous = ''; // On windows, check that the root exists. On unix there is no need.
+
+        if (isWindows && !knownHard[base]) {
+          fs.lstatSync(base);
+          knownHard[base] = true;
+        }
+      } // walk down the path, swapping out linked pathparts for their real
+      // values
+      // NB: p.length changes.
+
+
+      while (pos < p.length) {
+        // find the next part
+        nextPartRe.lastIndex = pos;
+        var result = nextPartRe.exec(p);
+        previous = current;
+        current += result[0];
+        base = previous + result[1];
+        pos = nextPartRe.lastIndex; // continue if not a symlink
+
+        if (knownHard[base] || cache && cache[base] === base) {
+          continue;
+        }
+
+        var resolvedLink;
+
+        if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
+          // some known symbolic link.  no need to stat again.
+          resolvedLink = cache[base];
+        } else {
+          var stat = fs.lstatSync(base);
+
+          if (!stat.isSymbolicLink()) {
+            knownHard[base] = true;
+            if (cache) cache[base] = base;
+            continue;
+          } // read the link if it wasn't read before
+          // dev/ino always return 0 on windows, so skip the check.
+
+
+          var linkTarget = null;
+
+          if (!isWindows) {
+            var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
+
+            if (seenLinks.hasOwnProperty(id)) {
+              linkTarget = seenLinks[id];
+            }
+          }
+
+          if (linkTarget === null) {
+            fs.statSync(base);
+            linkTarget = fs.readlinkSync(base);
+          }
+
+          resolvedLink = pathModule.resolve(previous, linkTarget); // track this, if given a cache.
+
+          if (cache) cache[base] = resolvedLink;
+          if (!isWindows) seenLinks[id] = linkTarget;
+        } // resolve the link, then start over
+
+
+        p = pathModule.resolve(resolvedLink, p.slice(pos));
+        start();
+      }
+
+      if (cache) cache[original] = p;
+      return p;
+    };
+
+    exports.realpath = function realpath(p, cache, cb) {
+      if (typeof cb !== 'function') {
+        cb = maybeCallback(cache);
+        cache = null;
+      } // make p is absolute
+
+
+      p = pathModule.resolve(p);
+
+      if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
+        return process.nextTick(cb.bind(null, null, cache[p]));
+      }
+
+      var original = p,
+          seenLinks = {},
+          knownHard = {}; // current character position in p
+
+      var pos; // the partial path so far, including a trailing slash if any
+
+      var current; // the partial path without a trailing slash (except when pointing at a root)
+
+      var base; // the partial path scanned in the previous round, with slash
+
+      var previous;
+      start();
+
+      function start() {
+        // Skip over roots
+        var m = splitRootRe.exec(p);
+        pos = m[0].length;
+        current = m[0];
+        base = m[0];
+        previous = ''; // On windows, check that the root exists. On unix there is no need.
+
+        if (isWindows && !knownHard[base]) {
+          fs.lstat(base, function (err) {
+            if (err) return cb(err);
+            knownHard[base] = true;
+            LOOP();
+          });
+        } else {
+          process.nextTick(LOOP);
+        }
+      } // walk down the path, swapping out linked pathparts for their real
+      // values
+
+
+      function LOOP() {
+        // stop if scanned past end of path
+        if (pos >= p.length) {
+          if (cache) cache[original] = p;
+          return cb(null, p);
+        } // find the next part
+
+
+        nextPartRe.lastIndex = pos;
+        var result = nextPartRe.exec(p);
+        previous = current;
+        current += result[0];
+        base = previous + result[1];
+        pos = nextPartRe.lastIndex; // continue if not a symlink
+
+        if (knownHard[base] || cache && cache[base] === base) {
+          return process.nextTick(LOOP);
+        }
+
+        if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
+          // known symbolic link.  no need to stat again.
+          return gotResolvedLink(cache[base]);
+        }
+
+        return fs.lstat(base, gotStat);
+      }
+
+      function gotStat(err, stat) {
+        if (err) return cb(err); // if not a symlink, skip to the next path part
+
+        if (!stat.isSymbolicLink()) {
+          knownHard[base] = true;
+          if (cache) cache[base] = base;
+          return process.nextTick(LOOP);
+        } // stat & read the link if not read before
+        // call gotTarget as soon as the link target is known
+        // dev/ino always return 0 on windows, so skip the check.
+
+
+        if (!isWindows) {
+          var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
+
+          if (seenLinks.hasOwnProperty(id)) {
+            return gotTarget(null, seenLinks[id], base);
+          }
+        }
+
+        fs.stat(base, function (err) {
+          if (err) return cb(err);
+          fs.readlink(base, function (err, target) {
+            if (!isWindows) seenLinks[id] = target;
+            gotTarget(err, target);
+          });
+        });
+      }
+
+      function gotTarget(err, target, base) {
+        if (err) return cb(err);
+        var resolvedLink = pathModule.resolve(previous, target);
+        if (cache) cache[base] = resolvedLink;
+        gotResolvedLink(resolvedLink);
+      }
+
+      function gotResolvedLink(resolvedLink) {
+        // resolve the link, then start over
+        p = pathModule.resolve(resolvedLink, p.slice(pos));
+        start();
+      }
+    };
+  }, {
+    "fs": undefined,
+    "path": undefined
+  }],
+  115: [function (require, module, exports) {
+    exports.alphasort = alphasort;
+    exports.alphasorti = alphasorti;
+    exports.setopts = setopts;
+    exports.ownProp = ownProp;
+    exports.makeAbs = makeAbs;
+    exports.finish = finish;
+    exports.mark = mark;
+    exports.isIgnored = isIgnored;
+    exports.childrenIgnored = childrenIgnored;
+
+    function ownProp(obj, field) {
+      return Object.prototype.hasOwnProperty.call(obj, field);
+    }
+
+    var path = require("path");
+
+    var minimatch = require("minimatch");
+
+    var isAbsolute = require("path-is-absolute");
+
+    var Minimatch = minimatch.Minimatch;
+
+    function alphasorti(a, b) {
+      return a.toLowerCase().localeCompare(b.toLowerCase());
+    }
+
+    function alphasort(a, b) {
+      return a.localeCompare(b);
+    }
+
+    function setupIgnores(self, options) {
+      self.ignore = options.ignore || [];
+      if (!Array.isArray(self.ignore)) self.ignore = [self.ignore];
+
+      if (self.ignore.length) {
+        self.ignore = self.ignore.map(ignoreMap);
+      }
+    } // ignore patterns are always in dot:true mode.
+
+
+    function ignoreMap(pattern) {
+      var gmatcher = null;
+
+      if (pattern.slice(-3) === '/**') {
+        var gpattern = pattern.replace(/(\/\*\*)+$/, '');
+        gmatcher = new Minimatch(gpattern, {
+          dot: true
+        });
+      }
+
+      return {
+        matcher: new Minimatch(pattern, {
+          dot: true
+        }),
+        gmatcher: gmatcher
+      };
+    }
+
+    function setopts(self, pattern, options) {
+      if (!options) options = {}; // base-matching: just use globstar for that.
+
+      if (options.matchBase && -1 === pattern.indexOf("/")) {
+        if (options.noglobstar) {
+          throw new Error("base matching requires globstar");
+        }
+
+        pattern = "**/" + pattern;
+      }
+
+      self.silent = !!options.silent;
+      self.pattern = pattern;
+      self.strict = options.strict !== false;
+      self.realpath = !!options.realpath;
+      self.realpathCache = options.realpathCache || Object.create(null);
+      self.follow = !!options.follow;
+      self.dot = !!options.dot;
+      self.mark = !!options.mark;
+      self.nodir = !!options.nodir;
+      if (self.nodir) self.mark = true;
+      self.sync = !!options.sync;
+      self.nounique = !!options.nounique;
+      self.nonull = !!options.nonull;
+      self.nosort = !!options.nosort;
+      self.nocase = !!options.nocase;
+      self.stat = !!options.stat;
+      self.noprocess = !!options.noprocess;
+      self.absolute = !!options.absolute;
+      self.maxLength = options.maxLength || Infinity;
+      self.cache = options.cache || Object.create(null);
+      self.statCache = options.statCache || Object.create(null);
+      self.symlinks = options.symlinks || Object.create(null);
+      setupIgnores(self, options);
+      self.changedCwd = false;
+      var cwd = process.cwd();
+      if (!ownProp(options, "cwd")) self.cwd = cwd;else {
+        self.cwd = path.resolve(options.cwd);
+        self.changedCwd = self.cwd !== cwd;
+      }
+      self.root = options.root || path.resolve(self.cwd, "/");
+      self.root = path.resolve(self.root);
+      if (process.platform === "win32") self.root = self.root.replace(/\\/g, "/"); // TODO: is an absolute `cwd` supposed to be resolved against `root`?
+      // e.g. { cwd: '/test', root: __dirname } === path.join(__dirname, '/test')
+
+      self.cwdAbs = isAbsolute(self.cwd) ? self.cwd : makeAbs(self, self.cwd);
+      if (process.platform === "win32") self.cwdAbs = self.cwdAbs.replace(/\\/g, "/");
+      self.nomount = !!options.nomount; // disable comments and negation in Minimatch.
+      // Note that they are not supported in Glob itself anyway.
+
+      options.nonegate = true;
+      options.nocomment = true;
+      self.minimatch = new Minimatch(pattern, options);
+      self.options = self.minimatch.options;
+    }
+
+    function finish(self) {
+      var nou = self.nounique;
+      var all = nou ? [] : Object.create(null);
+
+      for (var i = 0, l = self.matches.length; i < l; i++) {
+        var matches = self.matches[i];
+
+        if (!matches || Object.keys(matches).length === 0) {
+          if (self.nonull) {
+            // do like the shell, and spit out the literal glob
+            var literal = self.minimatch.globSet[i];
+            if (nou) all.push(literal);else all[literal] = true;
+          }
+        } else {
+          // had matches
+          var m = Object.keys(matches);
+          if (nou) all.push.apply(all, m);else m.forEach(function (m) {
+            all[m] = true;
+          });
+        }
+      }
+
+      if (!nou) all = Object.keys(all);
+      if (!self.nosort) all = all.sort(self.nocase ? alphasorti : alphasort); // at *some* point we statted all of these
+
+      if (self.mark) {
+        for (var i = 0; i < all.length; i++) {
+          all[i] = self._mark(all[i]);
+        }
+
+        if (self.nodir) {
+          all = all.filter(function (e) {
+            var notDir = !/\/$/.test(e);
+            var c = self.cache[e] || self.cache[makeAbs(self, e)];
+            if (notDir && c) notDir = c !== 'DIR' && !Array.isArray(c);
+            return notDir;
+          });
+        }
+      }
+
+      if (self.ignore.length) all = all.filter(function (m) {
+        return !isIgnored(self, m);
+      });
+      self.found = all;
+    }
+
+    function mark(self, p) {
+      var abs = makeAbs(self, p);
+      var c = self.cache[abs];
+      var m = p;
+
+      if (c) {
+        var isDir = c === 'DIR' || Array.isArray(c);
+        var slash = p.slice(-1) === '/';
+        if (isDir && !slash) m += '/';else if (!isDir && slash) m = m.slice(0, -1);
+
+        if (m !== p) {
+          var mabs = makeAbs(self, m);
+          self.statCache[mabs] = self.statCache[abs];
+          self.cache[mabs] = self.cache[abs];
+        }
+      }
+
+      return m;
+    } // lotta situps...
+
+
+    function makeAbs(self, f) {
+      var abs = f;
+
+      if (f.charAt(0) === '/') {
+        abs = path.join(self.root, f);
+      } else if (isAbsolute(f) || f === '') {
+        abs = f;
+      } else if (self.changedCwd) {
+        abs = path.resolve(self.cwd, f);
+      } else {
+        abs = path.resolve(f);
+      }
+
+      if (process.platform === 'win32') abs = abs.replace(/\\/g, '/');
+      return abs;
+    } // Return true, if pattern ends with globstar '**', for the accompanying parent directory.
+    // Ex:- If node_modules/** is the pattern, add 'node_modules' to ignore list along with it's contents
+
+
+    function isIgnored(self, path) {
+      if (!self.ignore.length) return false;
+      return self.ignore.some(function (item) {
+        return item.matcher.match(path) || !!(item.gmatcher && item.gmatcher.match(path));
+      });
+    }
+
+    function childrenIgnored(self, path) {
+      if (!self.ignore.length) return false;
+      return self.ignore.some(function (item) {
+        return !!(item.gmatcher && item.gmatcher.match(path));
+      });
+    }
+  }, {
+    "minimatch": 126,
+    "path": undefined,
+    "path-is-absolute": 129
+  }],
+  116: [function (require, module, exports) {
+    // Approach:
+    //
+    // 1. Get the minimatch set
+    // 2. For each pattern in the set, PROCESS(pattern, false)
+    // 3. Store matches per-set, then uniq them
+    //
+    // PROCESS(pattern, inGlobStar)
+    // Get the first [n] items from pattern that are all strings
+    // Join these together.  This is PREFIX.
+    //   If there is no more remaining, then stat(PREFIX) and
+    //   add to matches if it succeeds.  END.
+    //
+    // If inGlobStar and PREFIX is symlink and points to dir
+    //   set ENTRIES = []
+    // else readdir(PREFIX) as ENTRIES
+    //   If fail, END
+    //
+    // with ENTRIES
+    //   If pattern[n] is GLOBSTAR
+    //     // handle the case where the globstar match is empty
+    //     // by pruning it out, and testing the resulting pattern
+    //     PROCESS(pattern[0..n] + pattern[n+1 .. $], false)
+    //     // handle other cases.
+    //     for ENTRY in ENTRIES (not dotfiles)
+    //       // attach globstar + tail onto the entry
+    //       // Mark that this entry is a globstar match
+    //       PROCESS(pattern[0..n] + ENTRY + pattern[n .. $], true)
+    //
+    //   else // not globstar
+    //     for ENTRY in ENTRIES (not dotfiles, unless pattern[n] is dot)
+    //       Test ENTRY against pattern[n]
+    //       If fails, continue
+    //       If passes, PROCESS(pattern[0..n] + item + pattern[n+1 .. $])
+    //
+    // Caveat:
+    //   Cache all stats and readdirs results to minimize syscall.  Since all
+    //   we ever care about is existence and directory-ness, we can just keep
+    //   `true` for files, and [children,...] for directories, or `false` for
+    //   things that don't exist.
+    module.exports = glob;
+
+    var fs = require('fs');
+
+    var rp = require('fs.realpath');
+
+    var minimatch = require('minimatch');
+
+    var Minimatch = minimatch.Minimatch;
+
+    var inherits = require('inherits');
+
+    var EE = require('events').EventEmitter;
+
+    var path = require('path');
+
+    var assert = require('assert');
+
+    var isAbsolute = require('path-is-absolute');
+
+    var globSync = require('./sync.js');
+
+    var common = require('./common.js');
+
+    var alphasort = common.alphasort;
+    var alphasorti = common.alphasorti;
+    var setopts = common.setopts;
+    var ownProp = common.ownProp;
+
+    var inflight = require('inflight');
+
+    var util = require('util');
+
+    var childrenIgnored = common.childrenIgnored;
+    var isIgnored = common.isIgnored;
+
+    var once = require('once');
+
+    function glob(pattern, options, cb) {
+      if (typeof options === 'function') cb = options, options = {};
+      if (!options) options = {};
+
+      if (options.sync) {
+        if (cb) throw new TypeError('callback provided to sync glob');
+        return globSync(pattern, options);
+      }
+
+      return new Glob(pattern, options, cb);
+    }
+
+    glob.sync = globSync;
+    var GlobSync = glob.GlobSync = globSync.GlobSync; // old api surface
+
+    glob.glob = glob;
+
+    function extend(origin, add) {
+      if (add === null || (0, _typeof2["default"])(add) !== 'object') {
+        return origin;
+      }
+
+      var keys = Object.keys(add);
+      var i = keys.length;
+
+      while (i--) {
+        origin[keys[i]] = add[keys[i]];
+      }
+
+      return origin;
+    }
+
+    glob.hasMagic = function (pattern, options_) {
+      var options = extend({}, options_);
+      options.noprocess = true;
+      var g = new Glob(pattern, options);
+      var set = g.minimatch.set;
+      if (!pattern) return false;
+      if (set.length > 1) return true;
+
+      for (var j = 0; j < set[0].length; j++) {
+        if (typeof set[0][j] !== 'string') return true;
+      }
+
+      return false;
+    };
+
+    glob.Glob = Glob;
+    inherits(Glob, EE);
+
+    function Glob(pattern, options, cb) {
+      if (typeof options === 'function') {
+        cb = options;
+        options = null;
+      }
+
+      if (options && options.sync) {
+        if (cb) throw new TypeError('callback provided to sync glob');
+        return new GlobSync(pattern, options);
+      }
+
+      if (!(this instanceof Glob)) return new Glob(pattern, options, cb);
+      setopts(this, pattern, options);
+      this._didRealPath = false; // process each pattern in the minimatch set
+
+      var n = this.minimatch.set.length; // The matches are stored as {<filename>: true,...} so that
+      // duplicates are automagically pruned.
+      // Later, we do an Object.keys() on these.
+      // Keep them as a list so we can fill in when nonull is set.
+
+      this.matches = new Array(n);
+
+      if (typeof cb === 'function') {
+        cb = once(cb);
+        this.on('error', cb);
+        this.on('end', function (matches) {
+          cb(null, matches);
+        });
+      }
+
+      var self = this;
+      this._processing = 0;
+      this._emitQueue = [];
+      this._processQueue = [];
+      this.paused = false;
+      if (this.noprocess) return this;
+      if (n === 0) return done();
+      var sync = true;
+
+      for (var i = 0; i < n; i++) {
+        this._process(this.minimatch.set[i], i, false, done);
+      }
+
+      sync = false;
+
+      function done() {
+        --self._processing;
+
+        if (self._processing <= 0) {
+          if (sync) {
+            process.nextTick(function () {
+              self._finish();
+            });
+          } else {
+            self._finish();
+          }
+        }
+      }
+    }
+
+    Glob.prototype._finish = function () {
+      assert(this instanceof Glob);
+      if (this.aborted) return;
+      if (this.realpath && !this._didRealpath) return this._realpath();
+      common.finish(this);
+      this.emit('end', this.found);
+    };
+
+    Glob.prototype._realpath = function () {
+      if (this._didRealpath) return;
+      this._didRealpath = true;
+      var n = this.matches.length;
+      if (n === 0) return this._finish();
+      var self = this;
+
+      for (var i = 0; i < this.matches.length; i++) {
+        this._realpathSet(i, next);
+      }
+
+      function next() {
+        if (--n === 0) self._finish();
+      }
+    };
+
+    Glob.prototype._realpathSet = function (index, cb) {
+      var matchset = this.matches[index];
+      if (!matchset) return cb();
+      var found = Object.keys(matchset);
+      var self = this;
+      var n = found.length;
+      if (n === 0) return cb();
+      var set = this.matches[index] = Object.create(null);
+      found.forEach(function (p, i) {
+        // If there's a problem with the stat, then it means that
+        // one or more of the links in the realpath couldn't be
+        // resolved.  just return the abs value in that case.
+        p = self._makeAbs(p);
+        rp.realpath(p, self.realpathCache, function (er, real) {
+          if (!er) set[real] = true;else if (er.syscall === 'stat') set[p] = true;else self.emit('error', er); // srsly wtf right here
+
+          if (--n === 0) {
+            self.matches[index] = set;
+            cb();
+          }
+        });
+      });
+    };
+
+    Glob.prototype._mark = function (p) {
+      return common.mark(this, p);
+    };
+
+    Glob.prototype._makeAbs = function (f) {
+      return common.makeAbs(this, f);
+    };
+
+    Glob.prototype.abort = function () {
+      this.aborted = true;
+      this.emit('abort');
+    };
+
+    Glob.prototype.pause = function () {
+      if (!this.paused) {
+        this.paused = true;
+        this.emit('pause');
+      }
+    };
+
+    Glob.prototype.resume = function () {
+      if (this.paused) {
+        this.emit('resume');
+        this.paused = false;
+
+        if (this._emitQueue.length) {
+          var eq = this._emitQueue.slice(0);
+
+          this._emitQueue.length = 0;
+
+          for (var i = 0; i < eq.length; i++) {
+            var e = eq[i];
+
+            this._emitMatch(e[0], e[1]);
+          }
+        }
+
+        if (this._processQueue.length) {
+          var pq = this._processQueue.slice(0);
+
+          this._processQueue.length = 0;
+
+          for (var i = 0; i < pq.length; i++) {
+            var p = pq[i];
+            this._processing--;
+
+            this._process(p[0], p[1], p[2], p[3]);
+          }
+        }
+      }
+    };
+
+    Glob.prototype._process = function (pattern, index, inGlobStar, cb) {
+      assert(this instanceof Glob);
+      assert(typeof cb === 'function');
+      if (this.aborted) return;
+      this._processing++;
+
+      if (this.paused) {
+        this._processQueue.push([pattern, index, inGlobStar, cb]);
+
+        return;
+      } //console.error('PROCESS %d', this._processing, pattern)
+      // Get the first [n] parts of pattern that are all strings.
+
+
+      var n = 0;
+
+      while (typeof pattern[n] === 'string') {
+        n++;
+      } // now n is the index of the first one that is *not* a string.
+      // see if there's anything else
+
+
+      var prefix;
+
+      switch (n) {
+        // if not, then this is rather simple
+        case pattern.length:
+          this._processSimple(pattern.join('/'), index, cb);
+
+          return;
+
+        case 0:
+          // pattern *starts* with some non-trivial item.
+          // going to readdir(cwd), but not include the prefix in matches.
+          prefix = null;
+          break;
+
+        default:
+          // pattern has some string bits in the front.
+          // whatever it starts with, whether that's 'absolute' like /foo/bar,
+          // or 'relative' like '../baz'
+          prefix = pattern.slice(0, n).join('/');
+          break;
+      }
+
+      var remain = pattern.slice(n); // get the list of entries.
+
+      var read;
+      if (prefix === null) read = '.';else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
+        if (!prefix || !isAbsolute(prefix)) prefix = '/' + prefix;
+        read = prefix;
+      } else read = prefix;
+
+      var abs = this._makeAbs(read); //if ignored, skip _processing
+
+
+      if (childrenIgnored(this, read)) return cb();
+      var isGlobStar = remain[0] === minimatch.GLOBSTAR;
+      if (isGlobStar) this._processGlobStar(prefix, read, abs, remain, index, inGlobStar, cb);else this._processReaddir(prefix, read, abs, remain, index, inGlobStar, cb);
+    };
+
+    Glob.prototype._processReaddir = function (prefix, read, abs, remain, index, inGlobStar, cb) {
+      var self = this;
+
+      this._readdir(abs, inGlobStar, function (er, entries) {
+        return self._processReaddir2(prefix, read, abs, remain, index, inGlobStar, entries, cb);
+      });
+    };
+
+    Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, inGlobStar, entries, cb) {
+      // if the abs isn't a dir, then nothing can match!
+      if (!entries) return cb(); // It will only match dot entries if it starts with a dot, or if
+      // dot is set.  Stuff like @(.foo|.bar) isn't allowed.
+
+      var pn = remain[0];
+      var negate = !!this.minimatch.negate;
+      var rawGlob = pn._glob;
+      var dotOk = this.dot || rawGlob.charAt(0) === '.';
+      var matchedEntries = [];
+
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+
+        if (e.charAt(0) !== '.' || dotOk) {
+          var m;
+
+          if (negate && !prefix) {
+            m = !e.match(pn);
+          } else {
+            m = e.match(pn);
+          }
+
+          if (m) matchedEntries.push(e);
+        }
+      } //console.error('prd2', prefix, entries, remain[0]._glob, matchedEntries)
+
+
+      var len = matchedEntries.length; // If there are no matched entries, then nothing matches.
+
+      if (len === 0) return cb(); // if this is the last remaining pattern bit, then no need for
+      // an additional stat *unless* the user has specified mark or
+      // stat explicitly.  We know they exist, since readdir returned
+      // them.
+
+      if (remain.length === 1 && !this.mark && !this.stat) {
+        if (!this.matches[index]) this.matches[index] = Object.create(null);
+
+        for (var i = 0; i < len; i++) {
+          var e = matchedEntries[i];
+
+          if (prefix) {
+            if (prefix !== '/') e = prefix + '/' + e;else e = prefix + e;
+          }
+
+          if (e.charAt(0) === '/' && !this.nomount) {
+            e = path.join(this.root, e);
+          }
+
+          this._emitMatch(index, e);
+        } // This was the last one, and no stats were needed
+
+
+        return cb();
+      } // now test all matched entries as stand-ins for that part
+      // of the pattern.
+
+
+      remain.shift();
+
+      for (var i = 0; i < len; i++) {
+        var e = matchedEntries[i];
+        var newPattern;
+
+        if (prefix) {
+          if (prefix !== '/') e = prefix + '/' + e;else e = prefix + e;
+        }
+
+        this._process([e].concat(remain), index, inGlobStar, cb);
+      }
+
+      cb();
+    };
+
+    Glob.prototype._emitMatch = function (index, e) {
+      if (this.aborted) return;
+      if (isIgnored(this, e)) return;
+
+      if (this.paused) {
+        this._emitQueue.push([index, e]);
+
+        return;
+      }
+
+      var abs = isAbsolute(e) ? e : this._makeAbs(e);
+      if (this.mark) e = this._mark(e);
+      if (this.absolute) e = abs;
+      if (this.matches[index][e]) return;
+
+      if (this.nodir) {
+        var c = this.cache[abs];
+        if (c === 'DIR' || Array.isArray(c)) return;
+      }
+
+      this.matches[index][e] = true;
+      var st = this.statCache[abs];
+      if (st) this.emit('stat', e, st);
+      this.emit('match', e);
+    };
+
+    Glob.prototype._readdirInGlobStar = function (abs, cb) {
+      if (this.aborted) return; // follow all symlinked directories forever
+      // just proceed as if this is a non-globstar situation
+
+      if (this.follow) return this._readdir(abs, false, cb);
+      var lstatkey = 'lstat\0' + abs;
+      var self = this;
+      var lstatcb = inflight(lstatkey, lstatcb_);
+      if (lstatcb) fs.lstat(abs, lstatcb);
+
+      function lstatcb_(er, lstat) {
+        if (er && er.code === 'ENOENT') return cb();
+        var isSym = lstat && lstat.isSymbolicLink();
+        self.symlinks[abs] = isSym; // If it's not a symlink or a dir, then it's definitely a regular file.
+        // don't bother doing a readdir in that case.
+
+        if (!isSym && lstat && !lstat.isDirectory()) {
+          self.cache[abs] = 'FILE';
+          cb();
+        } else self._readdir(abs, false, cb);
+      }
+    };
+
+    Glob.prototype._readdir = function (abs, inGlobStar, cb) {
+      if (this.aborted) return;
+      cb = inflight('readdir\0' + abs + '\0' + inGlobStar, cb);
+      if (!cb) return; //console.error('RD %j %j', +inGlobStar, abs)
+
+      if (inGlobStar && !ownProp(this.symlinks, abs)) return this._readdirInGlobStar(abs, cb);
+
+      if (ownProp(this.cache, abs)) {
+        var c = this.cache[abs];
+        if (!c || c === 'FILE') return cb();
+        if (Array.isArray(c)) return cb(null, c);
+      }
+
+      var self = this;
+      fs.readdir(abs, readdirCb(this, abs, cb));
+    };
+
+    function readdirCb(self, abs, cb) {
+      return function (er, entries) {
+        if (er) self._readdirError(abs, er, cb);else self._readdirEntries(abs, entries, cb);
+      };
+    }
+
+    Glob.prototype._readdirEntries = function (abs, entries, cb) {
+      if (this.aborted) return; // if we haven't asked to stat everything, then just
+      // assume that everything in there exists, so we can avoid
+      // having to stat it a second time.
+
+      if (!this.mark && !this.stat) {
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          if (abs === '/') e = abs + e;else e = abs + '/' + e;
+          this.cache[e] = true;
+        }
+      }
+
+      this.cache[abs] = entries;
+      return cb(null, entries);
+    };
+
+    Glob.prototype._readdirError = function (f, er, cb) {
+      if (this.aborted) return; // handle errors, and cache the information
+
+      switch (er.code) {
+        case 'ENOTSUP': // https://github.com/isaacs/node-glob/issues/205
+
+        case 'ENOTDIR':
+          // totally normal. means it *does* exist.
+          var abs = this._makeAbs(f);
+
+          this.cache[abs] = 'FILE';
+
+          if (abs === this.cwdAbs) {
+            var error = new Error(er.code + ' invalid cwd ' + this.cwd);
+            error.path = this.cwd;
+            error.code = er.code;
+            this.emit('error', error);
+            this.abort();
+          }
+
+          break;
+
+        case 'ENOENT': // not terribly unusual
+
+        case 'ELOOP':
+        case 'ENAMETOOLONG':
+        case 'UNKNOWN':
+          this.cache[this._makeAbs(f)] = false;
+          break;
+
+        default:
+          // some unusual error.  Treat as failure.
+          this.cache[this._makeAbs(f)] = false;
+
+          if (this.strict) {
+            this.emit('error', er); // If the error is handled, then we abort
+            // if not, we threw out of here
+
+            this.abort();
+          }
+
+          if (!this.silent) console.error('glob error', er);
+          break;
+      }
+
+      return cb();
+    };
+
+    Glob.prototype._processGlobStar = function (prefix, read, abs, remain, index, inGlobStar, cb) {
+      var self = this;
+
+      this._readdir(abs, inGlobStar, function (er, entries) {
+        self._processGlobStar2(prefix, read, abs, remain, index, inGlobStar, entries, cb);
+      });
+    };
+
+    Glob.prototype._processGlobStar2 = function (prefix, read, abs, remain, index, inGlobStar, entries, cb) {
+      //console.error('pgs2', prefix, remain[0], entries)
+      // no entries means not a dir, so it can never have matches
+      // foo.txt/** doesn't match foo.txt
+      if (!entries) return cb(); // test without the globstar, and with every child both below
+      // and replacing the globstar.
+
+      var remainWithoutGlobStar = remain.slice(1);
+      var gspref = prefix ? [prefix] : [];
+      var noGlobStar = gspref.concat(remainWithoutGlobStar); // the noGlobStar pattern exits the inGlobStar state
+
+      this._process(noGlobStar, index, false, cb);
+
+      var isSym = this.symlinks[abs];
+      var len = entries.length; // If it's a symlink, and we're in a globstar, then stop
+
+      if (isSym && inGlobStar) return cb();
+
+      for (var i = 0; i < len; i++) {
+        var e = entries[i];
+        if (e.charAt(0) === '.' && !this.dot) continue; // these two cases enter the inGlobStar state
+
+        var instead = gspref.concat(entries[i], remainWithoutGlobStar);
+
+        this._process(instead, index, true, cb);
+
+        var below = gspref.concat(entries[i], remain);
+
+        this._process(below, index, true, cb);
+      }
+
+      cb();
+    };
+
+    Glob.prototype._processSimple = function (prefix, index, cb) {
+      // XXX review this.  Shouldn't it be doing the mounting etc
+      // before doing stat?  kinda weird?
+      var self = this;
+
+      this._stat(prefix, function (er, exists) {
+        self._processSimple2(prefix, index, er, exists, cb);
+      });
+    };
+
+    Glob.prototype._processSimple2 = function (prefix, index, er, exists, cb) {
+      //console.error('ps2', prefix, exists)
+      if (!this.matches[index]) this.matches[index] = Object.create(null); // If it doesn't exist, then just mark the lack of results
+
+      if (!exists) return cb();
+
+      if (prefix && isAbsolute(prefix) && !this.nomount) {
+        var trail = /[\/\\]$/.test(prefix);
+
+        if (prefix.charAt(0) === '/') {
+          prefix = path.join(this.root, prefix);
+        } else {
+          prefix = path.resolve(this.root, prefix);
+          if (trail) prefix += '/';
+        }
+      }
+
+      if (process.platform === 'win32') prefix = prefix.replace(/\\/g, '/'); // Mark this as a match
+
+      this._emitMatch(index, prefix);
+
+      cb();
+    }; // Returns either 'DIR', 'FILE', or false
+
+
+    Glob.prototype._stat = function (f, cb) {
+      var abs = this._makeAbs(f);
+
+      var needDir = f.slice(-1) === '/';
+      if (f.length > this.maxLength) return cb();
+
+      if (!this.stat && ownProp(this.cache, abs)) {
+        var c = this.cache[abs];
+        if (Array.isArray(c)) c = 'DIR'; // It exists, but maybe not how we need it
+
+        if (!needDir || c === 'DIR') return cb(null, c);
+        if (needDir && c === 'FILE') return cb(); // otherwise we have to stat, because maybe c=true
+        // if we know it exists, but not what it is.
+      }
+
+      var exists;
+      var stat = this.statCache[abs];
+
+      if (stat !== undefined) {
+        if (stat === false) return cb(null, stat);else {
+          var type = stat.isDirectory() ? 'DIR' : 'FILE';
+          if (needDir && type === 'FILE') return cb();else return cb(null, type, stat);
+        }
+      }
+
+      var self = this;
+      var statcb = inflight('stat\0' + abs, lstatcb_);
+      if (statcb) fs.lstat(abs, statcb);
+
+      function lstatcb_(er, lstat) {
+        if (lstat && lstat.isSymbolicLink()) {
+          // If it's a symlink, then treat it as the target, unless
+          // the target does not exist, then treat it as a file.
+          return fs.stat(abs, function (er, stat) {
+            if (er) self._stat2(f, abs, null, lstat, cb);else self._stat2(f, abs, er, stat, cb);
+          });
+        } else {
+          self._stat2(f, abs, er, lstat, cb);
+        }
+      }
+    };
+
+    Glob.prototype._stat2 = function (f, abs, er, stat, cb) {
+      if (er && (er.code === 'ENOENT' || er.code === 'ENOTDIR')) {
+        this.statCache[abs] = false;
+        return cb();
+      }
+
+      var needDir = f.slice(-1) === '/';
+      this.statCache[abs] = stat;
+      if (abs.slice(-1) === '/' && stat && !stat.isDirectory()) return cb(null, false, stat);
+      var c = true;
+      if (stat) c = stat.isDirectory() ? 'DIR' : 'FILE';
+      this.cache[abs] = this.cache[abs] || c;
+      if (needDir && c === 'FILE') return cb();
+      return cb(null, c, stat);
+    };
+  }, {
+    "./common.js": 115,
+    "./sync.js": 117,
+    "assert": undefined,
+    "events": undefined,
+    "fs": undefined,
+    "fs.realpath": 113,
+    "inflight": 122,
+    "inherits": 123,
+    "minimatch": 126,
+    "once": 128,
+    "path": undefined,
+    "path-is-absolute": 129,
+    "util": undefined
+  }],
+  117: [function (require, module, exports) {
+    module.exports = globSync;
+    globSync.GlobSync = GlobSync;
+
+    var fs = require('fs');
+
+    var rp = require('fs.realpath');
+
+    var minimatch = require('minimatch');
+
+    var Minimatch = minimatch.Minimatch;
+
+    var Glob = require('./glob.js').Glob;
+
+    var util = require('util');
+
+    var path = require('path');
+
+    var assert = require('assert');
+
+    var isAbsolute = require('path-is-absolute');
+
+    var common = require('./common.js');
+
+    var alphasort = common.alphasort;
+    var alphasorti = common.alphasorti;
+    var setopts = common.setopts;
+    var ownProp = common.ownProp;
+    var childrenIgnored = common.childrenIgnored;
+    var isIgnored = common.isIgnored;
+
+    function globSync(pattern, options) {
+      if (typeof options === 'function' || arguments.length === 3) throw new TypeError('callback provided to sync glob\n' + 'See: https://github.com/isaacs/node-glob/issues/167');
+      return new GlobSync(pattern, options).found;
+    }
+
+    function GlobSync(pattern, options) {
+      if (!pattern) throw new Error('must provide pattern');
+      if (typeof options === 'function' || arguments.length === 3) throw new TypeError('callback provided to sync glob\n' + 'See: https://github.com/isaacs/node-glob/issues/167');
+      if (!(this instanceof GlobSync)) return new GlobSync(pattern, options);
+      setopts(this, pattern, options);
+      if (this.noprocess) return this;
+      var n = this.minimatch.set.length;
+      this.matches = new Array(n);
+
+      for (var i = 0; i < n; i++) {
+        this._process(this.minimatch.set[i], i, false);
+      }
+
+      this._finish();
+    }
+
+    GlobSync.prototype._finish = function () {
+      assert(this instanceof GlobSync);
+
+      if (this.realpath) {
+        var self = this;
+        this.matches.forEach(function (matchset, index) {
+          var set = self.matches[index] = Object.create(null);
+
+          for (var p in matchset) {
+            try {
+              p = self._makeAbs(p);
+              var real = rp.realpathSync(p, self.realpathCache);
+              set[real] = true;
+            } catch (er) {
+              if (er.syscall === 'stat') set[self._makeAbs(p)] = true;else throw er;
+            }
+          }
+        });
+      }
+
+      common.finish(this);
+    };
+
+    GlobSync.prototype._process = function (pattern, index, inGlobStar) {
+      assert(this instanceof GlobSync); // Get the first [n] parts of pattern that are all strings.
+
+      var n = 0;
+
+      while (typeof pattern[n] === 'string') {
+        n++;
+      } // now n is the index of the first one that is *not* a string.
+      // See if there's anything else
+
+
+      var prefix;
+
+      switch (n) {
+        // if not, then this is rather simple
+        case pattern.length:
+          this._processSimple(pattern.join('/'), index);
+
+          return;
+
+        case 0:
+          // pattern *starts* with some non-trivial item.
+          // going to readdir(cwd), but not include the prefix in matches.
+          prefix = null;
+          break;
+
+        default:
+          // pattern has some string bits in the front.
+          // whatever it starts with, whether that's 'absolute' like /foo/bar,
+          // or 'relative' like '../baz'
+          prefix = pattern.slice(0, n).join('/');
+          break;
+      }
+
+      var remain = pattern.slice(n); // get the list of entries.
+
+      var read;
+      if (prefix === null) read = '.';else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
+        if (!prefix || !isAbsolute(prefix)) prefix = '/' + prefix;
+        read = prefix;
+      } else read = prefix;
+
+      var abs = this._makeAbs(read); //if ignored, skip processing
+
+
+      if (childrenIgnored(this, read)) return;
+      var isGlobStar = remain[0] === minimatch.GLOBSTAR;
+      if (isGlobStar) this._processGlobStar(prefix, read, abs, remain, index, inGlobStar);else this._processReaddir(prefix, read, abs, remain, index, inGlobStar);
+    };
+
+    GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index, inGlobStar) {
+      var entries = this._readdir(abs, inGlobStar); // if the abs isn't a dir, then nothing can match!
+
+
+      if (!entries) return; // It will only match dot entries if it starts with a dot, or if
+      // dot is set.  Stuff like @(.foo|.bar) isn't allowed.
+
+      var pn = remain[0];
+      var negate = !!this.minimatch.negate;
+      var rawGlob = pn._glob;
+      var dotOk = this.dot || rawGlob.charAt(0) === '.';
+      var matchedEntries = [];
+
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+
+        if (e.charAt(0) !== '.' || dotOk) {
+          var m;
+
+          if (negate && !prefix) {
+            m = !e.match(pn);
+          } else {
+            m = e.match(pn);
+          }
+
+          if (m) matchedEntries.push(e);
+        }
+      }
+
+      var len = matchedEntries.length; // If there are no matched entries, then nothing matches.
+
+      if (len === 0) return; // if this is the last remaining pattern bit, then no need for
+      // an additional stat *unless* the user has specified mark or
+      // stat explicitly.  We know they exist, since readdir returned
+      // them.
+
+      if (remain.length === 1 && !this.mark && !this.stat) {
+        if (!this.matches[index]) this.matches[index] = Object.create(null);
+
+        for (var i = 0; i < len; i++) {
+          var e = matchedEntries[i];
+
+          if (prefix) {
+            if (prefix.slice(-1) !== '/') e = prefix + '/' + e;else e = prefix + e;
+          }
+
+          if (e.charAt(0) === '/' && !this.nomount) {
+            e = path.join(this.root, e);
+          }
+
+          this._emitMatch(index, e);
+        } // This was the last one, and no stats were needed
+
+
+        return;
+      } // now test all matched entries as stand-ins for that part
+      // of the pattern.
+
+
+      remain.shift();
+
+      for (var i = 0; i < len; i++) {
+        var e = matchedEntries[i];
+        var newPattern;
+        if (prefix) newPattern = [prefix, e];else newPattern = [e];
+
+        this._process(newPattern.concat(remain), index, inGlobStar);
+      }
+    };
+
+    GlobSync.prototype._emitMatch = function (index, e) {
+      if (isIgnored(this, e)) return;
+
+      var abs = this._makeAbs(e);
+
+      if (this.mark) e = this._mark(e);
+
+      if (this.absolute) {
+        e = abs;
+      }
+
+      if (this.matches[index][e]) return;
+
+      if (this.nodir) {
+        var c = this.cache[abs];
+        if (c === 'DIR' || Array.isArray(c)) return;
+      }
+
+      this.matches[index][e] = true;
+      if (this.stat) this._stat(e);
+    };
+
+    GlobSync.prototype._readdirInGlobStar = function (abs) {
+      // follow all symlinked directories forever
+      // just proceed as if this is a non-globstar situation
+      if (this.follow) return this._readdir(abs, false);
+      var entries;
+      var lstat;
+      var stat;
+
+      try {
+        lstat = fs.lstatSync(abs);
+      } catch (er) {
+        if (er.code === 'ENOENT') {
+          // lstat failed, doesn't exist
+          return null;
+        }
+      }
+
+      var isSym = lstat && lstat.isSymbolicLink();
+      this.symlinks[abs] = isSym; // If it's not a symlink or a dir, then it's definitely a regular file.
+      // don't bother doing a readdir in that case.
+
+      if (!isSym && lstat && !lstat.isDirectory()) this.cache[abs] = 'FILE';else entries = this._readdir(abs, false);
+      return entries;
+    };
+
+    GlobSync.prototype._readdir = function (abs, inGlobStar) {
+      var entries;
+      if (inGlobStar && !ownProp(this.symlinks, abs)) return this._readdirInGlobStar(abs);
+
+      if (ownProp(this.cache, abs)) {
+        var c = this.cache[abs];
+        if (!c || c === 'FILE') return null;
+        if (Array.isArray(c)) return c;
+      }
+
+      try {
+        return this._readdirEntries(abs, fs.readdirSync(abs));
+      } catch (er) {
+        this._readdirError(abs, er);
+
+        return null;
+      }
+    };
+
+    GlobSync.prototype._readdirEntries = function (abs, entries) {
+      // if we haven't asked to stat everything, then just
+      // assume that everything in there exists, so we can avoid
+      // having to stat it a second time.
+      if (!this.mark && !this.stat) {
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          if (abs === '/') e = abs + e;else e = abs + '/' + e;
+          this.cache[e] = true;
+        }
+      }
+
+      this.cache[abs] = entries; // mark and cache dir-ness
+
+      return entries;
+    };
+
+    GlobSync.prototype._readdirError = function (f, er) {
+      // handle errors, and cache the information
+      switch (er.code) {
+        case 'ENOTSUP': // https://github.com/isaacs/node-glob/issues/205
+
+        case 'ENOTDIR':
+          // totally normal. means it *does* exist.
+          var abs = this._makeAbs(f);
+
+          this.cache[abs] = 'FILE';
+
+          if (abs === this.cwdAbs) {
+            var error = new Error(er.code + ' invalid cwd ' + this.cwd);
+            error.path = this.cwd;
+            error.code = er.code;
+            throw error;
+          }
+
+          break;
+
+        case 'ENOENT': // not terribly unusual
+
+        case 'ELOOP':
+        case 'ENAMETOOLONG':
+        case 'UNKNOWN':
+          this.cache[this._makeAbs(f)] = false;
+          break;
+
+        default:
+          // some unusual error.  Treat as failure.
+          this.cache[this._makeAbs(f)] = false;
+          if (this.strict) throw er;
+          if (!this.silent) console.error('glob error', er);
+          break;
+      }
+    };
+
+    GlobSync.prototype._processGlobStar = function (prefix, read, abs, remain, index, inGlobStar) {
+      var entries = this._readdir(abs, inGlobStar); // no entries means not a dir, so it can never have matches
+      // foo.txt/** doesn't match foo.txt
+
+
+      if (!entries) return; // test without the globstar, and with every child both below
+      // and replacing the globstar.
+
+      var remainWithoutGlobStar = remain.slice(1);
+      var gspref = prefix ? [prefix] : [];
+      var noGlobStar = gspref.concat(remainWithoutGlobStar); // the noGlobStar pattern exits the inGlobStar state
+
+      this._process(noGlobStar, index, false);
+
+      var len = entries.length;
+      var isSym = this.symlinks[abs]; // If it's a symlink, and we're in a globstar, then stop
+
+      if (isSym && inGlobStar) return;
+
+      for (var i = 0; i < len; i++) {
+        var e = entries[i];
+        if (e.charAt(0) === '.' && !this.dot) continue; // these two cases enter the inGlobStar state
+
+        var instead = gspref.concat(entries[i], remainWithoutGlobStar);
+
+        this._process(instead, index, true);
+
+        var below = gspref.concat(entries[i], remain);
+
+        this._process(below, index, true);
+      }
+    };
+
+    GlobSync.prototype._processSimple = function (prefix, index) {
+      // XXX review this.  Shouldn't it be doing the mounting etc
+      // before doing stat?  kinda weird?
+      var exists = this._stat(prefix);
+
+      if (!this.matches[index]) this.matches[index] = Object.create(null); // If it doesn't exist, then just mark the lack of results
+
+      if (!exists) return;
+
+      if (prefix && isAbsolute(prefix) && !this.nomount) {
+        var trail = /[\/\\]$/.test(prefix);
+
+        if (prefix.charAt(0) === '/') {
+          prefix = path.join(this.root, prefix);
+        } else {
+          prefix = path.resolve(this.root, prefix);
+          if (trail) prefix += '/';
+        }
+      }
+
+      if (process.platform === 'win32') prefix = prefix.replace(/\\/g, '/'); // Mark this as a match
+
+      this._emitMatch(index, prefix);
+    }; // Returns either 'DIR', 'FILE', or false
+
+
+    GlobSync.prototype._stat = function (f) {
+      var abs = this._makeAbs(f);
+
+      var needDir = f.slice(-1) === '/';
+      if (f.length > this.maxLength) return false;
+
+      if (!this.stat && ownProp(this.cache, abs)) {
+        var c = this.cache[abs];
+        if (Array.isArray(c)) c = 'DIR'; // It exists, but maybe not how we need it
+
+        if (!needDir || c === 'DIR') return c;
+        if (needDir && c === 'FILE') return false; // otherwise we have to stat, because maybe c=true
+        // if we know it exists, but not what it is.
+      }
+
+      var exists;
+      var stat = this.statCache[abs];
+
+      if (!stat) {
+        var lstat;
+
+        try {
+          lstat = fs.lstatSync(abs);
+        } catch (er) {
+          if (er && (er.code === 'ENOENT' || er.code === 'ENOTDIR')) {
+            this.statCache[abs] = false;
+            return false;
+          }
+        }
+
+        if (lstat && lstat.isSymbolicLink()) {
+          try {
+            stat = fs.statSync(abs);
+          } catch (er) {
+            stat = lstat;
+          }
+        } else {
+          stat = lstat;
+        }
+      }
+
+      this.statCache[abs] = stat;
+      var c = true;
+      if (stat) c = stat.isDirectory() ? 'DIR' : 'FILE';
+      this.cache[abs] = this.cache[abs] || c;
+      if (needDir && c === 'FILE') return false;
+      return c;
+    };
+
+    GlobSync.prototype._mark = function (p) {
+      return common.mark(this, p);
+    };
+
+    GlobSync.prototype._makeAbs = function (f) {
+      return common.makeAbs(this, f);
+    };
+  }, {
+    "./common.js": 115,
+    "./glob.js": 116,
+    "assert": undefined,
+    "fs": undefined,
+    "fs.realpath": 113,
+    "minimatch": 126,
+    "path": undefined,
+    "path-is-absolute": 129,
+    "util": undefined
+  }],
+  118: [function (require, module, exports) {
+    arguments[4][109][0].apply(exports, arguments);
+  }, {
+    "dup": 109
+  }],
+  119: [function (require, module, exports) {
     var fs = require('fs');
 
     var polyfills = require('./polyfills.js');
@@ -14053,20 +12787,20 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     }
   }, {
-    "./clone.js": 110,
-    "./legacy-streams.js": 112,
-    "./polyfills.js": 113,
+    "./clone.js": 118,
+    "./legacy-streams.js": 120,
+    "./polyfills.js": 121,
     "assert": undefined,
     "fs": undefined,
     "util": undefined
   }],
-  112: [function (require, module, exports) {
-    arguments[4][108][0].apply(exports, arguments);
+  120: [function (require, module, exports) {
+    arguments[4][111][0].apply(exports, arguments);
   }, {
-    "dup": 108,
+    "dup": 111,
     "stream": undefined
   }],
-  113: [function (require, module, exports) {
+  121: [function (require, module, exports) {
     var constants = require('constants');
 
     var origCwd = process.cwd;
@@ -14397,7 +13131,110 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "constants": undefined
   }],
-  114: [function (require, module, exports) {
+  122: [function (require, module, exports) {
+    var wrappy = require('wrappy');
+
+    var reqs = Object.create(null);
+
+    var once = require('once');
+
+    module.exports = wrappy(inflight);
+
+    function inflight(key, cb) {
+      if (reqs[key]) {
+        reqs[key].push(cb);
+        return null;
+      } else {
+        reqs[key] = [cb];
+        return makeres(key);
+      }
+    }
+
+    function makeres(key) {
+      return once(function RES() {
+        var cbs = reqs[key];
+        var len = cbs.length;
+        var args = slice(arguments); // XXX It's somewhat ambiguous whether a new callback added in this
+        // pass should be queued for later execution if something in the
+        // list of callbacks throws, or if it should just be discarded.
+        // However, it's such an edge case that it hardly matters, and either
+        // choice is likely as surprising as the other.
+        // As it happens, we do go ahead and schedule it for later execution.
+
+        try {
+          for (var i = 0; i < len; i++) {
+            cbs[i].apply(null, args);
+          }
+        } finally {
+          if (cbs.length > len) {
+            // added more in the interim.
+            // de-zalgo, just in case, but don't call again.
+            cbs.splice(0, len);
+            process.nextTick(function () {
+              RES.apply(null, args);
+            });
+          } else {
+            delete reqs[key];
+          }
+        }
+      });
+    }
+
+    function slice(args) {
+      var length = args.length;
+      var array = [];
+
+      for (var i = 0; i < length; i++) {
+        array[i] = args[i];
+      }
+
+      return array;
+    }
+  }, {
+    "once": 128,
+    "wrappy": 140
+  }],
+  123: [function (require, module, exports) {
+    try {
+      var util = require('util');
+
+      if (typeof util.inherits !== 'function') throw '';
+      module.exports = util.inherits;
+    } catch (e) {
+      module.exports = require('./inherits_browser.js');
+    }
+  }, {
+    "./inherits_browser.js": 124,
+    "util": undefined
+  }],
+  124: [function (require, module, exports) {
+    if (typeof Object.create === 'function') {
+      // implementation from standard node.js 'util' module
+      module.exports = function inherits(ctor, superCtor) {
+        ctor.super_ = superCtor;
+        ctor.prototype = Object.create(superCtor.prototype, {
+          constructor: {
+            value: ctor,
+            enumerable: false,
+            writable: true,
+            configurable: true
+          }
+        });
+      };
+    } else {
+      // old school shim for old browsers
+      module.exports = function inherits(ctor, superCtor) {
+        ctor.super_ = superCtor;
+
+        var TempCtor = function TempCtor() {};
+
+        TempCtor.prototype = superCtor.prototype;
+        ctor.prototype = new TempCtor();
+        ctor.prototype.constructor = ctor;
+      };
+    }
+  }, {}],
+  125: [function (require, module, exports) {
     var _fs;
 
     try {
@@ -14539,9 +13376,917 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     module.exports = jsonfile;
   }, {
     "fs": undefined,
-    "graceful-fs": 111
+    "graceful-fs": 119
   }],
-  115: [function (require, module, exports) {
+  126: [function (require, module, exports) {
+    module.exports = minimatch;
+    minimatch.Minimatch = Minimatch;
+    var path = {
+      sep: '/'
+    };
+
+    try {
+      path = require('path');
+    } catch (er) {}
+
+    var GLOBSTAR = minimatch.GLOBSTAR = Minimatch.GLOBSTAR = {};
+
+    var expand = require('brace-expansion');
+
+    var plTypes = {
+      '!': {
+        open: '(?:(?!(?:',
+        close: '))[^/]*?)'
+      },
+      '?': {
+        open: '(?:',
+        close: ')?'
+      },
+      '+': {
+        open: '(?:',
+        close: ')+'
+      },
+      '*': {
+        open: '(?:',
+        close: ')*'
+      },
+      '@': {
+        open: '(?:',
+        close: ')'
+      }
+    }; // any single thing other than /
+    // don't need to escape / when using new RegExp()
+
+    var qmark = '[^/]'; // * => any number of characters
+
+    var star = qmark + '*?'; // ** when dots are allowed.  Anything goes, except .. and .
+    // not (^ or / followed by one or two dots followed by $ or /),
+    // followed by anything, any number of times.
+
+    var twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?'; // not a ^ or / followed by a dot,
+    // followed by anything, any number of times.
+
+    var twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?'; // characters that need to be escaped in RegExp.
+
+    var reSpecials = charSet('().*{}+?[]^$\\!'); // "abc" -> { a:true, b:true, c:true }
+
+    function charSet(s) {
+      return s.split('').reduce(function (set, c) {
+        set[c] = true;
+        return set;
+      }, {});
+    } // normalizes slashes.
+
+
+    var slashSplit = /\/+/;
+    minimatch.filter = filter;
+
+    function filter(pattern, options) {
+      options = options || {};
+      return function (p, i, list) {
+        return minimatch(p, pattern, options);
+      };
+    }
+
+    function ext(a, b) {
+      a = a || {};
+      b = b || {};
+      var t = {};
+      Object.keys(b).forEach(function (k) {
+        t[k] = b[k];
+      });
+      Object.keys(a).forEach(function (k) {
+        t[k] = a[k];
+      });
+      return t;
+    }
+
+    minimatch.defaults = function (def) {
+      if (!def || !Object.keys(def).length) return minimatch;
+      var orig = minimatch;
+
+      var m = function minimatch(p, pattern, options) {
+        return orig.minimatch(p, pattern, ext(def, options));
+      };
+
+      m.Minimatch = function Minimatch(pattern, options) {
+        return new orig.Minimatch(pattern, ext(def, options));
+      };
+
+      return m;
+    };
+
+    Minimatch.defaults = function (def) {
+      if (!def || !Object.keys(def).length) return Minimatch;
+      return minimatch.defaults(def).Minimatch;
+    };
+
+    function minimatch(p, pattern, options) {
+      if (typeof pattern !== 'string') {
+        throw new TypeError('glob pattern string required');
+      }
+
+      if (!options) options = {}; // shortcut: comments match nothing.
+
+      if (!options.nocomment && pattern.charAt(0) === '#') {
+        return false;
+      } // "" only matches ""
+
+
+      if (pattern.trim() === '') return p === '';
+      return new Minimatch(pattern, options).match(p);
+    }
+
+    function Minimatch(pattern, options) {
+      if (!(this instanceof Minimatch)) {
+        return new Minimatch(pattern, options);
+      }
+
+      if (typeof pattern !== 'string') {
+        throw new TypeError('glob pattern string required');
+      }
+
+      if (!options) options = {};
+      pattern = pattern.trim(); // windows support: need to use /, not \
+
+      if (path.sep !== '/') {
+        pattern = pattern.split(path.sep).join('/');
+      }
+
+      this.options = options;
+      this.set = [];
+      this.pattern = pattern;
+      this.regexp = null;
+      this.negate = false;
+      this.comment = false;
+      this.empty = false; // make the set of regexps etc.
+
+      this.make();
+    }
+
+    Minimatch.prototype.debug = function () {};
+
+    Minimatch.prototype.make = make;
+
+    function make() {
+      // don't do it more than once.
+      if (this._made) return;
+      var pattern = this.pattern;
+      var options = this.options; // empty patterns and comments match nothing.
+
+      if (!options.nocomment && pattern.charAt(0) === '#') {
+        this.comment = true;
+        return;
+      }
+
+      if (!pattern) {
+        this.empty = true;
+        return;
+      } // step 1: figure out negation, etc.
+
+
+      this.parseNegate(); // step 2: expand braces
+
+      var set = this.globSet = this.braceExpand();
+      if (options.debug) this.debug = console.error;
+      this.debug(this.pattern, set); // step 3: now we have a set, so turn each one into a series of path-portion
+      // matching patterns.
+      // These will be regexps, except in the case of "**", which is
+      // set to the GLOBSTAR object for globstar behavior,
+      // and will not contain any / characters
+
+      set = this.globParts = set.map(function (s) {
+        return s.split(slashSplit);
+      });
+      this.debug(this.pattern, set); // glob --> regexps
+
+      set = set.map(function (s, si, set) {
+        return s.map(this.parse, this);
+      }, this);
+      this.debug(this.pattern, set); // filter out everything that didn't compile properly.
+
+      set = set.filter(function (s) {
+        return s.indexOf(false) === -1;
+      });
+      this.debug(this.pattern, set);
+      this.set = set;
+    }
+
+    Minimatch.prototype.parseNegate = parseNegate;
+
+    function parseNegate() {
+      var pattern = this.pattern;
+      var negate = false;
+      var options = this.options;
+      var negateOffset = 0;
+      if (options.nonegate) return;
+
+      for (var i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
+        negate = !negate;
+        negateOffset++;
+      }
+
+      if (negateOffset) this.pattern = pattern.substr(negateOffset);
+      this.negate = negate;
+    } // Brace expansion:
+    // a{b,c}d -> abd acd
+    // a{b,}c -> abc ac
+    // a{0..3}d -> a0d a1d a2d a3d
+    // a{b,c{d,e}f}g -> abg acdfg acefg
+    // a{b,c}d{e,f}g -> abdeg acdeg abdeg abdfg
+    //
+    // Invalid sets are not expanded.
+    // a{2..}b -> a{2..}b
+    // a{b}c -> a{b}c
+
+
+    minimatch.braceExpand = function (pattern, options) {
+      return braceExpand(pattern, options);
+    };
+
+    Minimatch.prototype.braceExpand = braceExpand;
+
+    function braceExpand(pattern, options) {
+      if (!options) {
+        if (this instanceof Minimatch) {
+          options = this.options;
+        } else {
+          options = {};
+        }
+      }
+
+      pattern = typeof pattern === 'undefined' ? this.pattern : pattern;
+
+      if (typeof pattern === 'undefined') {
+        throw new TypeError('undefined pattern');
+      }
+
+      if (options.nobrace || !pattern.match(/\{.*\}/)) {
+        // shortcut. no need to expand.
+        return [pattern];
+      }
+
+      return expand(pattern);
+    } // parse a component of the expanded set.
+    // At this point, no pattern may contain "/" in it
+    // so we're going to return a 2d array, where each entry is the full
+    // pattern, split on '/', and then turned into a regular expression.
+    // A regexp is made at the end which joins each array with an
+    // escaped /, and another full one which joins each regexp with |.
+    //
+    // Following the lead of Bash 4.1, note that "**" only has special meaning
+    // when it is the *only* thing in a path portion.  Otherwise, any series
+    // of * is equivalent to a single *.  Globstar behavior is enabled by
+    // default, and can be disabled by setting options.noglobstar.
+
+
+    Minimatch.prototype.parse = parse;
+    var SUBPARSE = {};
+
+    function parse(pattern, isSub) {
+      if (pattern.length > 1024 * 64) {
+        throw new TypeError('pattern is too long');
+      }
+
+      var options = this.options; // shortcuts
+
+      if (!options.noglobstar && pattern === '**') return GLOBSTAR;
+      if (pattern === '') return '';
+      var re = '';
+      var hasMagic = !!options.nocase;
+      var escaping = false; // ? => one single character
+
+      var patternListStack = [];
+      var negativeLists = [];
+      var stateChar;
+      var inClass = false;
+      var reClassStart = -1;
+      var classStart = -1; // . and .. never match anything that doesn't start with .,
+      // even when options.dot is set.
+
+      var patternStart = pattern.charAt(0) === '.' ? '' // anything
+      // not (start or / followed by . or .. followed by / or end)
+      : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
+      var self = this;
+
+      function clearStateChar() {
+        if (stateChar) {
+          // we had some state-tracking character
+          // that wasn't consumed by this pass.
+          switch (stateChar) {
+            case '*':
+              re += star;
+              hasMagic = true;
+              break;
+
+            case '?':
+              re += qmark;
+              hasMagic = true;
+              break;
+
+            default:
+              re += '\\' + stateChar;
+              break;
+          }
+
+          self.debug('clearStateChar %j %j', stateChar, re);
+          stateChar = false;
+        }
+      }
+
+      for (var i = 0, len = pattern.length, c; i < len && (c = pattern.charAt(i)); i++) {
+        this.debug('%s\t%s %s %j', pattern, i, re, c); // skip over any that are escaped.
+
+        if (escaping && reSpecials[c]) {
+          re += '\\' + c;
+          escaping = false;
+          continue;
+        }
+
+        switch (c) {
+          case '/':
+            // completely not allowed, even escaped.
+            // Should already be path-split by now.
+            return false;
+
+          case '\\':
+            clearStateChar();
+            escaping = true;
+            continue;
+          // the various stateChar values
+          // for the "extglob" stuff.
+
+          case '?':
+          case '*':
+          case '+':
+          case '@':
+          case '!':
+            this.debug('%s\t%s %s %j <-- stateChar', pattern, i, re, c); // all of those are literals inside a class, except that
+            // the glob [!a] means [^a] in regexp
+
+            if (inClass) {
+              this.debug('  in class');
+              if (c === '!' && i === classStart + 1) c = '^';
+              re += c;
+              continue;
+            } // if we already have a stateChar, then it means
+            // that there was something like ** or +? in there.
+            // Handle the stateChar, then proceed with this one.
+
+
+            self.debug('call clearStateChar %j', stateChar);
+            clearStateChar();
+            stateChar = c; // if extglob is disabled, then +(asdf|foo) isn't a thing.
+            // just clear the statechar *now*, rather than even diving into
+            // the patternList stuff.
+
+            if (options.noext) clearStateChar();
+            continue;
+
+          case '(':
+            if (inClass) {
+              re += '(';
+              continue;
+            }
+
+            if (!stateChar) {
+              re += '\\(';
+              continue;
+            }
+
+            patternListStack.push({
+              type: stateChar,
+              start: i - 1,
+              reStart: re.length,
+              open: plTypes[stateChar].open,
+              close: plTypes[stateChar].close
+            }); // negation is (?:(?!js)[^/]*)
+
+            re += stateChar === '!' ? '(?:(?!(?:' : '(?:';
+            this.debug('plType %j %j', stateChar, re);
+            stateChar = false;
+            continue;
+
+          case ')':
+            if (inClass || !patternListStack.length) {
+              re += '\\)';
+              continue;
+            }
+
+            clearStateChar();
+            hasMagic = true;
+            var pl = patternListStack.pop(); // negation is (?:(?!js)[^/]*)
+            // The others are (?:<pattern>)<type>
+
+            re += pl.close;
+
+            if (pl.type === '!') {
+              negativeLists.push(pl);
+            }
+
+            pl.reEnd = re.length;
+            continue;
+
+          case '|':
+            if (inClass || !patternListStack.length || escaping) {
+              re += '\\|';
+              escaping = false;
+              continue;
+            }
+
+            clearStateChar();
+            re += '|';
+            continue;
+          // these are mostly the same in regexp and glob
+
+          case '[':
+            // swallow any state-tracking char before the [
+            clearStateChar();
+
+            if (inClass) {
+              re += '\\' + c;
+              continue;
+            }
+
+            inClass = true;
+            classStart = i;
+            reClassStart = re.length;
+            re += c;
+            continue;
+
+          case ']':
+            //  a right bracket shall lose its special
+            //  meaning and represent itself in
+            //  a bracket expression if it occurs
+            //  first in the list.  -- POSIX.2 2.8.3.2
+            if (i === classStart + 1 || !inClass) {
+              re += '\\' + c;
+              escaping = false;
+              continue;
+            } // handle the case where we left a class open.
+            // "[z-a]" is valid, equivalent to "\[z-a\]"
+
+
+            if (inClass) {
+              // split where the last [ was, make sure we don't have
+              // an invalid re. if so, re-walk the contents of the
+              // would-be class to re-translate any characters that
+              // were passed through as-is
+              // TODO: It would probably be faster to determine this
+              // without a try/catch and a new RegExp, but it's tricky
+              // to do safely.  For now, this is safe and works.
+              var cs = pattern.substring(classStart + 1, i);
+
+              try {
+                RegExp('[' + cs + ']');
+              } catch (er) {
+                // not a valid class!
+                var sp = this.parse(cs, SUBPARSE);
+                re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]';
+                hasMagic = hasMagic || sp[1];
+                inClass = false;
+                continue;
+              }
+            } // finish up the class.
+
+
+            hasMagic = true;
+            inClass = false;
+            re += c;
+            continue;
+
+          default:
+            // swallow any state char that wasn't consumed
+            clearStateChar();
+
+            if (escaping) {
+              // no need
+              escaping = false;
+            } else if (reSpecials[c] && !(c === '^' && inClass)) {
+              re += '\\';
+            }
+
+            re += c;
+        } // switch
+
+      } // for
+      // handle the case where we left a class open.
+      // "[abc" is valid, equivalent to "\[abc"
+
+
+      if (inClass) {
+        // split where the last [ was, and escape it
+        // this is a huge pita.  We now have to re-walk
+        // the contents of the would-be class to re-translate
+        // any characters that were passed through as-is
+        cs = pattern.substr(classStart + 1);
+        sp = this.parse(cs, SUBPARSE);
+        re = re.substr(0, reClassStart) + '\\[' + sp[0];
+        hasMagic = hasMagic || sp[1];
+      } // handle the case where we had a +( thing at the *end*
+      // of the pattern.
+      // each pattern list stack adds 3 chars, and we need to go through
+      // and escape any | chars that were passed through as-is for the regexp.
+      // Go through and escape them, taking care not to double-escape any
+      // | chars that were already escaped.
+
+
+      for (pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
+        var tail = re.slice(pl.reStart + pl.open.length);
+        this.debug('setting tail', re, pl); // maybe some even number of \, then maybe 1 \, followed by a |
+
+        tail = tail.replace(/((?:\\{2}){0,64})(\\?)\|/g, function (_, $1, $2) {
+          if (!$2) {
+            // the | isn't already escaped, so escape it.
+            $2 = '\\';
+          } // need to escape all those slashes *again*, without escaping the
+          // one that we need for escaping the | character.  As it works out,
+          // escaping an even number of slashes can be done by simply repeating
+          // it exactly after itself.  That's why this trick works.
+          //
+          // I am sorry that you have to see this.
+
+
+          return $1 + $1 + $2 + '|';
+        });
+        this.debug('tail=%j\n   %s', tail, tail, pl, re);
+        var t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
+        hasMagic = true;
+        re = re.slice(0, pl.reStart) + t + '\\(' + tail;
+      } // handle trailing things that only matter at the very end.
+
+
+      clearStateChar();
+
+      if (escaping) {
+        // trailing \\
+        re += '\\\\';
+      } // only need to apply the nodot start if the re starts with
+      // something that could conceivably capture a dot
+
+
+      var addPatternStart = false;
+
+      switch (re.charAt(0)) {
+        case '.':
+        case '[':
+        case '(':
+          addPatternStart = true;
+      } // Hack to work around lack of negative lookbehind in JS
+      // A pattern like: *.!(x).!(y|z) needs to ensure that a name
+      // like 'a.xyz.yz' doesn't match.  So, the first negative
+      // lookahead, has to look ALL the way ahead, to the end of
+      // the pattern.
+
+
+      for (var n = negativeLists.length - 1; n > -1; n--) {
+        var nl = negativeLists[n];
+        var nlBefore = re.slice(0, nl.reStart);
+        var nlFirst = re.slice(nl.reStart, nl.reEnd - 8);
+        var nlLast = re.slice(nl.reEnd - 8, nl.reEnd);
+        var nlAfter = re.slice(nl.reEnd);
+        nlLast += nlAfter; // Handle nested stuff like *(*.js|!(*.json)), where open parens
+        // mean that we should *not* include the ) in the bit that is considered
+        // "after" the negated section.
+
+        var openParensBefore = nlBefore.split('(').length - 1;
+        var cleanAfter = nlAfter;
+
+        for (i = 0; i < openParensBefore; i++) {
+          cleanAfter = cleanAfter.replace(/\)[+*?]?/, '');
+        }
+
+        nlAfter = cleanAfter;
+        var dollar = '';
+
+        if (nlAfter === '' && isSub !== SUBPARSE) {
+          dollar = '$';
+        }
+
+        var newRe = nlBefore + nlFirst + nlAfter + dollar + nlLast;
+        re = newRe;
+      } // if the re is not "" at this point, then we need to make sure
+      // it doesn't match against an empty path part.
+      // Otherwise a/* will match a/, which it should not.
+
+
+      if (re !== '' && hasMagic) {
+        re = '(?=.)' + re;
+      }
+
+      if (addPatternStart) {
+        re = patternStart + re;
+      } // parsing just a piece of a larger pattern.
+
+
+      if (isSub === SUBPARSE) {
+        return [re, hasMagic];
+      } // skip the regexp for non-magical patterns
+      // unescape anything in it, though, so that it'll be
+      // an exact match against a file etc.
+
+
+      if (!hasMagic) {
+        return globUnescape(pattern);
+      }
+
+      var flags = options.nocase ? 'i' : '';
+
+      try {
+        var regExp = new RegExp('^' + re + '$', flags);
+      } catch (er) {
+        // If it was an invalid regular expression, then it can't match
+        // anything.  This trick looks for a character after the end of
+        // the string, which is of course impossible, except in multi-line
+        // mode, but it's not a /m regex.
+        return new RegExp('$.');
+      }
+
+      regExp._glob = pattern;
+      regExp._src = re;
+      return regExp;
+    }
+
+    minimatch.makeRe = function (pattern, options) {
+      return new Minimatch(pattern, options || {}).makeRe();
+    };
+
+    Minimatch.prototype.makeRe = makeRe;
+
+    function makeRe() {
+      if (this.regexp || this.regexp === false) return this.regexp; // at this point, this.set is a 2d array of partial
+      // pattern strings, or "**".
+      //
+      // It's better to use .match().  This function shouldn't
+      // be used, really, but it's pretty convenient sometimes,
+      // when you just want to work with a regex.
+
+      var set = this.set;
+
+      if (!set.length) {
+        this.regexp = false;
+        return this.regexp;
+      }
+
+      var options = this.options;
+      var twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
+      var flags = options.nocase ? 'i' : '';
+      var re = set.map(function (pattern) {
+        return pattern.map(function (p) {
+          return p === GLOBSTAR ? twoStar : typeof p === 'string' ? regExpEscape(p) : p._src;
+        }).join('\\\/');
+      }).join('|'); // must match entire pattern
+      // ending in a * or ** will make it less strict.
+
+      re = '^(?:' + re + ')$'; // can match anything, as long as it's not this.
+
+      if (this.negate) re = '^(?!' + re + ').*$';
+
+      try {
+        this.regexp = new RegExp(re, flags);
+      } catch (ex) {
+        this.regexp = false;
+      }
+
+      return this.regexp;
+    }
+
+    minimatch.match = function (list, pattern, options) {
+      options = options || {};
+      var mm = new Minimatch(pattern, options);
+      list = list.filter(function (f) {
+        return mm.match(f);
+      });
+
+      if (mm.options.nonull && !list.length) {
+        list.push(pattern);
+      }
+
+      return list;
+    };
+
+    Minimatch.prototype.match = match;
+
+    function match(f, partial) {
+      this.debug('match', f, this.pattern); // short-circuit in the case of busted things.
+      // comments, etc.
+
+      if (this.comment) return false;
+      if (this.empty) return f === '';
+      if (f === '/' && partial) return true;
+      var options = this.options; // windows: need to use /, not \
+
+      if (path.sep !== '/') {
+        f = f.split(path.sep).join('/');
+      } // treat the test path as a set of pathparts.
+
+
+      f = f.split(slashSplit);
+      this.debug(this.pattern, 'split', f); // just ONE of the pattern sets in this.set needs to match
+      // in order for it to be valid.  If negating, then just one
+      // match means that we have failed.
+      // Either way, return on the first hit.
+
+      var set = this.set;
+      this.debug(this.pattern, 'set', set); // Find the basename of the path by looking for the last non-empty segment
+
+      var filename;
+      var i;
+
+      for (i = f.length - 1; i >= 0; i--) {
+        filename = f[i];
+        if (filename) break;
+      }
+
+      for (i = 0; i < set.length; i++) {
+        var pattern = set[i];
+        var file = f;
+
+        if (options.matchBase && pattern.length === 1) {
+          file = [filename];
+        }
+
+        var hit = this.matchOne(file, pattern, partial);
+
+        if (hit) {
+          if (options.flipNegate) return true;
+          return !this.negate;
+        }
+      } // didn't get any hits.  this is success if it's a negative
+      // pattern, failure otherwise.
+
+
+      if (options.flipNegate) return false;
+      return this.negate;
+    } // set partial to true to test if, for example,
+    // "/a/b" matches the start of "/*/b/*/d"
+    // Partial means, if you run out of file before you run
+    // out of pattern, then that's fine, as long as all
+    // the parts match.
+
+
+    Minimatch.prototype.matchOne = function (file, pattern, partial) {
+      var options = this.options;
+      this.debug('matchOne', {
+        'this': this,
+        file: file,
+        pattern: pattern
+      });
+      this.debug('matchOne', file.length, pattern.length);
+
+      for (var fi = 0, pi = 0, fl = file.length, pl = pattern.length; fi < fl && pi < pl; fi++, pi++) {
+        this.debug('matchOne loop');
+        var p = pattern[pi];
+        var f = file[fi];
+        this.debug(pattern, p, f); // should be impossible.
+        // some invalid regexp stuff in the set.
+
+        if (p === false) return false;
+
+        if (p === GLOBSTAR) {
+          this.debug('GLOBSTAR', [pattern, p, f]); // "**"
+          // a/**/b/**/c would match the following:
+          // a/b/x/y/z/c
+          // a/x/y/z/b/c
+          // a/b/x/b/x/c
+          // a/b/c
+          // To do this, take the rest of the pattern after
+          // the **, and see if it would match the file remainder.
+          // If so, return success.
+          // If not, the ** "swallows" a segment, and try again.
+          // This is recursively awful.
+          //
+          // a/**/b/**/c matching a/b/x/y/z/c
+          // - a matches a
+          // - doublestar
+          //   - matchOne(b/x/y/z/c, b/**/c)
+          //     - b matches b
+          //     - doublestar
+          //       - matchOne(x/y/z/c, c) -> no
+          //       - matchOne(y/z/c, c) -> no
+          //       - matchOne(z/c, c) -> no
+          //       - matchOne(c, c) yes, hit
+
+          var fr = fi;
+          var pr = pi + 1;
+
+          if (pr === pl) {
+            this.debug('** at the end'); // a ** at the end will just swallow the rest.
+            // We have found a match.
+            // however, it will not swallow /.x, unless
+            // options.dot is set.
+            // . and .. are *never* matched by **, for explosively
+            // exponential reasons.
+
+            for (; fi < fl; fi++) {
+              if (file[fi] === '.' || file[fi] === '..' || !options.dot && file[fi].charAt(0) === '.') return false;
+            }
+
+            return true;
+          } // ok, let's see if we can swallow whatever we can.
+
+
+          while (fr < fl) {
+            var swallowee = file[fr];
+            this.debug('\nglobstar while', file, fr, pattern, pr, swallowee); // XXX remove this slice.  Just pass the start index.
+
+            if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
+              this.debug('globstar found match!', fr, fl, swallowee); // found a match.
+
+              return true;
+            } else {
+              // can't swallow "." or ".." ever.
+              // can only swallow ".foo" when explicitly asked.
+              if (swallowee === '.' || swallowee === '..' || !options.dot && swallowee.charAt(0) === '.') {
+                this.debug('dot detected!', file, fr, pattern, pr);
+                break;
+              } // ** swallows a segment, and continue.
+
+
+              this.debug('globstar swallow a segment, and continue');
+              fr++;
+            }
+          } // no match was found.
+          // However, in partial mode, we can't say this is necessarily over.
+          // If there's more *pattern* left, then
+
+
+          if (partial) {
+            // ran out of file
+            this.debug('\n>>> no match, partial?', file, fr, pattern, pr);
+            if (fr === fl) return true;
+          }
+
+          return false;
+        } // something other than **
+        // non-magic patterns just have to match exactly
+        // patterns with magic have been turned into regexps.
+
+
+        var hit;
+
+        if (typeof p === 'string') {
+          if (options.nocase) {
+            hit = f.toLowerCase() === p.toLowerCase();
+          } else {
+            hit = f === p;
+          }
+
+          this.debug('string match', p, f, hit);
+        } else {
+          hit = f.match(p);
+          this.debug('pattern match', p, f, hit);
+        }
+
+        if (!hit) return false;
+      } // Note: ending in / means that we'll get a final ""
+      // at the end of the pattern.  This can only match a
+      // corresponding "" at the end of the file.
+      // If the file ends in /, then it can only match a
+      // a pattern that ends in /, unless the pattern just
+      // doesn't have any more for it. But, a/b/ should *not*
+      // match "a/b/*", even though "" matches against the
+      // [^/]*? pattern, except in partial mode, where it might
+      // simply not be reached yet.
+      // However, a/b/ should still satisfy a/*
+      // now either we fell off the end of the pattern, or we're done.
+
+
+      if (fi === fl && pi === pl) {
+        // ran out of pattern and filename at the same time.
+        // an exact hit!
+        return true;
+      } else if (fi === fl) {
+        // ran out of file, but still had pattern left.
+        // this is ok if we're doing the match as part of
+        // a glob fs traversal.
+        return partial;
+      } else if (pi === pl) {
+        // ran out of pattern, still have file left.
+        // this is only acceptable if we're on the very last
+        // empty segment of a file with a trailing slash.
+        // a/* should match a/b/
+        var emptyFileEnd = fi === fl - 1 && file[fi] === '';
+        return emptyFileEnd;
+      } // should be unreachable.
+
+
+      throw new Error('wtf?');
+    }; // replace stuff like \* with *
+
+
+    function globUnescape(s) {
+      return s.replace(/\\(.)/g, '$1');
+    }
+
+    function regExpEscape(s) {
+      return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    }
+  }, {
+    "brace-expansion": 75,
+    "path": undefined
+  }],
+  127: [function (require, module, exports) {
     module.exports = function (args, opts) {
       if (!opts) opts = {};
       var flags = {
@@ -14760,7 +14505,74 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(e[-+]?\d+)?$/.test(x);
     }
   }, {}],
-  116: [function (require, module, exports) {
+  128: [function (require, module, exports) {
+    var wrappy = require('wrappy');
+
+    module.exports = wrappy(once);
+    module.exports.strict = wrappy(onceStrict);
+    once.proto = once(function () {
+      Object.defineProperty(Function.prototype, 'once', {
+        value: function value() {
+          return once(this);
+        },
+        configurable: true
+      });
+      Object.defineProperty(Function.prototype, 'onceStrict', {
+        value: function value() {
+          return onceStrict(this);
+        },
+        configurable: true
+      });
+    });
+
+    function once(fn) {
+      var f = function f() {
+        if (f.called) return f.value;
+        f.called = true;
+        return f.value = fn.apply(this, arguments);
+      };
+
+      f.called = false;
+      return f;
+    }
+
+    function onceStrict(fn) {
+      var f = function f() {
+        if (f.called) throw new Error(f.onceError);
+        f.called = true;
+        return f.value = fn.apply(this, arguments);
+      };
+
+      var name = fn.name || 'Function wrapped with `once`';
+      f.onceError = name + " shouldn't be called more than once";
+      f.called = false;
+      return f;
+    }
+  }, {
+    "wrappy": 140
+  }],
+  129: [function (require, module, exports) {
+    'use strict';
+
+    function posix(path) {
+      return path.charAt(0) === '/';
+    }
+
+    function win32(path) {
+      // https://github.com/nodejs/node/blob/b3fcc245fb25539909ef1d5eaa01dbf92e168633/lib/path.js#L56
+      var splitDeviceRe = /^([a-zA-Z]:|[\\\/]{2}[^\\\/]+[\\\/]+[^\\\/]+)?([\\\/])?([\s\S]*?)$/;
+      var result = splitDeviceRe.exec(path);
+      var device = result[1] || '';
+      var isUnc = Boolean(device && device.charAt(1) !== ':'); // UNC paths are always absolute
+
+      return Boolean(result[2] || isUnc);
+    }
+
+    module.exports = process.platform === 'win32' ? win32 : posix;
+    module.exports.posix = posix;
+    module.exports.win32 = win32;
+  }, {}],
+  130: [function (require, module, exports) {
     'use strict';
 
     var isWindows = process.platform === 'win32'; // Regex to split a windows path into three parts: [*, device, slash,
@@ -14842,7 +14654,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     module.exports.posix = posix.parse;
     module.exports.win32 = win32.parse;
   }, {}],
-  117: [function (require, module, exports) {
+  131: [function (require, module, exports) {
     var core = require('./lib/core');
 
     var async = require('./lib/async');
@@ -14857,11 +14669,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     exports = async;
     module.exports = async;
   }, {
-    "./lib/async": 118,
-    "./lib/core": 121,
-    "./lib/sync": 124
+    "./lib/async": 132,
+    "./lib/core": 135,
+    "./lib/sync": 138
   }],
-  118: [function (require, module, exports) {
+  132: [function (require, module, exports) {
     var core = require('./core');
 
     var fs = require('fs');
@@ -15094,14 +14906,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 119,
-    "./core": 121,
-    "./node-modules-paths.js": 122,
-    "./normalize-options.js": 123,
+    "./caller.js": 133,
+    "./core": 135,
+    "./node-modules-paths.js": 136,
+    "./normalize-options.js": 137,
     "fs": undefined,
     "path": undefined
   }],
-  119: [function (require, module, exports) {
+  133: [function (require, module, exports) {
     module.exports = function () {
       // see https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
       var origPrepareStackTrace = Error.prepareStackTrace;
@@ -15115,7 +14927,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return stack[2].getFileName();
     };
   }, {}],
-  120: [function (require, module, exports) {
+  134: [function (require, module, exports) {
     module.exports = {
       "assert": true,
       "async_hooks": ">= 8",
@@ -15190,7 +15002,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       "zlib": true
     };
   }, {}],
-  121: [function (require, module, exports) {
+  135: [function (require, module, exports) {
     var current = process.versions && process.versions.node && process.versions.node.split('.') || [];
 
     function specifierIncluded(specifier) {
@@ -15265,9 +15077,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = core;
   }, {
-    "./core.json": 120
+    "./core.json": 134
   }],
-  122: [function (require, module, exports) {
+  136: [function (require, module, exports) {
     var path = require('path');
 
     var parse = path.parse || require('path-parse');
@@ -15310,9 +15122,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
   }, {
     "path": undefined,
-    "path-parse": 116
+    "path-parse": 130
   }],
-  123: [function (require, module, exports) {
+  137: [function (require, module, exports) {
     module.exports = function (x, opts) {
       /**
        * This file is purposefully a passthrough. It's expected that third-party
@@ -15323,7 +15135,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return opts || {};
     };
   }, {}],
-  124: [function (require, module, exports) {
+  138: [function (require, module, exports) {
     var core = require('./core');
 
     var fs = require('fs');
@@ -15491,14 +15303,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
   }, {
-    "./caller.js": 119,
-    "./core": 121,
-    "./node-modules-paths.js": 122,
-    "./normalize-options.js": 123,
+    "./caller.js": 133,
+    "./core": 135,
+    "./node-modules-paths.js": 136,
+    "./normalize-options.js": 137,
     "fs": undefined,
     "path": undefined
   }],
-  125: [function (require, module, exports) {
+  139: [function (require, module, exports) {
     'use strict';
 
     exports.fromCallback = function (fn) {
@@ -15533,24 +15345,47 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     };
   }, {}],
-  126: [function (require, module, exports) {
+  140: [function (require, module, exports) {
+    // Returns a wrapper function that returns a wrapped callback
+    // The wrapper function should do some stuff, and return a
+    // presumably different callback function.
+    // This makes sure that own properties are retained, so that
+    // decorations and such are not lost along the way.
+    module.exports = wrappy;
+
+    function wrappy(fn, cb) {
+      if (fn && cb) return wrappy(fn)(cb);
+      if (typeof fn !== 'function') throw new TypeError('need wrapper function');
+      Object.keys(fn).forEach(function (k) {
+        wrapper[k] = fn[k];
+      });
+      return wrapper;
+
+      function wrapper() {
+        var args = new Array(arguments.length);
+
+        for (var i = 0; i < args.length; i++) {
+          args[i] = arguments[i];
+        }
+
+        var ret = fn.apply(this, args);
+        var cb = args[args.length - 1];
+
+        if (typeof ret === 'function' && ret !== cb) {
+          Object.keys(cb).forEach(function (k) {
+            ret[k] = cb[k];
+          });
+        }
+
+        return ret;
+      }
+    }
+  }, {}],
+  141: [function (require, module, exports) {
     (function (__dirname) {
-      var REGEXP_ESCAPE = require("escape-string-regexp");
-
-      var PATH = require("path");
-
-      var FS = require("fs");
-
       var ESPRIMA = require("esprima");
 
-      var JSONLINT = require("jsonlint");
-
-      var DEBUG = /(^|\s)codeblock(\s|$)/.test(process.env.DEBUG || "") || false;
-
-      if (DEBUG) {
-        // TODO: Use 'require("colors/safe")'
-        require("colors");
-      }
+      var REGEXP_ESCAPE = require("escape-string-regexp");
 
       var Codeblock = exports.Codeblock = function (code, format, args) {
         this[".@"] = "github.com~0ink~codeblock/codeblock:Codeblock";
@@ -15680,8 +15515,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       Codeblock.prototype.run = function (variables, options) {
         variables = variables || {};
         options = options || {};
+        var VM = exports.VM;
 
-        var VM = require('vm');
+        if (!VM) {
+          throw new Error("No 'VM' available!");
+        }
 
         if (!this._compiled) {
           var codeblock = this.compile(variables);
@@ -15690,7 +15528,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         var code = this.getCode();
 
-        if (DEBUG) {
+        if (exports.DEBUG) {
           console.log("[codeblock] variables:", Object.keys(variables));
           console.log("[codeblock] options:", Object.keys(options));
           console.log("[codeblock] Code to execute in VM", code);
@@ -15724,77 +15562,91 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return sandbox.RESULT;
       };
 
-      Codeblock.prototype.runAsync = function _callee5(variables, options) {
-        var VM, codeblock, code, script, sandbox;
-        return _regenerator["default"].async(function _callee5$(_context8) {
-          while (1) {
-            switch (_context8.prev = _context8.next) {
-              case 0:
-                variables = variables || {};
-                options = options || {};
-                VM = require('vm');
+      Codeblock.prototype.runAsync = /*#__PURE__*/function () {
+        var _ref9 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee9(variables, options) {
+          var VM, codeblock, code, script, sandbox;
+          return _regenerator["default"].wrap(function _callee9$(_context9) {
+            while (1) {
+              switch (_context9.prev = _context9.next) {
+                case 0:
+                  variables = variables || {};
+                  options = options || {};
+                  VM = exports.VM;
 
-                if (this._compiled) {
-                  _context8.next = 6;
+                  if (VM) {
+                    _context9.next = 5;
+                    break;
+                  }
+
+                  throw new Error("No 'VM' available!");
+
+                case 5:
+                  if (this._compiled) {
+                    _context9.next = 8;
+                    break;
+                  }
+
+                  codeblock = this.compile(variables);
+                  return _context9.abrupt("return", codeblock.runAsync(variables, options));
+
+                case 8:
+                  code = this.getCode();
+
+                  if (exports.DEBUG) {
+                    console.log("[codeblock] variables:", Object.keys(variables));
+                    console.log("[codeblock] options:", Object.keys(options));
+                    console.log("[codeblock] Code to execute in VM", code);
+                  }
+
+                  _context9.prev = 10;
+                  script = new VM.Script(['RUNNER = async function (', this._args.join(', '), ') { ', code.replace(/&#96;/g, "\`"), ' }'].join(""));
+                  _context9.next = 19;
                   break;
-                }
 
-                codeblock = this.compile(variables);
-                return _context8.abrupt("return", codeblock.runAsync(variables, options));
+                case 14:
+                  _context9.prev = 14;
+                  _context9.t0 = _context9["catch"](10);
+                  console.log("this._code", this._code);
+                  console.log("code", code);
+                  throw _context9.t0;
 
-              case 6:
-                code = this.getCode();
+                case 19:
+                  sandbox = {
+                    console: console,
+                    RESULT: undefined,
+                    THIS: options["this"] || null,
+                    ARGS: this._args.map(function (name) {
+                      return variables[name];
+                    }),
+                    ___WrApCoDe___: ___WrApCoDe___
+                  };
 
-                if (DEBUG) {
-                  console.log("[codeblock] variables:", Object.keys(variables));
-                  console.log("[codeblock] options:", Object.keys(options));
-                  console.log("[codeblock] Code to execute in VM", code);
-                }
+                  if (options.sandbox) {
+                    Object.keys(options.sandbox).forEach(function (name) {
+                      sandbox[name] = options.sandbox[name];
+                    });
+                  }
 
-                _context8.prev = 8;
-                script = new VM.Script(['RUNNER = async function (', this._args.join(', '), ') { ', code.replace(/&#96;/g, "\`"), ' }'].join(""));
-                _context8.next = 17;
-                break;
+                  script.runInNewContext(sandbox);
+                  _context9.next = 24;
+                  return sandbox.RUNNER.apply(sandbox.THIS, sandbox.ARGS);
 
-              case 12:
-                _context8.prev = 12;
-                _context8.t0 = _context8["catch"](8);
-                console.log("this._code", this._code);
-                console.log("code", code);
-                throw _context8.t0;
+                case 24:
+                  sandbox.RESULT = _context9.sent;
+                  return _context9.abrupt("return", sandbox.RESULT);
 
-              case 17:
-                sandbox = {
-                  console: console,
-                  RESULT: undefined,
-                  THIS: options["this"] || null,
-                  ARGS: this._args.map(function (name) {
-                    return variables[name];
-                  }),
-                  ___WrApCoDe___: ___WrApCoDe___
-                };
-
-                if (options.sandbox) {
-                  Object.keys(options.sandbox).forEach(function (name) {
-                    sandbox[name] = options.sandbox[name];
-                  });
-                }
-
-                script.runInNewContext(sandbox);
-                _context8.next = 22;
-                return _regenerator["default"].awrap(sandbox.RUNNER.apply(sandbox.THIS, sandbox.ARGS));
-
-              case 22:
-                sandbox.RESULT = _context8.sent;
-                return _context8.abrupt("return", sandbox.RESULT);
-
-              case 24:
-              case "end":
-                return _context8.stop();
+                case 26:
+                case "end":
+                  return _context9.stop();
+              }
             }
-          }
-        }, null, this, [[8, 12]]);
-      };
+          }, _callee9, this, [[10, 14]]);
+        }));
+
+        return function (_x11, _x12) {
+          return _ref9.apply(this, arguments);
+        };
+      }();
 
       Codeblock.thaw = function (ice) {
         if (typeof ice === "string") {
@@ -15844,7 +15696,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       function linesForEscapedNewline(rawCode) {
         var lines = [];
-        var segments = rawCode.split(/([\\]*\\n)/);
+        var segments = rawCode.split(/([\\]*\\n)/); // if (
+        //     segments.length === 1 &&
+        //     segments[0].indexOf("\n") !== -1
+        // ) {
+        //     return rawCode.split("\n");
+        // }
 
         for (var i = 0; i < segments.length; i++) {
           if (i % 2 === 0) {
@@ -15886,64 +15743,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
           var cleanedCode = linesForEscapedNewline(code);
           cleanedCode = cleanedCode.join("\n");
-          return new (Codeblock || require("$$__filename$$").Codeblock)({
+          var moduleUri = "$$__filename$$";
+          return new (Codeblock || require(moduleUri).Codeblock)({
             raw: cleanedCode
           }, format, args);
         };
-      } // TODO: Document
-      // TODO: Write test
-
-
-      exports.purifySync = function (path, options) {
-        options = options || {}; // We cache the compiled file by default
-
-        if (typeof options.cacheCompiled === "undefined") {
-          options.cacheCompiled = true;
-        } // TODO: Use 'pinf-it' helper to generate cache path
-
-
-        var purifiedPath = PATH.join(PATH.dirname(path), ".~" + PATH.basename(path) + "~codeblock-purified.js");
-
-        if (options.cacheCompiled && FS.existsSync(purifiedPath) && FS.statSync(purifiedPath).mtime.getTime() >= FS.statSync(path).mtime.getTime() && !process.env.CODEBLOCK_FORCE_COMPILE) {
-          return {
-            sourcePath: path,
-            code: FS.readFileSync(purifiedPath, "utf8"),
-            purifiedPath: purifiedPath
-          };
-        }
-
-        var code = path;
-
-        if (/^\//.test(code)) {
-          code = FS.readFileSync(path, "utf8");
-        }
-
-        code = exports.purifyCode(code, options);
-
-        if (code._foundBlocks) {
-          if (options.cacheCompiled) {
-            // TODO: Make configurable
-            //var compiledPath = LIB.PATH.join(path, "..", ".io/cache.modules", LIB.PATH.basename(path));
-            FS.writeFileSync(purifiedPath, code, "utf8");
-          }
-
-          return {
-            sourcePath: path,
-            code: code,
-            purifiedPath: purifiedPath
-          };
-        }
-
-        return {
-          sourcePath: path,
-          code: code
-        };
-      };
+      }
 
       function validateCode(code) {
-        if (DEBUG) console.log("validateCode >>>>".yellow);
-        if (DEBUG) process.stdout.write(code + "\n");
-        if (DEBUG) console.log("<<<< validateCode".yellow);
+        if (exports.DEBUG) console.log("validateCode >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(code + "\n");
+        if (exports.DEBUG) console.log("<<<< validateCode".yellow);
 
         try {
           var syntax = ESPRIMA.parse(code, {
@@ -15961,9 +15771,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
 
       exports.jsonFunctionsToJavaScriptCodeblocks = function (codeIn) {
-        if (DEBUG) console.log("jsonFunctionsToJavaScriptCodeblocks IN >>>>".yellow);
-        if (DEBUG) process.stdout.write(codeIn + "\n");
-        if (DEBUG) console.log("<<<< jsonFunctionsToJavaScriptCodeblocks IN".yellow); // Upgrade ': function /*CodeBlock*/ () {\n}' to ': (javascript () >>>\n<<<)'
+        if (exports.DEBUG) console.log("jsonFunctionsToJavaScriptCodeblocks IN >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(codeIn + "\n");
+        if (exports.DEBUG) console.log("<<<< jsonFunctionsToJavaScriptCodeblocks IN".yellow); // Upgrade ': function /*CodeBlock*/ () {\n}' to ': (javascript () >>>\n<<<)'
         // TODO: Make this more reliable.
 
         var lines = codeIn.split("\n"); // Replace all matches starting with the last one until none are left
@@ -16032,16 +15842,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         iterate();
         var codeOut = lines.join("\n");
-        if (DEBUG) console.log("jsonFunctionsToJavaScriptCodeblocks OUT >>>>".yellow);
-        if (DEBUG) process.stdout.write(codeOut + "\n");
-        if (DEBUG) console.log("<<<< jsonFunctionsToJavaScriptCodeblocks OUT".yellow);
+        if (exports.DEBUG) console.log("jsonFunctionsToJavaScriptCodeblocks OUT >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(codeOut + "\n");
+        if (exports.DEBUG) console.log("<<<< jsonFunctionsToJavaScriptCodeblocks OUT".yellow);
         return codeOut;
       };
 
       exports.purifyCode = function (codeIn, options) {
-        if (DEBUG) console.log("PURIFY CODE >>>>".yellow);
-        if (DEBUG) process.stdout.write(codeIn + "\n");
-        if (DEBUG) console.log("<<<< PURIFY CODE".yellow);
+        if (exports.DEBUG) console.log("PURIFY CODE >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(codeIn + "\n");
+        if (exports.DEBUG) console.log("<<<< PURIFY CODE".yellow);
         options = options || {};
 
         if (options.freezeToJSON && options.freezeToJavaScript) {
@@ -16069,9 +15879,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         var preparedCodeIn = codeIn.replace(/\\n/g, "___NeWlInE_KeEp_OrIgInAl___");
         var code = exports.jsonFunctionsToJavaScriptCodeblocks(preparedCodeIn).replace(/\n/g, "\\n");
-        if (DEBUG) console.log("code >>>>".yellow);
-        if (DEBUG) process.stdout.write(code + "\n");
-        if (DEBUG) console.log("<<<< code".yellow);
+        if (exports.DEBUG) console.log("code >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(code + "\n");
+        if (exports.DEBUG) console.log("<<<< code".yellow);
 
         function purifyLayer(code, inSubLayer) {
           // Resolve codeblocks one layer at a time starting with the deepest.
@@ -16123,9 +15933,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
 
           matchedSegments.forEach(function (match) {
-            if (DEBUG) console.log("match >>>>".yellow);
-            if (DEBUG) console.log(match);
-            if (DEBUG) console.log("<<<< match".yellow);
+            if (exports.DEBUG) console.log("match >>>>".yellow);
+            if (exports.DEBUG) console.log(match);
+            if (exports.DEBUG) console.log("<<<< match".yellow);
             var args = match[3].replace(/\s/g, "");
             args = args !== "" ? args.split(",") : [];
             var lines = match[4].split("\\n");
@@ -16182,10 +15992,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               lines.push("");
             }
 
-            if (DEBUG) console.log("lines >>>>".yellow);
-            if (DEBUG) process.stdout.write(lines.join("\n") + "\n");
-            if (DEBUG) console.log("<<<< lines".yellow);
-            if (DEBUG) console.log("options".yellow, options);
+            if (exports.DEBUG) console.log("lines >>>>".yellow);
+            if (exports.DEBUG) process.stdout.write(lines.join("\n") + "\n");
+            if (exports.DEBUG) console.log("<<<< lines".yellow);
+            if (exports.DEBUG) console.log("options".yellow, options);
 
             if (options.freezeToJSON) {
               var replacement = new Codeblock({
@@ -16254,12 +16064,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
                 //notifyOnCodeblock(replacement);
               }
 
-              if (DEBUG) console.log("replace >>>>".yellow);
-              if (DEBUG) process.stdout.write(match[1] + "\n");
-              if (DEBUG) console.log("<<<< replace".yellow);
-              if (DEBUG) console.log("replacement >>>>".yellow);
-              if (DEBUG) process.stdout.write(replacement + "\n");
-              if (DEBUG) console.log("<<<< replacement".yellow);
+              if (exports.DEBUG) console.log("replace >>>>".yellow);
+              if (exports.DEBUG) process.stdout.write(match[1] + "\n");
+              if (exports.DEBUG) console.log("<<<< replace".yellow);
+              if (exports.DEBUG) console.log("replacement >>>>".yellow);
+              if (exports.DEBUG) process.stdout.write(replacement + "\n");
+              if (exports.DEBUG) console.log("<<<< replacement".yellow);
               code = code.replace(new RegExp(REGEXP_ESCAPE(match[1]), "g"), replacement);
             }
           });
@@ -16352,9 +16162,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
           var codeOut = purifyLayer(code);
           codeOut = codeOut.replace(/___NeWlInE_KeEp_OrIgInAl___/g, "\\n");
-          if (DEBUG) console.log("PURIFIED CODE >>>>".yellow);
-          if (DEBUG) process.stdout.write(codeOut + "\n");
-          if (DEBUG) console.log("<<<< PURIFIED CODE".yellow);
+          if (exports.DEBUG) console.log("PURIFIED CODE >>>>".yellow);
+          if (exports.DEBUG) process.stdout.write(codeOut + "\n");
+          if (exports.DEBUG) console.log("<<<< PURIFIED CODE".yellow);
           codeOut = new String(_restoreStringBlocks(codeOut));
           codeOut._foundBlocks = true;
           return codeOut;
@@ -16385,30 +16195,30 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         var segments = [];
         var source = TRAVERSE(obj).map(function (value) {
-          if ((0, _typeof2["default"])(value) === "object" && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+          if (value && (0, _typeof2["default"])(value) === "object" && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
             var codeblock = value;
             segments.push(function (indent) {
               var code = ["(" + codeblock._format + " (" + codeblock._args.join(", ") + ") >>>"];
               var rawCode = codeblock._code;
-              if (DEBUG) console.log("rawCode >>>>".yellow);
-              if (DEBUG) process.stdout.write(rawCode + "\n");
-              if (DEBUG) console.log("<<<< rawCode".yellow);
+              if (exports.DEBUG) console.log("rawCode >>>>".yellow);
+              if (exports.DEBUG) process.stdout.write(rawCode + "\n");
+              if (exports.DEBUG) console.log("<<<< rawCode".yellow);
               /*
-                      // Convert '(___WrApCoDe___("javascript", [...], " ... "___WrApCoDe___END")' back to '... >>> ... <<<'
-                      var re = /\(___WrApCoDe___\("javascript", \[([^\]]*)\], "(.*?)", "___WrApCoDe___END"\)\)/g;
-                      var match2 = null;
-                      while ( (match2 = re.exec(rawCode)) ) {
-                          rawCode = rawCode.replace(
-                              new RegExp(REGEXP_ESCAPE(match2[0]), "g"),
-                              [
-                                  "(javascript (" + match2[1].replace(/"/g, "") + ") >>>",
-                                  match2[2].split(/\\n/).map(function (line) {
-                                      return ("    " + line);
-                                  }).join("\n"),
-                                  "<<<)"
-                              ].join("\n")
-                          );
-                      }
+                  // Convert '(___WrApCoDe___("javascript", [...], " ... "___WrApCoDe___END")' back to '... >>> ... <<<'
+                  var re = /\(___WrApCoDe___\("javascript", \[([^\]]*)\], "(.*?)", "___WrApCoDe___END"\)\)/g;
+                  var match2 = null;
+                  while ( (match2 = re.exec(rawCode)) ) {
+                      rawCode = rawCode.replace(
+                          new RegExp(REGEXP_ESCAPE(match2[0]), "g"),
+                          [
+                              "(javascript (" + match2[1].replace(/"/g, "") + ") >>>",
+                              match2[2].split(/\\n/).map(function (line) {
+                                  return ("    " + line);
+                              }).join("\n"),
+                              "<<<)"
+                          ].join("\n")
+                      );
+                  }
               */
 
               var lines = linesForEscapedNewline(rawCode);
@@ -16480,12 +16290,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         var TRAVERSE = require("traverse");
 
         if (typeof json === "string") {
-          if (DEBUG) console.error("thawFromJSON >>>>");
-          if (DEBUG) process.stderr.write(json + "\n");
-          if (DEBUG) console.error("<<<< thawFromJSON");
+          if (exports.DEBUG) console.error("thawFromJSON >>>>");
+          if (exports.DEBUG) process.stderr.write(json + "\n");
+          if (exports.DEBUG) console.error("<<<< thawFromJSON");
 
           try {
-            JSONLINT.parse(json);
+            if (exports.JSONLINT) exports.JSONLINT.parse(json);
             json = JSON.parse(json);
           } catch (err) {
             console.error("json:", json);
@@ -16554,6 +16364,47 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return obj;
       };
 
+      exports.runAsync = /*#__PURE__*/function () {
+        var _ref10 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee10(obj, args, options) {
+          return _regenerator["default"].wrap(function _callee10$(_context10) {
+            while (1) {
+              switch (_context10.prev = _context10.next) {
+                case 0:
+                  if (typeof obj === "function" && obj.toString().split("\n")[0] === ___WrApCoDe___WrappedCodeblock___Signature) {
+                    obj = obj(args, exports.Codeblock);
+                  }
+
+                  if (exports.isCodeblock(obj)) {
+                    if (typeof obj.compile !== "function") {
+                      obj = Codeblock.thaw(obj);
+                    }
+
+                    obj = obj.compile(args);
+                  }
+
+                  if (!((0, _typeof2["default"])(obj) === "object" && obj instanceof Codeblock)) {
+                    _context10.next = 4;
+                    break;
+                  }
+
+                  return _context10.abrupt("return", obj.runAsync(args, options));
+
+                case 4:
+                  return _context10.abrupt("return", obj);
+
+                case 5:
+                case "end":
+                  return _context10.stop();
+              }
+            }
+          }, _callee10);
+        }));
+
+        return function (_x13, _x14, _x15) {
+          return _ref10.apply(this, arguments);
+        };
+      }();
+
       exports.runAll = function (obj, args, options) {
         if (typeof options === "undefined") {
           options = args;
@@ -16585,107 +16436,179 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         });
       };
+    }).call(this, require("path").join(__dirname, "..", "..", "gi0.Origin.ink", "codeblock.js"));
+  }, {
+    "escape-string-regexp": 155,
+    "esprima": 156,
+    "path": undefined,
+    "traverse": 158
+  }],
+  142: [function (require, module, exports) {
+    var PATH = require("path");
 
-      var originalRequire = null;
+    var FS = require("fs");
 
-      exports.unpatchGlobalRequire = function () {
-        if (!originalRequire) {
-          throw new Error("Global require not patched");
+    var JSONLINT = require("jsonlint");
+
+    exports.DEBUG = /(^|\s)codeblock(\s|$)/.test(process.env.DEBUG || "") || false;
+
+    if (exports.DEBUG) {
+      // TODO: Use 'require("colors/safe")'
+      require("colors");
+    }
+
+    var CODEBLOCK_BROWSER = require("./codeblock.browser");
+
+    Object.keys(CODEBLOCK_BROWSER).forEach(function (name) {
+      exports[name] = CODEBLOCK_BROWSER[name];
+    });
+    CODEBLOCK_BROWSER.DEBUG = exports.DEBUG;
+    CODEBLOCK_BROWSER.VM = require('vm');
+    CODEBLOCK_BROWSER.JSONLINT = JSONLINT; // TODO: Document
+    // TODO: Write test
+
+    exports.purifySync = function (path, options) {
+      options = options || {}; // We cache the compiled file by default
+
+      if (typeof options.cacheCompiled === "undefined") {
+        options.cacheCompiled = true;
+      } // TODO: Use 'pinf-it' helper to generate cache path
+
+
+      var purifiedPath = PATH.join(PATH.dirname(path), ".~" + PATH.basename(path) + "~codeblock-purified.js");
+
+      if (options.cacheCompiled && FS.existsSync(purifiedPath) && FS.statSync(purifiedPath).mtime.getTime() >= FS.statSync(path).mtime.getTime() && !process.env.CODEBLOCK_FORCE_COMPILE) {
+        return {
+          sourcePath: path,
+          code: FS.readFileSync(purifiedPath, "utf8"),
+          purifiedPath: purifiedPath
+        };
+      }
+
+      var code = path;
+
+      if (/^\//.test(code)) {
+        code = FS.readFileSync(path, "utf8");
+      }
+
+      code = exports.purifyCode(code, options);
+
+      if (code._foundBlocks) {
+        if (options.cacheCompiled) {
+          // TODO: Make configurable
+          //var compiledPath = LIB.PATH.join(path, "..", ".io/cache.modules", LIB.PATH.basename(path));
+          FS.writeFileSync(purifiedPath, code, "utf8");
         }
 
-        var Module = require('module');
-
-        Module.prototype.require = originalRequire;
-        originalRequire = null;
-      }; // TODO: Use https://stackoverflow.com/a/42648141
-
-
-      exports.patchGlobalRequire = function () {
-        // @see https://github.com/bahmutov/really-need/blob/master/index.js
-        var Module = require('module');
-
-        originalRequire = Module.prototype.require;
-
-        Module.prototype.require = function (uri) {
-          var path = Module._resolveFilename(uri, this);
-
-          if (FS.existsSync(path)) {
-            var purified = exports.purifySync(path);
-
-            if (purified.purifiedPath) {
-              if (DEBUG) console.log("RUN CODE >>>>".yellow);
-              if (DEBUG) process.stdout.write(purified.code + "\n");
-              if (DEBUG) console.log("<<<< RUN CODE".yellow);
-              var mod = new Module(purified.sourcePath, this);
-              mod.parent = this;
-              mod.filename = purified.sourcePath;
-              mod.paths = Module._nodeModulePaths(PATH.dirname(purified.sourcePath));
-              mod.loaded = true;
-
-              mod._compile(purified.code, purified.sourcePath);
-
-              Module._cache[purified.sourcePath] = mod;
-              return mod.exports;
-              /*
-              var compiledPath = LIB.PATH.join(path, "..", ".io/cache.modules", LIB.PATH.basename(path));
-              LIB.FS.outputFileSync(compiledPath, code, "utf8");
-              return originalRequire.call(this, compiledPath);
-              */
-            }
-          }
-
-          try {
-            return originalRequire.call(this, uri);
-          } catch (err) {
-            console.error("ERROR require(uri)", uri);
-            console.error(err.stack);
-            throw err;
-          }
+        return {
+          sourcePath: path,
+          code: code,
+          purifiedPath: purifiedPath
         };
+      }
+
+      return {
+        sourcePath: path,
+        code: code
       };
+    };
 
-      exports.makeRequire = function (moduleRequire, options) {
-        options = options || {}; // @see https://github.com/bahmutov/really-need/blob/master/index.js
+    var originalRequire = null;
 
-        var Module = require('module');
+    exports.unpatchGlobalRequire = function () {
+      if (!originalRequire) {
+        throw new Error("Global require not patched");
+      }
 
-        return function (uri) {
-          var path = moduleRequire.resolve(uri);
-          var purified = exports.purifySync(path, options);
+      var Module = require('module');
 
-          if (!purified.purifiedPath) {
-            return moduleRequire(path);
+      Module.prototype.require = originalRequire;
+      originalRequire = null;
+    }; // TODO: Use https://stackoverflow.com/a/42648141
+
+
+    exports.patchGlobalRequire = function () {
+      // @see https://github.com/bahmutov/really-need/blob/master/index.js
+      var Module = require('module');
+
+      originalRequire = Module.prototype.require;
+
+      Module.prototype.require = function (uri) {
+        var path = Module._resolveFilename(uri, this);
+
+        if (FS.existsSync(path)) {
+          var purified = exports.purifySync(path);
+
+          if (purified.purifiedPath) {
+            if (exports.DEBUG) console.log("RUN CODE >>>>".yellow);
+            if (exports.DEBUG) process.stdout.write(purified.code + "\n");
+            if (exports.DEBUG) console.log("<<<< RUN CODE".yellow);
+            var mod = new Module(purified.sourcePath, this);
+            mod.parent = this;
+            mod.filename = purified.sourcePath;
+            mod.paths = Module._nodeModulePaths(PATH.dirname(purified.sourcePath));
+            mod.loaded = true;
+
+            mod._compile(purified.code.toString(), purified.sourcePath);
+
+            Module._cache[purified.sourcePath] = mod;
+            return mod.exports;
+            /*
+            var compiledPath = LIB.PATH.join(path, "..", ".io/cache.modules", LIB.PATH.basename(path));
+            LIB.FS.outputFileSync(compiledPath, code, "utf8");
+            return originalRequire.call(this, compiledPath);
+            */
           }
+        }
 
-          if (DEBUG) console.log("RUN CODE >>>>".yellow);
-          if (DEBUG) process.stdout.write(purified.code + "\n");
-          if (DEBUG) console.log("<<<< RUN CODE".yellow);
-          var mod = new Module(purified.sourcePath, this);
-          mod.parent = this;
-          mod.filename = purified.sourcePath;
-          mod.paths = Module._nodeModulePaths(PATH.dirname(purified.sourcePath));
-          mod.loaded = true;
-
-          mod._compile(purified.code, purified.sourcePath);
-
-          Module._cache[purified.sourcePath] = mod;
-          return mod.exports;
-        };
+        try {
+          return originalRequire.call(this, uri);
+        } catch (err) {
+          console.error("ERROR require(uri)", uri);
+          console.error(err.stack);
+          throw err;
+        }
       };
-    }).call(this, require("path").join(__dirname, "..", "..", "..", "node_modules", "codeblock"));
+    };
+
+    exports.makeRequire = function (moduleRequire, options) {
+      options = options || {}; // @see https://github.com/bahmutov/really-need/blob/master/index.js
+
+      var Module = require('module');
+
+      return function (uri) {
+        var path = moduleRequire.resolve(uri);
+        var purified = exports.purifySync(path, options);
+
+        if (!purified.purifiedPath) {
+          return moduleRequire(path);
+        }
+
+        if (exports.DEBUG) console.log("RUN CODE >>>>".yellow);
+        if (exports.DEBUG) process.stdout.write(purified.code + "\n");
+        if (exports.DEBUG) console.log("<<<< RUN CODE".yellow);
+        var mod = new Module(purified.sourcePath, this);
+        mod.parent = this;
+        mod.filename = purified.sourcePath;
+        mod.paths = Module._nodeModulePaths(PATH.dirname(purified.sourcePath));
+        mod.loaded = true;
+
+        mod._compile(purified.code.toString(), purified.sourcePath);
+
+        Module._cache[purified.sourcePath] = mod;
+        return mod.exports;
+      };
+    };
   }, {
-    "$$__filename$$": undefined,
-    "colors": 131,
-    "escape-string-regexp": 139,
-    "esprima": 140,
+    "./codeblock.browser": 141,
+    "colors": 147,
     "fs": undefined,
-    "jsonlint": 141,
+    "jsonlint": 157,
     "module": undefined,
     "path": undefined,
-    "traverse": 142,
     "vm": undefined
   }],
-  127: [function (require, module, exports) {
+  143: [function (require, module, exports) {
     /*
     
     The MIT License (MIT)
@@ -16885,17 +16808,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     defineProps(colors, init());
   }, {
-    "./custom/trap": 128,
-    "./custom/zalgo": 129,
-    "./maps/america": 132,
-    "./maps/rainbow": 133,
-    "./maps/random": 134,
-    "./maps/zebra": 135,
-    "./styles": 136,
-    "./system/supports-colors": 138,
+    "./custom/trap": 144,
+    "./custom/zalgo": 145,
+    "./maps/america": 148,
+    "./maps/rainbow": 149,
+    "./maps/random": 150,
+    "./maps/zebra": 151,
+    "./styles": 152,
+    "./system/supports-colors": 154,
     "util": undefined
   }],
-  128: [function (require, module, exports) {
+  144: [function (require, module, exports) {
     module['exports'] = function runTheTrap(text, options) {
       var result = '';
       text = text || 'Run the trap, drop the bass';
@@ -16942,7 +16865,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return result;
     };
   }, {}],
-  129: [function (require, module, exports) {
+  145: [function (require, module, exports) {
     // please no
     module['exports'] = function zalgo(text, options) {
       text = text || '   he is here   ';
@@ -17029,7 +16952,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return heComes(text, options);
     };
   }, {}],
-  130: [function (require, module, exports) {
+  146: [function (require, module, exports) {
     var colors = require('./colors');
 
     module['exports'] = function () {
@@ -17120,9 +17043,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {
-    "./colors": 127
+    "./colors": 143
   }],
-  131: [function (require, module, exports) {
+  147: [function (require, module, exports) {
     var colors = require('./colors');
 
     module['exports'] = colors; // Remark: By default, colors will add style properties to String.prototype.
@@ -17137,10 +17060,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     require('./extendStringPrototype')();
   }, {
-    "./colors": 127,
-    "./extendStringPrototype": 130
+    "./colors": 143,
+    "./extendStringPrototype": 146
   }],
-  132: [function (require, module, exports) {
+  148: [function (require, module, exports) {
     module['exports'] = function (colors) {
       return function (letter, i, exploded) {
         if (letter === ' ') return letter;
@@ -17158,7 +17081,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  133: [function (require, module, exports) {
+  149: [function (require, module, exports) {
     module['exports'] = function (colors) {
       // RoY G BiV
       var rainbowColors = ['red', 'yellow', 'green', 'blue', 'magenta'];
@@ -17171,7 +17094,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  134: [function (require, module, exports) {
+  150: [function (require, module, exports) {
     module['exports'] = function (colors) {
       var available = ['underline', 'inverse', 'grey', 'yellow', 'red', 'green', 'blue', 'white', 'cyan', 'magenta'];
       return function (letter, i, exploded) {
@@ -17179,14 +17102,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  135: [function (require, module, exports) {
+  151: [function (require, module, exports) {
     module['exports'] = function (colors) {
       return function (letter, i, exploded) {
         return i % 2 === 0 ? letter : colors.inverse(letter);
       };
     };
   }, {}],
-  136: [function (require, module, exports) {
+  152: [function (require, module, exports) {
     /*
     The MIT License (MIT)
     
@@ -17257,7 +17180,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       style.close = "\x1B[" + val[1] + 'm';
     });
   }, {}],
-  137: [function (require, module, exports) {
+  153: [function (require, module, exports) {
     /*
     MIT License
     
@@ -17291,7 +17214,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return pos !== -1 && (terminatorPos === -1 ? true : pos < terminatorPos);
     };
   }, {}],
-  138: [function (require, module, exports) {
+  154: [function (require, module, exports) {
     /*
     The MIT License (MIT)
     
@@ -17443,10 +17366,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       stderr: getSupportLevel(process.stderr)
     };
   }, {
-    "./has-flag.js": 137,
+    "./has-flag.js": 153,
     "os": undefined
   }],
-  139: [function (require, module, exports) {
+  155: [function (require, module, exports) {
     'use strict';
 
     var matchOperatorsRe = /[|\\{}()[\]^$+*?.]/g;
@@ -17459,7 +17382,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return str.replace(matchOperatorsRe, '\\$&');
     };
   }, {}],
-  140: [function (require, module, exports) {
+  156: [function (require, module, exports) {
     (function webpackUniversalModuleDefinition(root, factory) {
       /* istanbul ignore next */
       if ((0, _typeof2["default"])(exports) === 'object' && (0, _typeof2["default"])(module) === 'object') module.exports = factory();else if (typeof define === 'function' && define.amd) define([], factory);
@@ -24995,7 +24918,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     ;
   }, {}],
-  141: [function (require, module, exports) {
+  157: [function (require, module, exports) {
     /* Jison generated parser */
     var jsonlint = function () {
       var parser = {
@@ -25768,7 +25691,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "path": undefined,
     "system": undefined
   }],
-  142: [function (require, module, exports) {
+  158: [function (require, module, exports) {
     var traverse = module.exports = function (obj) {
       return new Traverse(obj);
     };
@@ -26101,7 +26024,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return key in obj;
     };
   }, {}],
-  143: [function (require, module, exports) {
+  159: [function (require, module, exports) {
     (function (__filename, __dirname) {
       /*
       TODO:
@@ -26224,74 +26147,80 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         if ( // If running after being browserified
         typeof require.main === "undefined" || // If running in NodeJS
         require.main === module) {
-          var main = function main() {
-            var cwd, args, filepath, inf;
-            return _regenerator["default"].async(function main$(_context9) {
-              while (1) {
-                switch (_context9.prev = _context9.next) {
-                  case 0:
-                    _context9.prev = 0;
-                    cwd = process.cwd();
-                    args = MINIMIST(process.argv.slice(2), {
-                      "boolean": [//'verbose',
-                      //'debug',
-                      'progress']
-                    });
-                    args._original = process.argv.slice(2);
+          var main = /*#__PURE__*/function () {
+            var _ref11 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee11() {
+              var cwd, args, filepath, inf;
+              return _regenerator["default"].wrap(function _callee11$(_context11) {
+                while (1) {
+                  switch (_context11.prev = _context11.next) {
+                    case 0:
+                      _context11.prev = 0;
+                      cwd = process.cwd();
+                      args = MINIMIST(process.argv.slice(2), {
+                        "boolean": [//'verbose',
+                        //'debug',
+                        'progress']
+                      });
+                      args._original = process.argv.slice(2);
 
-                    if (args.debug && !process.env.INF_DEBUG) {
-                      process.env.INF_DEBUG = "1";
-                    }
+                      if (args.debug && !process.env.INF_DEBUG) {
+                        process.env.INF_DEBUG = "1";
+                      }
 
-                    if (args.cwd) {
-                      cwd = PATH.resolve(cwd, args.cwd);
-                      process.chdir(cwd);
-                    }
+                      if (args.cwd) {
+                        cwd = PATH.resolve(cwd, args.cwd);
+                        process.chdir(cwd);
+                      }
 
-                    filepath = args._.shift();
-                    exitContext = {
-                      cwd: cwd,
-                      filepath: filepath
-                    }; // TODO: Implement '--help'
+                      filepath = args._.shift();
+                      exitContext = {
+                        cwd: cwd,
+                        filepath: filepath
+                      }; // TODO: Implement '--help'
 
-                    inf = new INF(cwd, null, args);
+                      inf = new INF(cwd, null, args);
 
-                    if (process.env.INF_ENABLE_TIMERS) {
-                      timers.start = Date.now();
-                    }
+                      if (process.env.INF_ENABLE_TIMERS) {
+                        timers.start = Date.now();
+                      }
 
-                    if (!/^\{/.test(filepath)) {
-                      _context9.next = 15;
+                      if (!/^\{/.test(filepath)) {
+                        _context11.next = 15;
+                        break;
+                      }
+
+                      _context11.next = 13;
+                      return inf.runInstructions(filepath);
+
+                    case 13:
+                      _context11.next = 17;
                       break;
-                    }
 
-                    _context9.next = 13;
-                    return _regenerator["default"].awrap(inf.runInstructions(filepath));
+                    case 15:
+                      _context11.next = 17;
+                      return inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath)));
 
-                  case 13:
-                    _context9.next = 17;
-                    break;
+                    case 17:
+                      _context11.next = 22;
+                      break;
 
-                  case 15:
-                    _context9.next = 17;
-                    return _regenerator["default"].awrap(inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath))));
+                    case 19:
+                      _context11.prev = 19;
+                      _context11.t0 = _context11["catch"](0);
+                      exitWithError(_context11.t0);
 
-                  case 17:
-                    _context9.next = 22;
-                    break;
-
-                  case 19:
-                    _context9.prev = 19;
-                    _context9.t0 = _context9["catch"](0);
-                    exitWithError(_context9.t0);
-
-                  case 22:
-                  case "end":
-                    return _context9.stop();
+                    case 22:
+                    case "end":
+                      return _context11.stop();
+                  }
                 }
-              }
-            }, null, null, [[0, 19]]);
-          };
+              }, _callee11, null, [[0, 19]]);
+            }));
+
+            return function main() {
+              return _ref11.apply(this, arguments);
+            };
+          }();
 
           main();
         }
@@ -26299,9 +26228,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       // # Classes
       // ####################################################################################################
 
-      var INF =
-      /*#__PURE__*/
-      function () {
+      var INF = /*#__PURE__*/function () {
         function INF(baseDir, referringNamespace, options) {
           (0, _classCallCheck2["default"])(this, INF);
           var self = this;
@@ -26313,182 +26240,194 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(INF, [{
           key: "runInstructionsFile",
-          value: function runInstructionsFile(filepath) {
-            var self, path, exists, instructions;
-            return _regenerator["default"].async(function runInstructionsFile$(_context10) {
-              while (1) {
-                switch (_context10.prev = _context10.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _runInstructionsFile = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee12(filepath) {
+              var self, path, exists, instructions;
+              return _regenerator["default"].wrap(function _callee12$(_context12) {
+                while (1) {
+                  switch (_context12.prev = _context12.next) {
+                    case 0:
+                      self = this;
 
-                    if (/~infi\.log$/.test(filepath)) {
-                      filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
-                    }
+                      if (/~infi\.log$/.test(filepath)) {
+                        filepath = filepath.replace(/(^\.~|~infi\.log$)/g, "");
+                      }
 
-                    path = PATH.resolve(self.baseDir, filepath);
-                    _context10.next = 5;
-                    return _regenerator["default"].awrap(FS.existsAsync(path));
+                      path = PATH.resolve(self.baseDir, filepath);
+                      _context12.next = 5;
+                      return FS.existsAsync(path);
 
-                  case 5:
-                    exists = _context10.sent;
+                    case 5:
+                      exists = _context12.sent;
 
-                    if (exists) {
-                      _context10.next = 8;
-                      break;
-                    }
+                      if (exists) {
+                        _context12.next = 8;
+                        break;
+                      }
 
-                    throw new Error("[inf] File '" + path + "' not found!");
+                      throw new Error("[inf] File '" + path + "' not found!");
 
-                  case 8:
-                    log("Load file:", path);
-                    _context10.next = 11;
-                    return _regenerator["default"].awrap(FS.readFileAsync(path, "utf8"));
+                    case 8:
+                      log("Load file:", path);
+                      _context12.next = 11;
+                      return FS.readFileAsync(path, "utf8");
 
-                  case 11:
-                    instructions = _context10.sent;
-                    return _context10.abrupt("return", self.runInstructions(instructions, filepath));
+                    case 11:
+                      instructions = _context12.sent;
+                      return _context12.abrupt("return", self.runInstructions(instructions, filepath));
 
-                  case 13:
-                  case "end":
-                    return _context10.stop();
+                    case 13:
+                    case "end":
+                      return _context12.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee12, this);
+            }));
+
+            function runInstructionsFile(_x16) {
+              return _runInstructionsFile.apply(this, arguments);
+            }
+
+            return runInstructionsFile;
+          }()
         }, {
           key: "runInstructions",
-          value: function runInstructions(instructions, filepath, referringNamespace) {
-            var self, baseDir, instructionObjects;
-            return _regenerator["default"].async(function runInstructions$(_context11) {
-              while (1) {
-                switch (_context11.prev = _context11.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _runInstructions = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee13(instructions, filepath, referringNamespace) {
+              var self, baseDir, instructionObjects;
+              return _regenerator["default"].wrap(function _callee13$(_context13) {
+                while (1) {
+                  switch (_context13.prev = _context13.next) {
+                    case 0:
+                      self = this;
 
-                    if (!filepath) {
-                      filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
-                    }
-
-                    referringNamespace = referringNamespace || self.referringNamespace;
-                    filepath = PATH.resolve(self.baseDir, filepath);
-                    baseDir = PATH.dirname(filepath);
-                    filepath = PATH.basename(filepath);
-                    self.parser = new Parser(baseDir, filepath); // TODO: Instead of first populating 'instructionObjects' and then processing them we should
-                    //       process instruction objects as they come in. This will allow for faster processing of
-                    //       large instruction files.
-
-                    _context11.next = 9;
-                    return _regenerator["default"].awrap(self.parser.parseInstructions(instructions));
-
-                  case 9:
-                    instructionObjects = _context11.sent;
-                    self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
-                    self.processor = new Processor(self.namespace);
-
-                    if (filepath) {
-                      self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
-
-                      if (referringNamespace) {
-                        self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
-                        self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
-                      }
-                    }
-
-                    _context11.t0 = _regenerator["default"];
-                    _context11.t1 = Promise;
-                    _context11.t2 = instructionObjects;
-                    _context11.next = 18;
-                    return _regenerator["default"].awrap(function (instructionObject) {
-                      if (self.namespace.stopped) {
-                        return null;
-                      } // Replace variables
-
-
-                      instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
-                        if (/^\{.+\}$/.test(arguments[1])) {
-                          // Executable expression
-                          var args = self.options;
-                          return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
-                        } else {
-                          // Simple varibale reference
-                          return JSON.stringify(LODASH_GET({
-                            args: self.options
-                          }, arguments[1], ''));
-                        }
-                      });
-                      instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
-                        if (arguments[1] !== '%%') {
-                          return arguments[0];
-                        }
-
-                        if (/^\{.+\}$/.test(arguments[2])) {
-                          // Executable expression
-                          var args = self.options;
-                          return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
-                        } else {
-                          // Simple varibale reference
-                          return LODASH_GET({
-                            args: self.options
-                          }, arguments[2], '');
-                        }
-                      });
-                      instructionObject = instructionObject.split("\t");
-
-                      if (instructionObject.length === 1 && instructionObject[0] === '') {
-                        return;
+                      if (!filepath) {
+                        filepath = CRYPTO.createHash('sha1').update(instructions).digest('hex').substring(0, 7);
                       }
 
-                      return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
-                    });
+                      referringNamespace = referringNamespace || self.referringNamespace;
+                      filepath = PATH.resolve(self.baseDir, filepath);
+                      baseDir = PATH.dirname(filepath);
+                      filepath = PATH.basename(filepath);
+                      self.parser = new Parser(baseDir, filepath); // TODO: Instead of first populating 'instructionObjects' and then processing them we should
+                      //       process instruction objects as they come in. This will allow for faster processing of
+                      //       large instruction files.
 
-                  case 18:
-                    _context11.t3 = _context11.sent;
-                    _context11.t4 = _context11.t1.mapSeries.call(_context11.t1, _context11.t2, _context11.t3);
-                    _context11.next = 22;
-                    return _context11.t0.awrap.call(_context11.t0, _context11.t4);
+                      _context13.next = 9;
+                      return self.parser.parseInstructions(instructions);
 
-                  case 22:
-                    if (referringNamespace && self.namespace.options.mapNamespaceAliasesIntoParent !== false) {
-                      self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
-                      Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                        if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-                          self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
-                            if (anchorPrefix) {
-                              return [PATH.join(anchorPrefix.toString(), key), self.namespace.mappedNamespaceAliases[key]];
-                            }
+                    case 9:
+                      instructionObjects = _context13.sent;
+                      self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
+                      self.processor = new Processor(self.namespace);
 
-                            return [key, self.namespace.mappedNamespaceAliases[key]];
-                          });
+                      if (filepath) {
+                        self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
+
+                        if (referringNamespace) {
+                          self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
+                          self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
                         }
-                      });
-                    }
+                      }
 
-                    if (!self.namespace.referringNamespace) {
-                      self.namespace.componentInitContext.emit("processed");
-                    }
+                      _context13.t0 = Promise;
+                      _context13.t1 = instructionObjects;
+                      _context13.next = 17;
+                      return function (instructionObject) {
+                        if (self.namespace.stopped) {
+                          return null;
+                        } // Replace variables
 
-                    if (filepath) {
-                      self.namespace.pathStack.pop();
-                    }
 
-                    return _context11.abrupt("return", self.namespace.apis);
+                        instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
+                          if (/^\{.+\}$/.test(arguments[1])) {
+                            // Executable expression
+                            var args = self.options;
+                            return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
+                          } else {
+                            // Simple varibale reference
+                            return JSON.stringify(LODASH_GET({
+                              args: self.options
+                            }, arguments[1], ''));
+                          }
+                        });
+                        instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
+                          if (arguments[1] !== '%%') {
+                            return arguments[0];
+                          }
 
-                  case 26:
-                  case "end":
-                    return _context11.stop();
+                          if (/^\{.+\}$/.test(arguments[2])) {
+                            // Executable expression
+                            var args = self.options;
+                            return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
+                          } else {
+                            // Simple varibale reference
+                            return LODASH_GET({
+                              args: self.options
+                            }, arguments[2], '');
+                          }
+                        });
+                        instructionObject = instructionObject.split("\t");
+
+                        if (instructionObject.length === 1 && instructionObject[0] === '') {
+                          return;
+                        }
+
+                        return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
+                      };
+
+                    case 17:
+                      _context13.t2 = _context13.sent;
+                      _context13.next = 20;
+                      return _context13.t0.mapSeries.call(_context13.t0, _context13.t1, _context13.t2);
+
+                    case 20:
+                      if (referringNamespace && self.namespace.options.mapNamespaceAliasesIntoParent !== false) {
+                        self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                        Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
+                          if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+                            self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+                              if (anchorPrefix) {
+                                return [PATH.join(anchorPrefix.toString(), key), self.namespace.mappedNamespaceAliases[key]];
+                              }
+
+                              return [key, self.namespace.mappedNamespaceAliases[key]];
+                            });
+                          }
+                        });
+                      }
+
+                      if (!self.namespace.referringNamespace) {
+                        self.namespace.componentInitContext.emit("processed");
+                      }
+
+                      if (filepath) {
+                        self.namespace.pathStack.pop();
+                      }
+
+                      return _context13.abrupt("return", self.namespace.apis);
+
+                    case 24:
+                    case "end":
+                      return _context13.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee13, this);
+            }));
+
+            function runInstructions(_x17, _x18, _x19) {
+              return _runInstructions.apply(this, arguments);
+            }
+
+            return runInstructions;
+          }()
         }]);
         return INF;
       }();
 
       exports.INF = INF;
 
-      var Parser =
-      /*#__PURE__*/
-      function () {
+      var Parser = /*#__PURE__*/function () {
         function Parser(baseDir, filepath) {
           (0, _classCallCheck2["default"])(this, Parser);
           this.baseDir = baseDir;
@@ -26501,235 +26440,243 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Parser, [{
           key: "parseInstructions",
-          value: function parseInstructions(instructions) {
-            var self, sourceExists, infiExists, PARSER_EVENT_DEBUG, instructionObjects;
-            return _regenerator["default"].async(function parseInstructions$(_context12) {
-              while (1) {
-                switch (_context12.prev = _context12.next) {
-                  case 0:
-                    self = this;
-                    _context12.t0 = self.filepath;
+          value: function () {
+            var _parseInstructions = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee14(instructions) {
+              var self, sourceExists, infiExists, PARSER_EVENT_DEBUG, instructionObjects;
+              return _regenerator["default"].wrap(function _callee14$(_context14) {
+                while (1) {
+                  switch (_context14.prev = _context14.next) {
+                    case 0:
+                      self = this;
+                      _context14.t0 = self.filepath;
 
-                    if (!_context12.t0) {
-                      _context12.next = 6;
-                      break;
-                    }
-
-                    _context12.next = 5;
-                    return _regenerator["default"].awrap(FS.existsAsync(PATH.join(self.baseDir, self.filepath)));
-
-                  case 5:
-                    _context12.t0 = _context12.sent;
-
-                  case 6:
-                    sourceExists = _context12.t0;
-                    _context12.t1 = self.infiFilepath;
-
-                    if (!_context12.t1) {
-                      _context12.next = 12;
-                      break;
-                    }
-
-                    _context12.next = 11;
-                    return _regenerator["default"].awrap(FS.existsAsync(PATH.join(self.baseDir, self.infiFilepath)));
-
-                  case 11:
-                    _context12.t1 = _context12.sent;
-
-                  case 12:
-                    infiExists = _context12.t1;
-
-                    if (!infiExists) {
-                      _context12.next = 28;
-                      break;
-                    }
-
-                    if (sourceExists) {
-                      _context12.next = 18;
-                      break;
-                    }
-
-                    _context12.next = 17;
-                    return _regenerator["default"].awrap(FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8"));
-
-                  case 17:
-                    return _context12.abrupt("return", _context12.sent.split("\n"));
-
-                  case 18:
-                    _context12.next = 20;
-                    return _regenerator["default"].awrap(FS.statAsync(PATH.join(self.baseDir, self.infiFilepath)));
-
-                  case 20:
-                    _context12.t2 = _context12.sent.mtime;
-                    _context12.next = 23;
-                    return _regenerator["default"].awrap(FS.statAsync(PATH.join(self.baseDir, self.filepath)));
-
-                  case 23:
-                    _context12.t3 = _context12.sent.mtime;
-
-                    if (!(_context12.t2 >= _context12.t3)) {
-                      _context12.next = 28;
-                      break;
-                    }
-
-                    _context12.next = 27;
-                    return _regenerator["default"].awrap(FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8"));
-
-                  case 27:
-                    return _context12.abrupt("return", _context12.sent.split("\n"));
-
-                  case 28:
-                    PARSER_EVENT_DEBUG = false; // Strip shebang
-
-                    instructions = instructions.replace(/^#!.+\n/, ""); // Normalize codeblocks
-
-                    instructions = CODEBLOCK.purifyCode(instructions, {
-                      freezeToJSON: true
-                    }).toString();
-                    if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions(instructions)", instructions);
-                    instructionObjects = []; // Parse JSON using SAX parser which allows for repeated keys.
-
-                    _context12.next = 35;
-                    return _regenerator["default"].awrap(new Promise(function (resolve, reject) {
-                      function onInstructionObject(obj) {
-                        if (Object.keys(obj).length > 0) {
-                          instructionObjects.push(obj);
-                        }
+                      if (!_context14.t0) {
+                        _context14.next = 6;
+                        break;
                       }
 
-                      var parser = CLARINET.parser();
+                      _context14.next = 5;
+                      return FS.existsAsync(PATH.join(self.baseDir, self.filepath));
 
-                      parser.onerror = function (err) {
-                        CONSOLE.error("err", err);
-                        CONSOLE.error("self.baseDir", self.baseDir);
-                        CONSOLE.error("filepath", self.filepath);
-                        CONSOLE.error("instructions", instructions);
-                        reject(new Error("Error parsing instructions!"));
-                      };
+                    case 5:
+                      _context14.t0 = _context14.sent;
 
-                      var rootObj = null;
-                      var currentObject = null;
-                      var currentKey = null;
-                      var previousKeyStack = [];
-                      var previousObjectStack = [];
+                    case 6:
+                      sourceExists = _context14.t0;
+                      _context14.t1 = self.infiFilepath;
 
-                      parser.onopenobject = function (key) {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
+                      if (!_context14.t1) {
+                        _context14.next = 12;
+                        break;
+                      }
 
-                        if (this.depth === 0) {
-                          currentObject = rootObj = {
-                            ___meta: {
-                              line: this.line,
-                              column: this.column,
-                              pos: this.position
-                            }
-                          };
-                        } else {
-                          previousObjectStack.push(currentObject);
+                      _context14.next = 11;
+                      return FS.existsAsync(PATH.join(self.baseDir, self.infiFilepath));
 
-                          if (Array.isArray(currentObject)) {
-                            var obj = {};
-                            obj[key] = {};
-                            currentObject.push(obj);
-                            currentObject = obj;
+                    case 11:
+                      _context14.t1 = _context14.sent;
+
+                    case 12:
+                      infiExists = _context14.t1;
+
+                      if (!infiExists) {
+                        _context14.next = 28;
+                        break;
+                      }
+
+                      if (sourceExists) {
+                        _context14.next = 18;
+                        break;
+                      }
+
+                      _context14.next = 17;
+                      return FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8");
+
+                    case 17:
+                      return _context14.abrupt("return", _context14.sent.split("\n"));
+
+                    case 18:
+                      _context14.next = 20;
+                      return FS.statAsync(PATH.join(self.baseDir, self.infiFilepath));
+
+                    case 20:
+                      _context14.t2 = _context14.sent.mtime;
+                      _context14.next = 23;
+                      return FS.statAsync(PATH.join(self.baseDir, self.filepath));
+
+                    case 23:
+                      _context14.t3 = _context14.sent.mtime;
+
+                      if (!(_context14.t2 >= _context14.t3)) {
+                        _context14.next = 28;
+                        break;
+                      }
+
+                      _context14.next = 27;
+                      return FS.readFileAsync(PATH.join(self.baseDir, self.infiFilepath), "utf8");
+
+                    case 27:
+                      return _context14.abrupt("return", _context14.sent.split("\n"));
+
+                    case 28:
+                      PARSER_EVENT_DEBUG = false; // Strip shebang
+
+                      instructions = instructions.replace(/^#!.+\n/, ""); // Normalize codeblocks
+
+                      instructions = CODEBLOCK.purifyCode(instructions, {
+                        freezeToJSON: true
+                      }).toString();
+                      if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions(instructions)", instructions);
+                      instructionObjects = []; // Parse JSON using SAX parser which allows for repeated keys.
+
+                      _context14.next = 35;
+                      return new Promise(function (resolve, reject) {
+                        function onInstructionObject(obj) {
+                          if (Object.keys(obj).length > 0) {
+                            instructionObjects.push(obj);
+                          }
+                        }
+
+                        var parser = CLARINET.parser();
+
+                        parser.onerror = function (err) {
+                          CONSOLE.error("err", err);
+                          CONSOLE.error("self.baseDir", self.baseDir);
+                          CONSOLE.error("filepath", self.filepath);
+                          CONSOLE.error("instructions", instructions);
+                          reject(new Error("Error parsing instructions!"));
+                        };
+
+                        var rootObj = null;
+                        var currentObject = null;
+                        var currentKey = null;
+                        var previousKeyStack = [];
+                        var previousObjectStack = [];
+
+                        parser.onopenobject = function (key) {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenobject", key);
+
+                          if (this.depth === 0) {
+                            currentObject = rootObj = {
+                              ___meta: {
+                                line: this.line,
+                                column: this.column,
+                                pos: this.position
+                              }
+                            };
                           } else {
-                            currentObject = currentObject[currentKey] = {};
+                            previousObjectStack.push(currentObject);
+
+                            if (Array.isArray(currentObject)) {
+                              var obj = {};
+                              obj[key] = {};
+                              currentObject.push(obj);
+                              currentObject = obj;
+                            } else {
+                              currentObject = currentObject[currentKey] = {};
+                            }
+
+                            previousKeyStack.push(currentKey);
                           }
 
+                          currentKey = key;
+                        };
+
+                        parser.onvalue = function (value) {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onvalue", value);
+
+                          if (currentKey === null) {
+                            currentObject.push(value);
+                          } else {
+                            currentObject[currentKey] = value;
+                          }
+                        };
+
+                        parser.onkey = function (key) {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
+
+                          if (this.depth === 1) {
+                            onInstructionObject(rootObj);
+                            currentObject = rootObj = {
+                              ___meta: {
+                                line: this.line,
+                                column: this.column,
+                                pos: this.position
+                              }
+                            };
+                          }
+
+                          currentKey = key;
+                        };
+
+                        parser.oncloseobject = function () {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:oncloseobject");
+
+                          if (this.depth === 1) {
+                            onInstructionObject(rootObj);
+                          } else {
+                            currentKey = previousKeyStack.pop();
+                            currentObject = previousObjectStack.pop();
+                          }
+                        };
+
+                        parser.onopenarray = function () {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenarray");
+                          previousObjectStack.push(currentObject);
+                          currentObject = currentObject[currentKey] = [];
                           previousKeyStack.push(currentKey);
-                        }
+                          currentKey = null;
+                        };
 
-                        currentKey = key;
-                      };
-
-                      parser.onvalue = function (value) {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onvalue", value);
-
-                        if (currentKey === null) {
-                          currentObject.push(value);
-                        } else {
-                          currentObject[currentKey] = value;
-                        }
-                      };
-
-                      parser.onkey = function (key) {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onkey", key);
-
-                        if (this.depth === 1) {
-                          onInstructionObject(rootObj);
-                          currentObject = rootObj = {
-                            ___meta: {
-                              line: this.line,
-                              column: this.column,
-                              pos: this.position
-                            }
-                          };
-                        }
-
-                        currentKey = key;
-                      };
-
-                      parser.oncloseobject = function () {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:oncloseobject");
-
-                        if (this.depth === 1) {
-                          onInstructionObject(rootObj);
-                        } else {
+                        parser.onclosearray = function () {
+                          if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onclosearray");
                           currentKey = previousKeyStack.pop();
                           currentObject = previousObjectStack.pop();
+                        };
+
+                        parser.onend = resolve;
+                        parser.write(instructions).close();
+                      });
+
+                    case 35:
+                      instructionObjects = instructionObjects.map(function (instructionObject) {
+                        if (Object.keys(instructionObject).length === 1 && typeof instructionObject.___meta !== "undefined") {
+                          return null;
                         }
-                      };
 
-                      parser.onopenarray = function () {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onopenarray");
-                        previousObjectStack.push(currentObject);
-                        currentObject = currentObject[currentKey] = [];
-                        previousKeyStack.push(currentKey);
-                        currentKey = null;
-                      };
+                        var meta = instructionObject.___meta || null;
+                        delete instructionObject.___meta;
+                        var key = Object.keys(instructionObject)[0];
+                        return [key, JSON.stringify(instructionObject[key]), JSON.stringify(meta)].join("\t");
+                      }).filter(function (line) {
+                        return line !== null;
+                      });
 
-                      parser.onclosearray = function () {
-                        if (PARSER_EVENT_DEBUG) CONSOLE.log("[inf] Parser:parseInstructions():parser:onclosearray");
-                        currentKey = previousKeyStack.pop();
-                        currentObject = previousObjectStack.pop();
-                      };
-
-                      parser.onend = resolve;
-                      parser.write(instructions).close();
-                    }));
-
-                  case 35:
-                    instructionObjects = instructionObjects.map(function (instructionObject) {
-                      if (Object.keys(instructionObject).length === 1 && typeof instructionObject.___meta !== "undefined") {
-                        return null;
+                      if (!self.infiFilepath) {
+                        _context14.next = 39;
+                        break;
                       }
 
-                      var meta = instructionObject.___meta || null;
-                      delete instructionObject.___meta;
-                      var key = Object.keys(instructionObject)[0];
-                      return [key, JSON.stringify(instructionObject[key]), JSON.stringify(meta)].join("\t");
-                    }).filter(function (line) {
-                      return line !== null;
-                    });
+                      _context14.next = 39;
+                      return FS.writeFileAsync(PATH.join(self.baseDir, self.infiFilepath), instructionObjects.join("\n"));
 
-                    if (!self.infiFilepath) {
-                      _context12.next = 39;
-                      break;
-                    }
+                    case 39:
+                      return _context14.abrupt("return", instructionObjects);
 
-                    _context12.next = 39;
-                    return _regenerator["default"].awrap(FS.writeFileAsync(PATH.join(self.baseDir, self.infiFilepath), instructionObjects.join("\n")));
-
-                  case 39:
-                    return _context12.abrupt("return", instructionObjects);
-
-                  case 40:
-                  case "end":
-                    return _context12.stop();
+                    case 40:
+                    case "end":
+                      return _context14.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee14, this);
+            }));
+
+            function parseInstructions(_x20) {
+              return _parseInstructions.apply(this, arguments);
+            }
+
+            return parseInstructions;
+          }()
         }]);
         return Parser;
       }(); // @source https://stackoverflow.com/a/40577337/330439
@@ -26749,9 +26696,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return methods;
       }
 
-      var Component =
-      /*#__PURE__*/
-      function () {
+      var Component = /*#__PURE__*/function () {
         function Component(path) {
           (0, _classCallCheck2["default"])(this, Component);
           var self = this;
@@ -26760,383 +26705,415 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Component, [{
           key: "init",
-          value: function init(namespace, options) {
-            var self, mod, instances;
-            return _regenerator["default"].async(function init$(_context18) {
-              while (1) {
-                switch (_context18.prev = _context18.next) {
-                  case 0:
-                    self = this;
-                    options = options || {}; // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
-                    // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
-                    //       based on the FIRST namespace and never changes.
+          value: function () {
+            var _init = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee20(namespace, options) {
+              var self, mod, instances;
+              return _regenerator["default"].wrap(function _callee20$(_context20) {
+                while (1) {
+                  switch (_context20.prev = _context20.next) {
+                    case 0:
+                      self = this;
+                      options = options || {}; // TODO: Optionally inject seed into path hash to increase uniqueness of identical relpaths across namespaces.
+                      // TODO: Need a better way to determine a stable hash as 'namespace.baseDir' can change below. Use a stable path that gets set once
+                      //       based on the FIRST namespace and never changes.
 
-                    self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
-                    mod = options.exports || null;
+                      self.pathHash = options.pathHash || CRYPTO.createHash('sha1').update(PATH.relative(namespace.baseDir, self.path)).digest('hex');
+                      mod = options.exports || null;
 
-                    if (!mod) {
-                      // Check if module contains a codeblock as we need to purify it first before it can be required.
-                      if (/>>>/.test(FS.readFileSync(self.path, "utf8"))) {
-                        mod = CODEBLOCK_REQUIRE(self.path);
-                      } else {
-                        mod = require(self.path);
+                      if (!mod) {
+                        // Check if module contains a codeblock as we need to purify it first before it can be required.
+                        if (/>>>/.test(FS.readFileSync(self.path, "utf8"))) {
+                          mod = CODEBLOCK_REQUIRE(self.path);
+                        } else {
+                          mod = require(self.path);
+                        }
+
+                        mod.INF = exports;
                       }
 
-                      mod.INF = exports;
-                    }
+                      instances = {};
 
-                    instances = {};
+                      self.getComponentAliases = function () {
+                        return Object.keys(instances.component || {});
+                      };
 
-                    self.getComponentAliases = function () {
-                      return Object.keys(instances.component || {});
-                    };
+                      self.getInstance = function (type, alias) {
+                        if (!instances[type][alias]) {
+                          console.error("instances", instances);
+                          throw new Error("Instance for type '".concat(type, "' and alias '").concat(alias, "' not initialized!"));
+                        }
 
-                    self.getInstance = function (type, alias) {
-                      if (!instances[type][alias]) {
-                        console.error("instances", instances);
-                        throw new Error("Instance for type '".concat(type, "' and alias '").concat(alias, "' not initialized!"));
-                      }
+                        return instances[type][alias];
+                      };
 
-                      return instances[type][alias];
-                    };
+                      self.forAlias = /*#__PURE__*/function () {
+                        var _ref12 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee19(type, alias, namespace, resolvedNamespace) {
+                          var makeMethodWrapper, plugins, componentInitContext, pluginOverrides, pluginInstance, instance, adapterId, adapter;
+                          return _regenerator["default"].wrap(function _callee19$(_context19) {
+                            while (1) {
+                              switch (_context19.prev = _context19.next) {
+                                case 0:
+                                  if (namespace) {
+                                    _context19.next = 2;
+                                    break;
+                                  }
 
-                    self.forAlias = function _callee9(type, alias, namespace, resolvedNamespace) {
-                      var makeMethodWrapper, plugins, componentInitContext, pluginOverrides, pluginInstance, instance, adapterId, adapter;
-                      return _regenerator["default"].async(function _callee9$(_context17) {
-                        while (1) {
-                          switch (_context17.prev = _context17.next) {
-                            case 0:
-                              if (namespace) {
-                                _context17.next = 2;
-                                break;
-                              }
+                                  throw new Error("'namespace' not set!");
 
-                              throw new Error("'namespace' not set!");
+                                case 2:
+                                  if (!instances[type]) {
+                                    instances[type] = {};
+                                  }
 
-                            case 2:
-                              if (!instances[type]) {
-                                instances[type] = {};
-                              }
+                                  if (instances[type][alias]) {
+                                    _context19.next = 36;
+                                    break;
+                                  }
 
-                              if (instances[type][alias]) {
-                                _context17.next = 36;
-                                break;
-                              }
+                                  makeMethodWrapper = function makeMethodWrapper(type, method) {
+                                    return /*#__PURE__*/function () {
+                                      var _ref15 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee18(arg1, arg2, options) {
+                                        var self, methods, args1_parts, value, args, _result, result;
 
-                              makeMethodWrapper = function makeMethodWrapper(type, method) {
-                                return function _callee8(arg1, arg2, options) {
-                                  var self, methods, args1_parts, value, args, _result, result;
+                                        return _regenerator["default"].wrap(function _callee18$(_context18) {
+                                          while (1) {
+                                            switch (_context18.prev = _context18.next) {
+                                              case 0:
+                                                self = this;
+                                                options = options || {};
 
-                                  return _regenerator["default"].async(function _callee8$(_context16) {
-                                    while (1) {
-                                      switch (_context16.prev = _context16.next) {
-                                        case 0:
-                                          self = this;
-                                          options = options || {};
+                                                if (self) {
+                                                  self.getAPI = function (prefix) {
+                                                    return namespace.apis;
+                                                    ;
+                                                  };
+                                                }
 
-                                          if (self) {
-                                            self.getAPI = function (prefix) {
-                                              return namespace.apis;
-                                              ;
-                                            };
-                                          }
+                                                methods = getAllMethodNames(pluginInstance.impl); // See if there is a component method instead of using generic 'invoke'.
 
-                                          methods = getAllMethodNames(pluginInstance.impl); // See if there is a component method instead of using generic 'invoke'.
+                                                if (!(method === "invoke" && /^[a-zA-z0-9_]+\(\)/.test(arg1) && methods.has(arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")))) {
+                                                  _context18.next = 14;
+                                                  break;
+                                                }
 
-                                          if (!(method === "invoke" && /^[a-zA-z0-9_]+\(\)/.test(arg1) && methods.has(arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")))) {
-                                            _context16.next = 14;
-                                            break;
-                                          }
+                                                args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
 
-                                          args1_parts = arg1.match(/^([a-zA-z0-9_]+)\(\)\s*(.*?)$/);
+                                                if (args1_parts[2]) {
+                                                  log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with arguments:"), args1_parts[2], (0, _typeof2["default"])(arg2.value));
+                                                } else {
+                                                  log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with argument:"), (0, _typeof2["default"])(arg2.value));
+                                                }
 
-                                          if (args1_parts[2]) {
-                                            log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with arguments:"), args1_parts[2], (0, _typeof2["default"])(arg2.value));
-                                          } else {
-                                            log("Calling method '".concat(args1_parts[0], "' in component '").concat(pluginInstance.path, "' with argument:"), (0, _typeof2["default"])(arg2.value));
-                                          }
+                                                value = arg2.value; // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
 
-                                          value = arg2.value; // If we have a wrapped node we wrap the invocation so we can pull out the 'value'.
+                                                if (arg2.wrapped) {
+                                                  value = /*#__PURE__*/function () {
+                                                    var _ref16 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee17() {
+                                                      var result,
+                                                          _args17 = arguments;
+                                                      return _regenerator["default"].wrap(function _callee17$(_context17) {
+                                                        while (1) {
+                                                          switch (_context17.prev = _context17.next) {
+                                                            case 0:
+                                                              _context17.next = 2;
+                                                              return arg2.value.apply(this, _args17);
 
-                                          if (arg2.wrapped) {
-                                            value = function value() {
-                                              var result,
-                                                  _args15 = arguments;
-                                              return _regenerator["default"].async(function value$(_context15) {
-                                                while (1) {
-                                                  switch (_context15.prev = _context15.next) {
-                                                    case 0:
-                                                      _context15.next = 2;
-                                                      return _regenerator["default"].awrap(arg2.value.apply(this, _args15));
+                                                            case 2:
+                                                              result = _context17.sent;
+                                                              return _context17.abrupt("return", result.value);
 
-                                                    case 2:
-                                                      result = _context15.sent;
-                                                      return _context15.abrupt("return", result.value);
+                                                            case 4:
+                                                            case "end":
+                                                              return _context17.stop();
+                                                          }
+                                                        }
+                                                      }, _callee17, this);
+                                                    }));
 
-                                                    case 4:
-                                                    case "end":
-                                                      return _context15.stop();
+                                                    return function value() {
+                                                      return _ref16.apply(this, arguments);
+                                                    };
+                                                  }();
+                                                }
+
+                                                args = [value];
+
+                                                if (args1_parts[2]) {
+                                                  args.unshift(args1_parts[2]);
+                                                }
+
+                                                pluginInstance.impl._infComponent = self; // NOTE: We only pass in the value (not the wrapper).
+                                                // TODO: Optionally pass in the wrapper?
+
+                                                _result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(pluginInstance.impl, args); // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
+                                                //       'invoke()' in contrast must always return something to ensure the invocation was handled.
+
+                                                return _context18.abrupt("return", _result);
+
+                                              case 14:
+                                                log("Calling method '".concat(method, "' in component '").concat(pluginInstance.path, "' with args:"), arg1, (0, _typeof2["default"])(arg2));
+
+                                                if (methods.has(method)) {
+                                                  _context18.next = 20;
+                                                  break;
+                                                }
+
+                                                if (!(method === "invoke")) {
+                                                  _context18.next = 19;
+                                                  break;
+                                                }
+
+                                                console.error("pointer", arg1);
+                                                throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(pointer, value)'!"));
+
+                                              case 19:
+                                                throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(alias, node)'!"));
+
+                                              case 20:
+                                                pluginInstance.impl._infComponent = self;
+                                                _context18.next = 23;
+                                                return pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2, options);
+
+                                              case 23:
+                                                result = _context18.sent;
+
+                                                if (typeof result === "undefined") {
+                                                  if (type === "invoke") {
+                                                    badInvocation(arg1, arg2, self);
+                                                  } else {
+                                                    noFactory(method, arg1, arg2, self);
                                                   }
                                                 }
-                                              }, null, this);
-                                            };
-                                          }
+                                                /*
+                                                function checkResult (result) {
+                                                    if (typeof result === "undefined") {
+                                                        if (type === "invoke") {
+                                                            badInvocation(arg1, arg2, self);
+                                                        } else {
+                                                            noFactory(method, arg1, arg2, self);
+                                                        }
+                                                        return false;
+                                                    }
+                                                    return true;
+                                                }
+                                                 if (checkResult(result)) {
+                                                    // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
+                                                    if (
+                                                        typeof result === "object" &&
+                                                        typeof result.then === 'function'
+                                                    ) {
+                                                        result.then(checkResult).catch(exitWithError);
+                                                    }
+                                                }
+                                                */
 
-                                          args = [value];
 
-                                          if (args1_parts[2]) {
-                                            args.unshift(args1_parts[2]);
-                                          }
+                                                return _context18.abrupt("return", result);
 
-                                          pluginInstance.impl._infComponent = self; // NOTE: We only pass in the value (not the wrapper).
-                                          // TODO: Optionally pass in the wrapper?
-
-                                          _result = pluginInstance.impl[arg1.replace(/^([a-zA-z0-9_]+)\(\).*$/, "$1")].apply(pluginInstance.impl, args); // NOTE: We do not check if the result is undefined as an undefined result is valid when using component methods.
-                                          //       'invoke()' in contrast must always return something to ensure the invocation was handled.
-
-                                          return _context16.abrupt("return", _result);
-
-                                        case 14:
-                                          log("Calling method '".concat(method, "' in component '").concat(pluginInstance.path, "' with args:"), arg1, (0, _typeof2["default"])(arg2));
-
-                                          if (methods.has(method)) {
-                                            _context16.next = 20;
-                                            break;
-                                          }
-
-                                          if (!(method === "invoke")) {
-                                            _context16.next = 19;
-                                            break;
-                                          }
-
-                                          console.error("pointer", arg1);
-                                          throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(pointer, value)'!"));
-
-                                        case 19:
-                                          throw new Error("Component at path '".concat(pluginInstance.path, "' does not export 'inf().").concat(method, "(alias, node)'!"));
-
-                                        case 20:
-                                          pluginInstance.impl._infComponent = self;
-                                          _context16.next = 23;
-                                          return _regenerator["default"].awrap(pluginInstance.impl[method].call(pluginInstance.impl, arg1, arg2, options));
-
-                                        case 23:
-                                          result = _context16.sent;
-
-                                          if (typeof result === "undefined") {
-                                            if (type === "invoke") {
-                                              badInvocation(arg1, arg2, self);
-                                            } else {
-                                              noFactory(method, arg1, arg2, self);
+                                              case 26:
+                                              case "end":
+                                                return _context18.stop();
                                             }
                                           }
-                                          /*
-                                          function checkResult (result) {
-                                              if (typeof result === "undefined") {
-                                                  if (type === "invoke") {
-                                                      badInvocation(arg1, arg2, self);
-                                                  } else {
-                                                      noFactory(method, arg1, arg2, self);
-                                                  }
-                                                  return false;
-                                              }
-                                              return true;
-                                          }
-                                           if (checkResult(result)) {
-                                              // If we get a promise as a result we attach to it and ensure it does not resolve to undefined.
-                                              if (
-                                                  typeof result === "object" &&
-                                                  typeof result.then === 'function'
-                                              ) {
-                                                  result.then(checkResult).catch(exitWithError);
-                                              }
-                                          }
-                                          */
+                                        }, _callee18, this);
+                                      }));
 
+                                      return function (_x28, _x29, _x30) {
+                                        return _ref15.apply(this, arguments);
+                                      };
+                                    }();
+                                  };
 
-                                          return _context16.abrupt("return", result);
-
-                                        case 26:
-                                        case "end":
-                                          return _context16.stop();
-                                      }
+                                  plugins = namespace.getPluginsForAlias(alias);
+                                  componentInitContext = Object.create(namespace.componentInitContext);
+                                  pluginOverrides = [];
+                                  plugins.forEach(function (plugin) {
+                                    if (plugin.impl.ComponentInitContext && plugin.impl.ComponentInitContext.constructor) {
+                                      plugin.impl.ComponentInitContext.constructor.call(componentInitContext, namespace);
                                     }
-                                  }, null, this);
-                                };
-                              };
+                                  });
+                                  pluginInstance = Object.create(self);
+                                  componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
+                                  instance = pluginInstance;
+                                  _context19.next = 14;
+                                  return Promise.mapSeries(plugins, /*#__PURE__*/function () {
+                                    var _ref13 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee16(plugin) {
+                                      var impl;
+                                      return _regenerator["default"].wrap(function _callee16$(_context16) {
+                                        while (1) {
+                                          switch (_context16.prev = _context16.next) {
+                                            case 0:
+                                              if (!plugin.impl.inf) {
+                                                _context16.next = 5;
+                                                break;
+                                              }
 
-                              plugins = namespace.getPluginsForAlias(alias);
-                              componentInitContext = Object.create(namespace.componentInitContext);
-                              pluginOverrides = [];
-                              plugins.forEach(function (plugin) {
-                                if (plugin.impl.ComponentInitContext && plugin.impl.ComponentInitContext.constructor) {
-                                  plugin.impl.ComponentInitContext.constructor.call(componentInitContext, namespace);
-                                }
-                              });
-                              pluginInstance = Object.create(self);
-                              componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
-                              instance = pluginInstance;
-                              _context17.next = 14;
-                              return _regenerator["default"].awrap(Promise.mapSeries(plugins, function _callee7(plugin) {
-                                var impl;
-                                return _regenerator["default"].async(function _callee7$(_context14) {
-                                  while (1) {
-                                    switch (_context14.prev = _context14.next) {
-                                      case 0:
-                                        if (!plugin.impl.inf) {
-                                          _context14.next = 5;
-                                          break;
-                                        }
+                                              _context16.next = 3;
+                                              return plugin.impl.inf(componentInitContext, alias);
 
-                                        _context14.next = 3;
-                                        return _regenerator["default"].awrap(plugin.impl.inf(componentInitContext, alias));
+                                            case 3:
+                                              impl = _context16.sent;
 
-                                      case 3:
-                                        impl = _context14.sent;
+                                              if (impl.Component) {
+                                                Object.keys(impl.Component).forEach(function (functionName) {
+                                                  var origInstance = instance;
+                                                  instance = Object.create(origInstance);
 
-                                        if (impl.Component) {
-                                          Object.keys(impl.Component).forEach(function (functionName) {
-                                            var origInstance = instance;
-                                            instance = Object.create(origInstance);
+                                                  if (/^async /.test(impl.Component[functionName].toString())) {
+                                                    instance[functionName] = /*#__PURE__*/(0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee15() {
+                                                      var _args15 = arguments;
+                                                      return _regenerator["default"].wrap(function _callee15$(_context15) {
+                                                        while (1) {
+                                                          switch (_context15.prev = _context15.next) {
+                                                            case 0:
+                                                              return _context15.abrupt("return", impl.Component[functionName].apply(origInstance, _args15));
 
-                                            if (/^async /.test(impl.Component[functionName].toString())) {
-                                              instance[functionName] = function _callee6() {
-                                                var _args13 = arguments;
-                                                return _regenerator["default"].async(function _callee6$(_context13) {
-                                                  while (1) {
-                                                    switch (_context13.prev = _context13.next) {
-                                                      case 0:
-                                                        return _context13.abrupt("return", impl.Component[functionName].apply(origInstance, _args13));
-
-                                                      case 1:
-                                                      case "end":
-                                                        return _context13.stop();
-                                                    }
+                                                            case 1:
+                                                            case "end":
+                                                              return _context15.stop();
+                                                          }
+                                                        }
+                                                      }, _callee15);
+                                                    }));
+                                                  } else {
+                                                    instance[functionName] = function () {
+                                                      return impl.Component[functionName].apply(origInstance, arguments);
+                                                    };
                                                   }
                                                 });
-                                              };
-                                            } else {
-                                              instance[functionName] = function () {
-                                                return impl.Component[functionName].apply(origInstance, arguments);
-                                              };
-                                            }
-                                          });
+                                              }
+
+                                            case 5:
+                                            case "end":
+                                              return _context16.stop();
+                                          }
                                         }
+                                      }, _callee16);
+                                    }));
 
-                                      case 5:
-                                      case "end":
-                                        return _context14.stop();
+                                    return function (_x27) {
+                                      return _ref13.apply(this, arguments);
+                                    };
+                                  }());
+
+                                case 14:
+                                  instances[type][alias] = instance; //console.error("init", type, alias, namespace.baseDir);
+
+                                  pluginInstance.resolvedNamespace = resolvedNamespace;
+                                  pluginInstance.alias = alias;
+
+                                  if (!namespace.options.implementationAdapters) {
+                                    _context19.next = 27;
+                                    break;
+                                  }
+
+                                  adapterId = null;
+                                  Object.keys(mod).forEach(function (_adapterId) {
+                                    if (adapterId) return;
+
+                                    if (namespace.options.implementationAdapters[_adapterId]) {
+                                      adapterId = _adapterId;
                                     }
+                                  });
+
+                                  if (!adapterId) {
+                                    _context19.next = 27;
+                                    break;
                                   }
-                                });
-                              }));
 
-                            case 14:
-                              instances[type][alias] = instance; //console.error("init", type, alias, namespace.baseDir);
+                                  _context19.next = 23;
+                                  return namespace.getImplementationAdapterForId(adapterId);
 
-                              pluginInstance.resolvedNamespace = resolvedNamespace;
-                              pluginInstance.alias = alias;
+                                case 23:
+                                  adapter = _context19.sent;
+                                  _context19.next = 26;
+                                  return adapter.forInstance(namespace, mod[adapterId], {
+                                    pluginInstance: pluginInstance,
+                                    componentInitContext: componentInitContext,
+                                    alias: alias
+                                  });
 
-                              if (!namespace.options.implementationAdapters) {
-                                _context17.next = 27;
-                                break;
-                              }
+                                case 26:
+                                  pluginInstance.impl = _context19.sent;
 
-                              adapterId = null;
-                              Object.keys(mod).forEach(function (_adapterId) {
-                                if (adapterId) return;
-
-                                if (namespace.options.implementationAdapters[_adapterId]) {
-                                  adapterId = _adapterId;
-                                }
-                              });
-
-                              if (!adapterId) {
-                                _context17.next = 27;
-                                break;
-                              }
-
-                              _context17.next = 23;
-                              return _regenerator["default"].awrap(namespace.getImplementationAdapterForId(adapterId));
-
-                            case 23:
-                              adapter = _context17.sent;
-                              _context17.next = 26;
-                              return _regenerator["default"].awrap(adapter.forInstance(namespace, mod[adapterId], {
-                                pluginInstance: pluginInstance,
-                                componentInitContext: componentInitContext,
-                                alias: alias
-                              }));
-
-                            case 26:
-                              pluginInstance.impl = _context17.sent;
-
-                            case 27:
-                              if (pluginInstance.impl) {
-                                _context17.next = 33;
-                                break;
-                              }
-
-                              if (!(typeof mod.inf !== "function")) {
-                                _context17.next = 30;
-                                break;
-                              }
-
-                              throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
-
-                            case 30:
-                              _context17.next = 32;
-                              return _regenerator["default"].awrap(mod.inf(componentInitContext, alias));
-
-                            case 32:
-                              pluginInstance.impl = _context17.sent;
-
-                            case 33:
-                              ["invoke", "interface", "contract"].forEach(function (method) {
-                                if (typeof pluginInstance.impl[method] === "function") {
-                                  pluginInstance[method] = makeMethodWrapper(method === "invoke" ? "invoke" : "factory", method);
-                                }
-                              });
-
-                              if (type === "component" && !pluginInstance.invoke) {
-                                pluginInstance.invoke = makeMethodWrapper("invoke", "invoke");
-                              }
-
-                              pluginInstance.invokeContractAliasMethod = function (method, args) {
-                                var wrapper = makeMethodWrapper("invoke", method);
-                                return wrapper.apply(this, args);
-                              };
-                              /*
-                              pluginInstance.getNamespaceMount = function () {
-                                  if (!this._callerNamespace) {
-                                      return null;
+                                case 27:
+                                  if (pluginInstance.impl) {
+                                    _context19.next = 33;
+                                    break;
                                   }
-                                  return this._callerNamespace.anchorPrefix || null;
+
+                                  if (!(typeof mod.inf !== "function")) {
+                                    _context19.next = 30;
+                                    break;
+                                  }
+
+                                  throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
+
+                                case 30:
+                                  _context19.next = 32;
+                                  return mod.inf(componentInitContext, alias);
+
+                                case 32:
+                                  pluginInstance.impl = _context19.sent;
+
+                                case 33:
+                                  ["invoke", "interface", "contract"].forEach(function (method) {
+                                    if (typeof pluginInstance.impl[method] === "function") {
+                                      pluginInstance[method] = makeMethodWrapper(method === "invoke" ? "invoke" : "factory", method);
+                                    }
+                                  });
+
+                                  if (type === "component" && !pluginInstance.invoke) {
+                                    pluginInstance.invoke = makeMethodWrapper("invoke", "invoke");
+                                  }
+
+                                  pluginInstance.invokeContractAliasMethod = function (method, args) {
+                                    var wrapper = makeMethodWrapper("invoke", method);
+                                    return wrapper.apply(this, args);
+                                  };
+                                  /*
+                                  pluginInstance.getNamespaceMount = function () {
+                                      if (!this._callerNamespace) {
+                                          return null;
+                                      }
+                                      return this._callerNamespace.anchorPrefix || null;
+                                  }
+                                  pluginInstance.getAPI = function (prefix) {
+                                      return self._apis;
+                                  }
+                                  */
+
+
+                                case 36:
+                                  return _context19.abrupt("return", instances[type][alias]);
+
+                                case 37:
+                                case "end":
+                                  return _context19.stop();
                               }
-                              pluginInstance.getAPI = function (prefix) {
-                                  return self._apis;
-                              }
-                              */
+                            }
+                          }, _callee19);
+                        }));
 
+                        return function (_x23, _x24, _x25, _x26) {
+                          return _ref12.apply(this, arguments);
+                        };
+                      }();
 
-                            case 36:
-                              return _context17.abrupt("return", instances[type][alias]);
-
-                            case 37:
-                            case "end":
-                              return _context17.stop();
-                          }
-                        }
-                      });
-                    };
-
-                  case 9:
-                  case "end":
-                    return _context18.stop();
+                    case 9:
+                    case "end":
+                      return _context20.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee20, this);
+            }));
+
+            function init(_x21, _x22) {
+              return _init.apply(this, arguments);
+            }
+
+            return init;
+          }()
         }]);
         return Component;
       }();
@@ -27231,253 +27208,278 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
       exports.LIB = LIB;
 
-      function runCodeblock(namespace, value, vars) {
-        var codeblock, code, RUNBASH, result, run, _code2;
-
-        return _regenerator["default"].async(function runCodeblock$(_context22) {
-          while (1) {
-            switch (_context22.prev = _context22.next) {
-              case 0:
-                vars = vars || {};
-
-                if (!(value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock')) {
-                  _context22.next = 3;
-                  break;
-                }
-
-                throw new Error("'value' is not a codeblock!");
-
-              case 3:
-                codeblock = CODEBLOCK.thawFromJSON(value);
-
-                if (!(codeblock.getFormat() === 'run.bash' || codeblock.getFormat() === 'run.bash.progress' || codeblock.getFormat() === 'run.bash.method')) {
-                  _context22.next = 32;
-                  break;
-                }
-
-                _context22.next = 7;
-                return _regenerator["default"].awrap(Promise.map(codeblock._args, function _callee10(name) {
-                  return _regenerator["default"].async(function _callee10$(_context19) {
-                    while (1) {
-                      switch (_context19.prev = _context19.next) {
-                        case 0:
-                          if (!(typeof vars[name] === 'undefined')) {
-                            _context19.next = 4;
-                            break;
-                          }
-
-                          _context19.next = 3;
-                          return _regenerator["default"].awrap(namespace.getValueForVariablePath([name]));
-
-                        case 3:
-                          vars[name] = _context19.sent;
-
-                        case 4:
-                        case "end":
-                          return _context19.stop();
-                      }
-                    }
-                  });
-                }));
-
-              case 7:
-                codeblock = codeblock.compile(vars);
-                code = codeblock.getCode();
-                RUNBASH = require("runbash");
-                log("Running bash code from codeblock");
-                result = null;
-                _context22.prev = 12;
-                _context22.next = 15;
-                return _regenerator["default"].awrap(RUNBASH(codeblock.getCode(), {
-                  progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.INF_DEBUG || !!process.env.DEBUG,
-                  wait: true
-                }));
-
-              case 15:
-                result = _context22.sent;
-                _context22.next = 21;
-                break;
-
-              case 18:
-                _context22.prev = 18;
-                _context22.t0 = _context22["catch"](12);
-                result = _context22.t0;
-
-              case 21:
-                if (result.stderr) {
-                  process.stderr.write(LIB.COLORS.red(result.stderr.toString())); //log('Discarding stderr:', result.stderr);
-                }
-
-                if (!(codeblock.getFormat() !== 'run.bash.progress')) {
-                  _context22.next = 28;
-                  break;
-                }
-
-                if (!(result.code !== 0)) {
-                  _context22.next = 26;
-                  break;
-                }
-
-                console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
-                throw new Error("Bash codeblock exited with non 0 code of '".concat(result.code, "'!"));
-
-              case 26:
-                _context22.next = 29;
-                break;
-
-              case 28:
-                if (result.code !== 0) {
-                  console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
-                  console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
-                  process.exit(1);
-                }
-
-              case 29:
-                return _context22.abrupt("return", result.stdout);
-
-              case 32:
-                if (!(codeblock.getFormat() === 'run.javascript' || codeblock.getFormat() === 'run.javascript.progress' || codeblock.getFormat() === 'run.javascript.method')) {
-                  _context22.next = 42;
-                  break;
-                }
-
-                run = function run(process) {
-                  var data, origWrite, write, _console, ___VARS, ___run, _data;
-
-                  return _regenerator["default"].async(function run$(_context21) {
-                    while (1) {
-                      switch (_context21.prev = _context21.next) {
-                        case 0:
-                          _context21.prev = 0;
-                          data = null;
-                          origWrite = process.stdout.write;
-
-                          if (codeblock.getFormat() !== 'run.javascript.progress') {
-                            write = function write(chunk) {
-                              if (typeof chunk === 'string') {
-                                chunk = Buffer.from(chunk);
-                              }
-
-                              try {
-                                if (data) {
-                                  data = Buffer.concat([data, chunk]);
-                                } else {
-                                  data = chunk;
-                                }
-                              } catch (err) {
-                                _console.error(err);
-                              }
-                            };
-
-                            process.stdout.write = write;
-                          }
-
-                          _console = CONSOLE;
-                          ___VARS = vars;
-                          Object.keys(___VARS).map(function (name) {
-                            _code2 = ["const ".concat(name, " = ___VARS['").concat(name, "']"), _code2].join('\n');
-                          });
-                          _code2 = ['___run = async function () {', _code2, '}'].join('\n');
-                          ___run = null;
-                          eval(_code2);
-                          _context21.next = 12;
-                          return _regenerator["default"].awrap(___run());
-
-                        case 12:
-                          _data = _context21.sent;
-
-                          if (codeblock.getFormat() !== 'run.javascript.progress') {
-                            process.stdout.write = origWrite;
-                          }
-
-                          log("Done running javascript code from codeblock");
-
-                          if (!(typeof _data !== 'undefined')) {
-                            _context21.next = 20;
-                            break;
-                          }
-
-                          if (data) {
-                            process.stdout.write(data.toString());
-                          }
-
-                          return _context21.abrupt("return", _data);
-
-                        case 20:
-                          return _context21.abrupt("return", data);
-
-                        case 21:
-                          _context21.next = 28;
-                          break;
-
-                        case 23:
-                          _context21.prev = 23;
-                          _context21.t0 = _context21["catch"](0);
-                          console.error(LIB.COLORS.red("Code which contains error >>> " + _code2 + " <<<")); // TODO: Show proper stack trace for anonymous eval functon.
-
-                          console.error(LIB.COLORS.red('[inf][run.javascript] Ended with error: ' + _context21.t0.message));
-                          process.exit(1);
-
-                        case 28:
-                        case "end":
-                          return _context21.stop();
-                      }
-                    }
-                  }, null, null, [[0, 23]]);
-                };
-
-                _context22.next = 36;
-                return _regenerator["default"].awrap(Promise.map(codeblock._args, function _callee11(name) {
-                  return _regenerator["default"].async(function _callee11$(_context20) {
-                    while (1) {
-                      switch (_context20.prev = _context20.next) {
-                        case 0:
-                          if (!(typeof vars[name] === 'undefined')) {
-                            _context20.next = 4;
-                            break;
-                          }
-
-                          _context20.next = 3;
-                          return _regenerator["default"].awrap(namespace.getValueForVariablePath([name]));
-
-                        case 3:
-                          vars[name] = _context20.sent;
-
-                        case 4:
-                        case "end":
-                          return _context20.stop();
-                      }
-                    }
-                  });
-                }));
-
-              case 36:
-                codeblock = codeblock.compile(vars);
-                _code2 = codeblock.getCode();
-                log("Running javascript code from codeblock");
-                return _context22.abrupt("return", run(process));
-
-              case 42:
-                throw new Error("Unsupported codeblock format '".concat(codeblock.getFormat(), "'!"));
-
-              case 43:
-              case "end":
-                return _context22.stop();
-            }
-          }
-        }, null, null, [[12, 18]]);
+      function runCodeblock(_x31, _x32, _x33) {
+        return _runCodeblock.apply(this, arguments);
       }
 
-      var ComponentInitContext =
-      /*#__PURE__*/
-      function (_EventEmitter) {
+      function _runCodeblock() {
+        _runCodeblock = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee62(namespace, value, vars) {
+          var codeblock, code, RUNBASH, result, run, _code2;
+
+          return _regenerator["default"].wrap(function _callee62$(_context62) {
+            while (1) {
+              switch (_context62.prev = _context62.next) {
+                case 0:
+                  vars = vars || {};
+
+                  if (!(value['.@'] !== 'github.com~0ink~codeblock/codeblock:Codeblock')) {
+                    _context62.next = 3;
+                    break;
+                  }
+
+                  throw new Error("'value' is not a codeblock!");
+
+                case 3:
+                  codeblock = CODEBLOCK.thawFromJSON(value);
+
+                  if (!(codeblock.getFormat() === 'run.bash' || codeblock.getFormat() === 'run.bash.progress' || codeblock.getFormat() === 'run.bash.method')) {
+                    _context62.next = 32;
+                    break;
+                  }
+
+                  _context62.next = 7;
+                  return Promise.map(codeblock._args, /*#__PURE__*/function () {
+                    var _ref35 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee59(name) {
+                      return _regenerator["default"].wrap(function _callee59$(_context59) {
+                        while (1) {
+                          switch (_context59.prev = _context59.next) {
+                            case 0:
+                              if (!(typeof vars[name] === 'undefined')) {
+                                _context59.next = 4;
+                                break;
+                              }
+
+                              _context59.next = 3;
+                              return namespace.getValueForVariablePath([name]);
+
+                            case 3:
+                              vars[name] = _context59.sent;
+
+                            case 4:
+                            case "end":
+                              return _context59.stop();
+                          }
+                        }
+                      }, _callee59);
+                    }));
+
+                    return function (_x88) {
+                      return _ref35.apply(this, arguments);
+                    };
+                  }());
+
+                case 7:
+                  codeblock = codeblock.compile(vars);
+                  code = codeblock.getCode();
+                  RUNBASH = require("runbash");
+                  log("Running bash code from codeblock");
+                  result = null;
+                  _context62.prev = 12;
+                  _context62.next = 15;
+                  return RUNBASH(codeblock.getCode(), {
+                    progress: codeblock.getFormat() === 'run.bash.progress' || namespace.options.progress || !!process.env.INF_DEBUG || !!process.env.DEBUG,
+                    wait: true
+                  });
+
+                case 15:
+                  result = _context62.sent;
+                  _context62.next = 21;
+                  break;
+
+                case 18:
+                  _context62.prev = 18;
+                  _context62.t0 = _context62["catch"](12);
+                  result = _context62.t0;
+
+                case 21:
+                  if (result.stderr) {
+                    process.stderr.write(LIB.COLORS.red(result.stderr.toString())); //log('Discarding stderr:', result.stderr);
+                  }
+
+                  if (!(codeblock.getFormat() !== 'run.bash.progress')) {
+                    _context62.next = 28;
+                    break;
+                  }
+
+                  if (!(result.code !== 0)) {
+                    _context62.next = 26;
+                    break;
+                  }
+
+                  console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
+                  throw new Error("Bash codeblock exited with non 0 code of '".concat(result.code, "'!"));
+
+                case 26:
+                  _context62.next = 29;
+                  break;
+
+                case 28:
+                  if (result.code !== 0) {
+                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
+                    console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Ended with exit code: " + result.code));
+                    process.exit(1);
+                  }
+
+                case 29:
+                  return _context62.abrupt("return", result.stdout);
+
+                case 32:
+                  if (!(codeblock.getFormat() === 'run.javascript' || codeblock.getFormat() === 'run.javascript.progress' || codeblock.getFormat() === 'run.javascript.method')) {
+                    _context62.next = 42;
+                    break;
+                  }
+
+                  run = /*#__PURE__*/function () {
+                    var _ref37 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee61(process) {
+                      var data, origWrite, write, _console, ___VARS, ___run, _data;
+
+                      return _regenerator["default"].wrap(function _callee61$(_context61) {
+                        while (1) {
+                          switch (_context61.prev = _context61.next) {
+                            case 0:
+                              _context61.prev = 0;
+                              data = null;
+                              origWrite = process.stdout.write;
+
+                              if (codeblock.getFormat() !== 'run.javascript.progress') {
+                                write = function write(chunk) {
+                                  if (typeof chunk === 'string') {
+                                    chunk = Buffer.from(chunk);
+                                  }
+
+                                  try {
+                                    if (data) {
+                                      data = Buffer.concat([data, chunk]);
+                                    } else {
+                                      data = chunk;
+                                    }
+                                  } catch (err) {
+                                    _console.error(err);
+                                  }
+                                };
+
+                                process.stdout.write = write;
+                              }
+
+                              _console = CONSOLE;
+                              ___VARS = vars;
+                              Object.keys(___VARS).map(function (name) {
+                                _code2 = ["const ".concat(name, " = ___VARS['").concat(name, "']"), _code2].join('\n');
+                              });
+                              _code2 = ['___run = async function () {', _code2, '}'].join('\n');
+                              ___run = null;
+                              eval(_code2);
+                              _context61.next = 12;
+                              return ___run();
+
+                            case 12:
+                              _data = _context61.sent;
+
+                              if (codeblock.getFormat() !== 'run.javascript.progress') {
+                                process.stdout.write = origWrite;
+                              }
+
+                              log("Done running javascript code from codeblock");
+
+                              if (!(typeof _data !== 'undefined')) {
+                                _context61.next = 20;
+                                break;
+                              }
+
+                              if (data) {
+                                process.stdout.write(data.toString());
+                              }
+
+                              return _context61.abrupt("return", _data);
+
+                            case 20:
+                              return _context61.abrupt("return", data);
+
+                            case 21:
+                              _context61.next = 28;
+                              break;
+
+                            case 23:
+                              _context61.prev = 23;
+                              _context61.t0 = _context61["catch"](0);
+                              console.error(LIB.COLORS.red("Code which contains error >>> " + _code2 + " <<<")); // TODO: Show proper stack trace for anonymous eval functon.
+
+                              console.error(LIB.COLORS.red('[inf][run.javascript] Ended with error: ' + _context61.t0.message));
+                              process.exit(1);
+
+                            case 28:
+                            case "end":
+                              return _context61.stop();
+                          }
+                        }
+                      }, _callee61, null, [[0, 23]]);
+                    }));
+
+                    return function run(_x90) {
+                      return _ref37.apply(this, arguments);
+                    };
+                  }();
+
+                  _context62.next = 36;
+                  return Promise.map(codeblock._args, /*#__PURE__*/function () {
+                    var _ref36 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee60(name) {
+                      return _regenerator["default"].wrap(function _callee60$(_context60) {
+                        while (1) {
+                          switch (_context60.prev = _context60.next) {
+                            case 0:
+                              if (!(typeof vars[name] === 'undefined')) {
+                                _context60.next = 4;
+                                break;
+                              }
+
+                              _context60.next = 3;
+                              return namespace.getValueForVariablePath([name]);
+
+                            case 3:
+                              vars[name] = _context60.sent;
+
+                            case 4:
+                            case "end":
+                              return _context60.stop();
+                          }
+                        }
+                      }, _callee60);
+                    }));
+
+                    return function (_x89) {
+                      return _ref36.apply(this, arguments);
+                    };
+                  }());
+
+                case 36:
+                  codeblock = codeblock.compile(vars);
+                  _code2 = codeblock.getCode();
+                  log("Running javascript code from codeblock");
+                  return _context62.abrupt("return", run(process));
+
+                case 42:
+                  throw new Error("Unsupported codeblock format '".concat(codeblock.getFormat(), "'!"));
+
+                case 43:
+                case "end":
+                  return _context62.stop();
+              }
+            }
+          }, _callee62, null, [[12, 18]]);
+        }));
+        return _runCodeblock.apply(this, arguments);
+      }
+
+      var ComponentInitContext = /*#__PURE__*/function (_EventEmitter) {
         (0, _inherits2["default"])(ComponentInitContext, _EventEmitter);
+
+        var _super2 = _createSuper(ComponentInitContext);
 
         function ComponentInitContext(namespace) {
           var _this2;
 
           (0, _classCallCheck2["default"])(this, ComponentInitContext);
-          _this2 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ComponentInitContext).call(this));
+          _this2 = _super2.call(this);
 
           if (!namespace) {
             throw new Error("'namespace' not defined!");
@@ -27498,127 +27500,166 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             }
           });
 
-          self.toPINFBundle = function _callee12(aspectName, options) {
-            var self, memoizedComponents;
-            return _regenerator["default"].async(function _callee12$(_context23) {
-              while (1) {
-                switch (_context23.prev = _context23.next) {
-                  case 0:
-                    options = options || {};
-                    self = this;
-                    memoizedComponents = {}; // --------------------------------------------------
+          self.toPINFBundle = /*#__PURE__*/function () {
+            var _ref17 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee21(aspectName, options) {
+              var self, memoizedComponents;
+              return _regenerator["default"].wrap(function _callee21$(_context21) {
+                while (1) {
+                  switch (_context21.prev = _context21.next) {
+                    case 0:
+                      options = options || {};
+                      self = this;
+                      memoizedComponents = {}; // --------------------------------------------------
 
-                    _context23.t1 = "return new Promise(function (resolve, reject) { require.sandbox(function (require) {\n";
-                    _context23.next = 6;
-                    return _regenerator["default"].awrap(namespace.gatherComponentAspect(aspectName));
+                      _context21.t1 = "return new Promise(function (resolve, reject) { require.sandbox(function (require) {\n";
+                      _context21.next = 6;
+                      return namespace.gatherComponentAspect(aspectName);
 
-                  case 6:
-                    _context23.t2 = function (component) {
-                      return Object.keys(component.aspect).map(function (alias) {
-                        memoizedComponents[component.pathHash + ":" + alias] = true;
-                        return "require.memoize(\"/".concat(component.pathHash, "-").concat(alias).concat(options.ext || '.js', "\", function (require, exports, module) {\n").concat(component.aspect[alias], "\n});");
+                    case 6:
+                      _context21.t2 = _context21.sent.map(function (component) {
+                        return Object.keys(component.aspect).map(function (alias) {
+                          memoizedComponents[component.pathHash + ":" + alias] = true;
+                          return "require.memoize(\"/".concat(component.pathHash, "-").concat(alias).concat(options.ext || '.js', "\", function (require, exports, module) {\n").concat(component.aspect[alias], "\n});");
+                        }).join("\n");
                       }).join("\n");
-                    };
+                      _context21.t0 = _context21.t1.concat.call(_context21.t1, _context21.t2, "\nrequire.memoize(\"/main.js\", function (require, exports, module) {\n    let rtNamespace = {};\n    ");
+                      _context21.next = 10;
+                      return Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
+                        return !!memoizedComponents[namespace.aliases[alias].pathHash + ":" + alias];
+                      }), function (alias) {
+                        return "rtNamespace['".concat(alias, "'] = require('./").concat(namespace.aliases[alias].pathHash, "-").concat(alias).concat(options.ext || '.js', "')");
+                      });
 
-                    _context23.t3 = _context23.sent.map(_context23.t2).join("\n");
-                    _context23.t0 = _context23.t1.concat.call(_context23.t1, _context23.t3, "\nrequire.memoize(\"/main.js\", function (require, exports, module) {\n    let rtNamespace = {};\n    ");
-                    _context23.next = 11;
-                    return _regenerator["default"].awrap(Promise.map(Object.keys(namespace.aliases).filter(function (alias) {
-                      return !!memoizedComponents[namespace.aliases[alias].pathHash + ":" + alias];
-                    }), function (alias) {
-                      return "rtNamespace['".concat(alias, "'] = require('./").concat(namespace.aliases[alias].pathHash, "-").concat(alias).concat(options.ext || '.js', "')");
-                    }));
+                    case 10:
+                      _context21.t3 = _context21.sent.join('\n');
+                      return _context21.abrupt("return", _context21.t0.concat.call(_context21.t0, _context21.t3, "\n    return rtNamespace;\n});\n}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });"));
 
-                  case 11:
-                    _context23.t4 = _context23.sent.join('\n');
-                    return _context23.abrupt("return", _context23.t0.concat.call(_context23.t0, _context23.t4, "\n    return rtNamespace;\n});\n}, function (sandbox) { try { resolve(sandbox.main()); } catch (err) { reject(err); } }, reject); });"));
-
-                  case 13:
-                  case "end":
-                    return _context23.stop();
+                    case 12:
+                    case "end":
+                      return _context21.stop();
+                  }
                 }
-              }
-            }, null, this);
-          };
+              }, _callee21, this);
+            }));
+
+            return function (_x34, _x35) {
+              return _ref17.apply(this, arguments);
+            };
+          }();
 
           self.stopProcessing = function () {
             // TODO: Indicate who called stop.
             namespace.stopProcessing();
           };
 
-          self.run = function _callee13(filepath, options) {
-            var opts, _inf, path, inf;
+          self.run = /*#__PURE__*/function () {
+            var _ref18 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee22(filepath, options) {
+              var opts, _inf, path, inf;
 
-            return _regenerator["default"].async(function _callee13$(_context24) {
-              while (1) {
-                switch (_context24.prev = _context24.next) {
-                  case 0:
-                    opts = LODASH_MERGE({}, namespace.options, options || {});
+              return _regenerator["default"].wrap(function _callee22$(_context22) {
+                while (1) {
+                  switch (_context22.prev = _context22.next) {
+                    case 0:
+                      opts = LODASH_MERGE({}, namespace.options, options || {});
 
-                    if (!/\{/.test(filepath)) {
-                      _context24.next = 4;
-                      break;
-                    }
+                      if (!/\{/.test(filepath)) {
+                        _context22.next = 4;
+                        break;
+                      }
 
-                    _inf = new INF(self.baseDir, null, opts);
-                    return _context24.abrupt("return", _inf.runInstructions(filepath));
+                      _inf = new INF(self.baseDir, null, opts);
+                      return _context22.abrupt("return", _inf.runInstructions(filepath));
 
-                  case 4:
-                    path = PATH.resolve(namespace.baseDir || "", filepath);
-                    inf = new INF(PATH.dirname(path), null, opts);
-                    return _context24.abrupt("return", inf.runInstructionsFile(PATH.basename(path)));
+                    case 4:
+                      path = PATH.resolve(namespace.baseDir || "", filepath);
+                      inf = new INF(PATH.dirname(path), null, opts);
+                      return _context22.abrupt("return", inf.runInstructionsFile(PATH.basename(path)));
 
-                  case 7:
-                  case "end":
-                    return _context24.stop();
+                    case 7:
+                    case "end":
+                      return _context22.stop();
+                  }
                 }
-              }
-            });
-          };
+              }, _callee22);
+            }));
 
-          self.load = function _callee14(filepath) {
-            var baseDir, hash, path;
-            return _regenerator["default"].async(function _callee14$(_context25) {
-              while (1) {
-                switch (_context25.prev = _context25.next) {
-                  case 0:
-                    if (!(filepath instanceof InfNode && filepath.value instanceof CodeblockNode)) {
-                      _context25.next = 7;
-                      break;
-                    }
+            return function (_x36, _x37) {
+              return _ref18.apply(this, arguments);
+            };
+          }();
 
-                    baseDir = filepath.baseDir;
-                    _context25.next = 4;
-                    return _regenerator["default"].awrap(filepath.toInstructions());
+          self.load = /*#__PURE__*/function () {
+            var _ref19 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee23(filepath) {
+              var baseDir, hash, path;
+              return _regenerator["default"].wrap(function _callee23$(_context23) {
+                while (1) {
+                  switch (_context23.prev = _context23.next) {
+                    case 0:
+                      if (!(filepath instanceof InfNode && filepath.value instanceof CodeblockNode)) {
+                        _context23.next = 7;
+                        break;
+                      }
 
-                  case 4:
-                    filepath = _context25.sent;
-                    hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
-                    return _context25.abrupt("return", namespace.inf.runInstructions(filepath, PATH.join(baseDir, "inline-".concat(hash, ".inf.json")), namespace));
+                      baseDir = filepath.baseDir;
+                      _context23.next = 4;
+                      return filepath.toInstructions();
 
-                  case 7:
-                    if (!/\{/.test(filepath)) {
-                      _context25.next = 9;
-                      break;
-                    }
+                    case 4:
+                      filepath = _context23.sent;
+                      hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
+                      return _context23.abrupt("return", namespace.inf.runInstructions(filepath, PATH.join(baseDir, "inline-".concat(hash, ".inf.json")), namespace));
 
-                    return _context25.abrupt("return", namespace.inf.runInstructions(filepath, null, namespace));
+                    case 7:
+                      if (!/\{/.test(filepath)) {
+                        _context23.next = 9;
+                        break;
+                      }
 
-                  case 9:
-                    path = PATH.resolve(namespace.baseDir || "", filepath);
-                    return _context25.abrupt("return", namespace.inf.runInstructionsFile(path, namespace));
+                      return _context23.abrupt("return", namespace.inf.runInstructions(filepath, null, namespace));
 
-                  case 11:
-                  case "end":
-                    return _context25.stop();
+                    case 9:
+                      path = PATH.resolve(namespace.baseDir || "", filepath);
+                      return _context23.abrupt("return", namespace.inf.runInstructionsFile(path, namespace));
+
+                    case 11:
+                    case "end":
+                      return _context23.stop();
+                  }
                 }
-              }
-            });
-          };
+              }, _callee23);
+            }));
+
+            return function (_x38) {
+              return _ref19.apply(this, arguments);
+            };
+          }();
 
           self.wrapValue = function (value) {
             return Node.WrapInstructionNode(namespace, value);
           };
+
+          self.getValueForVariablePath = /*#__PURE__*/function () {
+            var _getValueForVariablePath = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee24(path) {
+              return _regenerator["default"].wrap(function _callee24$(_context24) {
+                while (1) {
+                  switch (_context24.prev = _context24.next) {
+                    case 0:
+                      return _context24.abrupt("return", namespace.getValueForVariablePath(path));
+
+                    case 1:
+                    case "end":
+                      return _context24.stop();
+                  }
+                }
+              }, _callee24);
+            }));
+
+            function getValueForVariablePath(_x39) {
+              return _getValueForVariablePath.apply(this, arguments);
+            }
+
+            return getValueForVariablePath;
+          }();
 
           self.badInvocation = badInvocation;
 
@@ -27626,20 +27667,26 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             return (0, _typeof2["default"])(value) === 'object' && value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock';
           };
 
-          self.runCodeblock = function _callee15(value, vars) {
-            return _regenerator["default"].async(function _callee15$(_context26) {
-              while (1) {
-                switch (_context26.prev = _context26.next) {
-                  case 0:
-                    return _context26.abrupt("return", runCodeblock(namespace, value, vars));
+          self.runCodeblock = /*#__PURE__*/function () {
+            var _ref20 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee25(value, vars) {
+              return _regenerator["default"].wrap(function _callee25$(_context25) {
+                while (1) {
+                  switch (_context25.prev = _context25.next) {
+                    case 0:
+                      return _context25.abrupt("return", runCodeblock(namespace, value, vars));
 
-                  case 1:
-                  case "end":
-                    return _context26.stop();
+                    case 1:
+                    case "end":
+                      return _context25.stop();
+                  }
                 }
-              }
-            });
-          };
+              }, _callee25);
+            }));
+
+            return function (_x40, _x41) {
+              return _ref20.apply(this, arguments);
+            };
+          }();
 
           self.forNode = function (node, nodeNamespace) {
             var context = new ComponentInitContext(nodeNamespace);
@@ -27701,10 +27748,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return ComponentInitContext;
       }(EventEmitter);
 
-      var NamespacePointer =
-      /*#__PURE__*/
-      function (_String) {
+      var NamespacePointer = /*#__PURE__*/function (_String) {
         (0, _inherits2["default"])(NamespacePointer, _String);
+
+        var _super3 = _createSuper(NamespacePointer);
 
         function NamespacePointer(namespace, parentPointer, value) {
           var _this3;
@@ -27776,7 +27823,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
               return "".concat(segment.alias, "|").concat(segment.resolved);
             }
           }).join('|') + suffix;
-          _this3 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(NamespacePointer).call(this, resolvedStr));
+          _this3 = _super3.call(this, resolvedStr);
 
           _this3.hasMultipleSegments = function () {
             return segments.length > 1;
@@ -27807,11 +27854,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
 
         return NamespacePointer;
-      }((0, _wrapNativeSuper2["default"])(String));
+      }( /*#__PURE__*/(0, _wrapNativeSuper2["default"])(String));
 
-      var Namespace =
-      /*#__PURE__*/
-      function () {
+      var Namespace = /*#__PURE__*/function () {
         function Namespace(inf, baseDir, referringNamespace, options) {
           (0, _classCallCheck2["default"])(this, Namespace);
           var self = this;
@@ -27909,836 +27954,935 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         }, {
           key: "findInParentTree",
-          value: function findInParentTree(dir, filepath) {
-            var path, exits, newPath;
-            return _regenerator["default"].async(function findInParentTree$(_context27) {
-              while (1) {
-                switch (_context27.prev = _context27.next) {
-                  case 0:
-                    path = PATH.join(dir, filepath);
-                    _context27.next = 3;
-                    return _regenerator["default"].awrap(FS.existsAsync(path));
-
-                  case 3:
-                    exits = _context27.sent;
-
-                    if (!exits) {
-                      _context27.next = 6;
-                      break;
-                    }
-
-                    return _context27.abrupt("return", path);
-
-                  case 6:
-                    newPath = PATH.dirname(dir);
-
-                    if (!(newPath === dir)) {
-                      _context27.next = 9;
-                      break;
-                    }
-
-                    return _context27.abrupt("return", null);
-
-                  case 9:
-                    return _context27.abrupt("return", this.findInParentTree(newPath, filepath));
-
-                  case 10:
-                  case "end":
-                    return _context27.stop();
-                }
-              }
-            }, null, this);
-          }
-        }, {
-          key: "resolveInfUri",
-          value: function resolveInfUri(uri) {
-            var self, isOptional, resolveUri;
-            return _regenerator["default"].async(function resolveInfUri$(_context29) {
-              while (1) {
-                switch (_context29.prev = _context29.next) {
-                  case 0:
-                    resolveUri = function _ref(uri) {
-                      var filepath, cwdPaths, resolvedPath, vocabulariesPath, parentTreePath, defaultPaths;
-                      return _regenerator["default"].async(function resolveUri$(_context28) {
-                        while (1) {
-                          switch (_context28.prev = _context28.next) {
-                            case 0:
-                              //        uri = self.flipDomainInUri(uri);
-                              filepath = uri + "inf.json"; // 1. Relative paths
-
-                              if (!/^\./.test(uri)) {
-                                _context28.next = 7;
-                                break;
-                              }
-
-                              _context28.next = 4;
-                              return _regenerator["default"].awrap(GLOB.async(filepath, {
-                                cwd: self.baseDir
-                              }));
-
-                            case 4:
-                              cwdPaths = _context28.sent;
-
-                              if (!cwdPaths.length) {
-                                _context28.next = 7;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", cwdPaths.map(function (filepath) {
-                                return PATH.join(self.baseDir, filepath);
-                              }));
-
-                            case 7:
-                              if (!self.lib.js) {
-                                _context28.next = 19;
-                                break;
-                              }
-
-                              _context28.prev = 8;
-                              resolvedPath = self.lib.js.resolve(filepath);
-                              log("resolveInfUri()", "resolvedPath", resolvedPath);
-                              _context28.next = 13;
-                              return _regenerator["default"].awrap(FS.existsAsync(resolvedPath));
-
-                            case 13:
-                              if (!_context28.sent) {
-                                _context28.next = 15;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [resolvedPath]);
-
-                            case 15:
-                              _context28.next = 19;
-                              break;
-
-                            case 17:
-                              _context28.prev = 17;
-                              _context28.t0 = _context28["catch"](8);
-
-                            case 19:
-                              // 2. Explicityly configured
-                              vocabulariesPath = null;
-
-                              if (!self.options.vocabularies) {
-                                _context28.next = 33;
-                                break;
-                              }
-
-                              vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
-                              _context28.next = 24;
-                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                            case 24:
-                              if (!_context28.sent) {
-                                _context28.next = 26;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [vocabulariesPath]);
-
-                            case 26:
-                              vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
-                              _context28.next = 29;
-                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                            case 29:
-                              if (!_context28.sent) {
-                                _context28.next = 31;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [vocabulariesPath]);
-
-                            case 31:
-                              _context28.next = 44;
-                              break;
-
-                            case 33:
-                              if (!process.env.INF_VOCABULARIES) {
-                                _context28.next = 44;
-                                break;
-                              }
-
-                              vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
-                              _context28.next = 37;
-                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                            case 37:
-                              if (!_context28.sent) {
-                                _context28.next = 39;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [vocabulariesPath]);
-
-                            case 39:
-                              vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
-                              _context28.next = 42;
-                              return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                            case 42:
-                              if (!_context28.sent) {
-                                _context28.next = 44;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [vocabulariesPath]);
-
-                            case 44:
-                              _context28.next = 46;
-                              return _regenerator["default"].awrap(self.findInParentTree(self.baseDir, filepath));
-
-                            case 46:
-                              parentTreePath = _context28.sent;
-
-                              if (!parentTreePath) {
-                                _context28.next = 49;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", [parentTreePath]);
-
-                            case 49:
-                              _context28.next = 51;
-                              return _regenerator["default"].awrap(GLOB.async(filepath, {
-                                cwd: PATH.join(__dirname, "vocabularies")
-                              }));
-
-                            case 51:
-                              defaultPaths = _context28.sent;
-
-                              if (!defaultPaths.length) {
-                                _context28.next = 54;
-                                break;
-                              }
-
-                              return _context28.abrupt("return", defaultPaths.map(function (filepath) {
-                                return PATH.join(__dirname, "vocabularies", filepath);
-                              }));
-
-                            case 54:
-                              // 6. Not found
-                              if (!isOptional) {
-                                CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
-                                CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
-                              }
-
-                              throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
-
-                            case 56:
-                            case "end":
-                              return _context28.stop();
-                          }
-                        }
-                      }, null, null, [[8, 17]]);
-                    };
-
-                    self = this;
-
-                    if (!self.options.resolveInfUri) {
-                      _context29.next = 6;
-                      break;
-                    }
-
-                    _context29.next = 5;
-                    return _regenerator["default"].awrap(self.options.resolveInfUri(uri, self));
-
-                  case 5:
-                    uri = _context29.sent;
-
-                  case 6:
-                    if (/(\/|\.|!)$/.test(uri)) {
-                      _context29.next = 9;
-                      break;
-                    }
-
-                    CONSOLE.error("uri", uri);
-                    throw new Error("Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
-
-                  case 9:
-                    isOptional = !!uri.match(/^!/);
-
-                    if (isOptional) {
-                      uri = uri.replace(/^!/, '');
-                    }
-
-                    _context29.prev = 11;
-                    _context29.next = 14;
-                    return _regenerator["default"].awrap(resolveUri(uri));
-
-                  case 14:
-                    uri = _context29.sent;
-                    _context29.next = 23;
-                    break;
-
-                  case 17:
-                    _context29.prev = 17;
-                    _context29.t0 = _context29["catch"](11);
-
-                    if (!isOptional) {
-                      _context29.next = 22;
-                      break;
-                    }
-
-                    log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
-                    return _context29.abrupt("return", null);
-
-                  case 22:
-                    throw _context29.t0;
-
-                  case 23:
-                    return _context29.abrupt("return", uri);
-
-                  case 24:
-                  case "end":
-                    return _context29.stop();
-                }
-              }
-            }, null, this, [[11, 17]]);
-          }
-        }, {
-          key: "resolveComponentUri",
-          value: function resolveComponentUri(uri) {
-            var self, exactPath, filepath, cwdPath, libPath, vocabulariesPath, defaultVocabulariesPath;
-            return _regenerator["default"].async(function resolveComponentUri$(_context30) {
-              while (1) {
-                switch (_context30.prev = _context30.next) {
-                  case 0:
-                    self = this; //        if (/\/$/.test(uri)) {
-                    //            throw new Error("Component uri '" + uri + "' may not end with '/'!");
-                    //        }
-                    //        uri = self.flipDomainInUri(uri);
-
-                    if (!/^\./.test(uri)) {
-                      _context30.next = 10;
-                      break;
-                    }
-
-                    exactPath = PATH.resolve(self.baseDir || "", uri);
-                    _context30.next = 5;
-                    return _regenerator["default"].awrap(FS.existsAsync(exactPath));
-
-                  case 5:
-                    if (!_context30.sent) {
-                      _context30.next = 10;
-                      break;
-                    }
-
-                    _context30.next = 8;
-                    return _regenerator["default"].awrap(FS.statAsync(exactPath));
-
-                  case 8:
-                    if (!_context30.sent.isFile()) {
-                      _context30.next = 10;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", exactPath);
-
-                  case 10:
-                    if (/(\/|\.|!)$/.test(uri)) {
-                      _context30.next = 13;
-                      break;
-                    }
-
-                    CONSOLE.error("uri", uri);
-                    throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
-
-                  case 13:
-                    filepath = uri + "inf.js";
-
-                    if (!/^\./.test(uri)) {
-                      _context30.next = 20;
-                      break;
-                    }
-
-                    cwdPath = PATH.join(self.baseDir, filepath);
-                    _context30.next = 18;
-                    return _regenerator["default"].awrap(FS.existsAsync(cwdPath));
-
-                  case 18:
-                    if (!_context30.sent) {
-                      _context30.next = 20;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", cwdPath);
-
-                  case 20:
-                    _context30.prev = 20;
-                    libPath = self.lib.js.resolve(filepath);
-                    _context30.next = 24;
-                    return _regenerator["default"].awrap(FS.existsAsync(libPath));
-
-                  case 24:
-                    if (!_context30.sent) {
-                      _context30.next = 26;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", libPath);
-
-                  case 26:
-                    _context30.next = 30;
-                    break;
-
-                  case 28:
-                    _context30.prev = 28;
-                    _context30.t0 = _context30["catch"](20);
-
-                  case 30:
-                    if (!self.options.vocabularies) {
-                      _context30.next = 43;
-                      break;
-                    }
-
-                    vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
-                    _context30.next = 34;
-                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                  case 34:
-                    if (!_context30.sent) {
-                      _context30.next = 36;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", vocabulariesPath);
-
-                  case 36:
-                    vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, filepath);
-                    _context30.next = 39;
-                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                  case 39:
-                    if (!_context30.sent) {
-                      _context30.next = 41;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", vocabulariesPath);
-
-                  case 41:
-                    _context30.next = 54;
-                    break;
-
-                  case 43:
-                    if (!process.env.INF_VOCABULARIES) {
-                      _context30.next = 54;
-                      break;
-                    }
-
-                    vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
-                    _context30.next = 47;
-                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                  case 47:
-                    if (!_context30.sent) {
-                      _context30.next = 49;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", vocabulariesPath);
-
-                  case 49:
-                    vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
-                    _context30.next = 52;
-                    return _regenerator["default"].awrap(FS.existsAsync(vocabulariesPath));
-
-                  case 52:
-                    if (!_context30.sent) {
-                      _context30.next = 54;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", vocabulariesPath);
-
-                  case 54:
-                    defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
-                    _context30.next = 57;
-                    return _regenerator["default"].awrap(FS.existsAsync(defaultVocabulariesPath));
-
-                  case 57:
-                    if (!_context30.sent) {
-                      _context30.next = 59;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", defaultVocabulariesPath);
-
-                  case 59:
-                    defaultVocabulariesPath = PATH.join(__dirname, "vocabularies", filepath);
-                    _context30.next = 62;
-                    return _regenerator["default"].awrap(FS.existsAsync(defaultVocabulariesPath));
-
-                  case 62:
-                    if (!_context30.sent) {
-                      _context30.next = 64;
-                      break;
-                    }
-
-                    return _context30.abrupt("return", defaultVocabulariesPath);
-
-                  case 64:
-                    throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
-
-                  case 65:
-                  case "end":
-                    return _context30.stop();
-                }
-              }
-            }, null, this, [[20, 28]]);
-          }
-        }, {
-          key: "getComponentForUri",
-          value: function getComponentForUri(uri, alias) {
-            var self, key, _codeblock, _exports, _component, path, _component2;
-
-            return _regenerator["default"].async(function getComponentForUri$(_context31) {
-              while (1) {
-                switch (_context31.prev = _context31.next) {
-                  case 0:
-                    self = this;
-
-                    if (!((0, _typeof2["default"])(uri) === "object" && uri['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock')) {
-                      _context31.next = 12;
-                      break;
-                    }
-
-                    key = CRYPTO.createHash('sha1').update(JSON.stringify(uri)).digest('hex');
-
-                    if (self.components[key]) {
-                      _context31.next = 11;
-                      break;
-                    }
-
-                    _codeblock = CODEBLOCK.thawFromJSON(uri);
-                    _exports = {};
-
-                    _codeblock.run({
-                      process: process,
-                      exports: _exports
-                    }); // TODO: Get filepath from 'uri._filepath'
-
-
-                    _component = new Component(null);
-                    _context31.next = 10;
-                    return _regenerator["default"].awrap(_component.init(self, {
-                      pathHash: key,
-                      exports: _exports
-                    }));
-
-                  case 10:
-                    self.components[key] = _component;
-
-                  case 11:
-                    return _context31.abrupt("return", self.components[key]);
-
-                  case 12:
-                    _context31.next = 14;
-                    return _regenerator["default"].awrap(self.resolveComponentUri(uri));
-
-                  case 14:
-                    path = _context31.sent;
-
-                    if (self.components[path]) {
-                      _context31.next = 21;
-                      break;
-                    }
-
-                    log("Load component for uri '" + uri + "' from file:", path);
-                    _component2 = new Component(path);
-                    _context31.next = 20;
-                    return _regenerator["default"].awrap(_component2.init(self));
-
-                  case 20:
-                    self.components[path] = _component2;
-
-                  case 21:
-                    return _context31.abrupt("return", self.components[path]);
-
-                  case 22:
-                  case "end":
-                    return _context31.stop();
-                }
-              }
-            }, null, this);
-          }
-        }, {
-          key: "mapComponent",
-          value: function mapComponent(anchor, uri) {
-            var self, alias, component, prefixedAlias, prefixedNamespace;
-            return _regenerator["default"].async(function mapComponent$(_context32) {
-              while (1) {
-                switch (_context32.prev = _context32.next) {
-                  case 0:
-                    self = this;
-                    alias = anchor.alias;
-                    _context32.next = 4;
-                    return _regenerator["default"].awrap(self.getComponentForUri(uri, alias));
-
-                  case 4:
-                    component = _context32.sent;
-
-                    if (!self.aliases[alias]) {
-                      _context32.next = 9;
-                      break;
-                    }
-
-                    if (!(component.path === self.aliases[alias].path)) {
-                      _context32.next = 8;
-                      break;
-                    }
-
-                    return _context32.abrupt("return", self.aliases[alias]);
-
-                  case 8:
-                    throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
-
-                  case 9:
-                    log("Map component for uri '" + uri + "' to alias '" + alias + "'");
-                    _context32.next = 12;
-                    return _regenerator["default"].awrap(component.forAlias('component', alias, self, anchor.namespacePointer));
-
-                  case 12:
-                    self.aliases[alias] = _context32.sent;
-
-                    if (self.anchorPrefix) {
-                      //console.error("anchor", anchor);
-                      // TODO: Map directly into 'self.aliases' as it is inherited anyway or use 'self.forParent.mappedAliases'?
-                      if (anchor.anchorNamespaceAlias) {
-                        prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
-                        prefixedNamespace = self.anchorPrefix.replace(/\/$/, '') + '/' + alias.replace(/^\//, '');
-                        log("Map component for uri '" + uri + "' for parent namespace to alias '" + prefixedAlias + "'");
-                        self.forParent.aliases = self.forParent.aliases || {};
-                        self.forParent.aliases[prefixedAlias] = self.aliases[alias]; //await component.forAlias('component', prefixedNamespace, self);
+          value: function () {
+            var _findInParentTree = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee26(dir, filepath) {
+              var path, exits, newPath;
+              return _regenerator["default"].wrap(function _callee26$(_context26) {
+                while (1) {
+                  switch (_context26.prev = _context26.next) {
+                    case 0:
+                      path = PATH.join(dir, filepath);
+                      _context26.next = 3;
+                      return FS.existsAsync(path);
+
+                    case 3:
+                      exits = _context26.sent;
+
+                      if (!exits) {
+                        _context26.next = 6;
+                        break;
                       }
 
-                      self.forParent.mappedAliases = self.forParent.mappedAliases || {};
-                      self.forParent.mappedAliases[alias] = self.aliases[alias];
-                    }
+                      return _context26.abrupt("return", path);
 
-                    return _context32.abrupt("return", self.aliases[alias]);
+                    case 6:
+                      newPath = PATH.dirname(dir);
 
-                  case 15:
-                  case "end":
-                    return _context32.stop();
+                      if (!(newPath === dir)) {
+                        _context26.next = 9;
+                        break;
+                      }
+
+                      return _context26.abrupt("return", null);
+
+                    case 9:
+                      return _context26.abrupt("return", this.findInParentTree(newPath, filepath));
+
+                    case 10:
+                    case "end":
+                      return _context26.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee26, this);
+            }));
+
+            function findInParentTree(_x42, _x43) {
+              return _findInParentTree.apply(this, arguments);
+            }
+
+            return findInParentTree;
+          }()
+        }, {
+          key: "resolveInfUri",
+          value: function () {
+            var _resolveInfUri = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee28(uri) {
+              var self, isOptional, resolveUri, _resolveUri;
+
+              return _regenerator["default"].wrap(function _callee28$(_context28) {
+                while (1) {
+                  switch (_context28.prev = _context28.next) {
+                    case 0:
+                      _resolveUri = function _resolveUri3() {
+                        _resolveUri = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee27(uri) {
+                          var filepath, cwdPaths, resolvedPath, vocabulariesPath, parentTreePath, defaultPaths;
+                          return _regenerator["default"].wrap(function _callee27$(_context27) {
+                            while (1) {
+                              switch (_context27.prev = _context27.next) {
+                                case 0:
+                                  //        uri = self.flipDomainInUri(uri);
+                                  filepath = uri + "inf.json"; // 1. Relative paths
+
+                                  if (!/^\./.test(uri)) {
+                                    _context27.next = 7;
+                                    break;
+                                  }
+
+                                  _context27.next = 4;
+                                  return GLOB.async(filepath, {
+                                    cwd: self.baseDir
+                                  });
+
+                                case 4:
+                                  cwdPaths = _context27.sent;
+
+                                  if (!cwdPaths.length) {
+                                    _context27.next = 7;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", cwdPaths.map(function (filepath) {
+                                    return PATH.join(self.baseDir, filepath);
+                                  }));
+
+                                case 7:
+                                  if (!self.lib.js) {
+                                    _context27.next = 19;
+                                    break;
+                                  }
+
+                                  _context27.prev = 8;
+                                  resolvedPath = self.lib.js.resolve(filepath);
+                                  log("resolveInfUri()", "resolvedPath", resolvedPath);
+                                  _context27.next = 13;
+                                  return FS.existsAsync(resolvedPath);
+
+                                case 13:
+                                  if (!_context27.sent) {
+                                    _context27.next = 15;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [resolvedPath]);
+
+                                case 15:
+                                  _context27.next = 19;
+                                  break;
+
+                                case 17:
+                                  _context27.prev = 17;
+                                  _context27.t0 = _context27["catch"](8);
+
+                                case 19:
+                                  // 2. Explicityly configured
+                                  vocabulariesPath = null;
+
+                                  if (!self.options.vocabularies) {
+                                    _context27.next = 33;
+                                    break;
+                                  }
+
+                                  vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+                                  _context27.next = 24;
+                                  return FS.existsAsync(vocabulariesPath);
+
+                                case 24:
+                                  if (!_context27.sent) {
+                                    _context27.next = 26;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [vocabulariesPath]);
+
+                                case 26:
+                                  vocabulariesPath = PATH.resolve(self.baseDir, self.options.vocabularies, filepath);
+                                  _context27.next = 29;
+                                  return FS.existsAsync(vocabulariesPath);
+
+                                case 29:
+                                  if (!_context27.sent) {
+                                    _context27.next = 31;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [vocabulariesPath]);
+
+                                case 31:
+                                  _context27.next = 44;
+                                  break;
+
+                                case 33:
+                                  if (!process.env.INF_VOCABULARIES) {
+                                    _context27.next = 44;
+                                    break;
+                                  }
+
+                                  vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+                                  _context27.next = 37;
+                                  return FS.existsAsync(vocabulariesPath);
+
+                                case 37:
+                                  if (!_context27.sent) {
+                                    _context27.next = 39;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [vocabulariesPath]);
+
+                                case 39:
+                                  vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+                                  _context27.next = 42;
+                                  return FS.existsAsync(vocabulariesPath);
+
+                                case 42:
+                                  if (!_context27.sent) {
+                                    _context27.next = 44;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [vocabulariesPath]);
+
+                                case 44:
+                                  _context27.next = 46;
+                                  return self.findInParentTree(self.baseDir, filepath);
+
+                                case 46:
+                                  parentTreePath = _context27.sent;
+
+                                  if (!parentTreePath) {
+                                    _context27.next = 49;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", [parentTreePath]);
+
+                                case 49:
+                                  _context27.next = 51;
+                                  return GLOB.async(filepath, {
+                                    cwd: PATH.join(__dirname, "vocabularies")
+                                  });
+
+                                case 51:
+                                  defaultPaths = _context27.sent;
+
+                                  if (!defaultPaths.length) {
+                                    _context27.next = 54;
+                                    break;
+                                  }
+
+                                  return _context27.abrupt("return", defaultPaths.map(function (filepath) {
+                                    return PATH.join(__dirname, "vocabularies", filepath);
+                                  }));
+
+                                case 54:
+                                  // 6. Not found
+                                  if (!isOptional) {
+                                    CONSOLE.error("self.options.vocabularies", self.options.vocabularies);
+                                    CONSOLE.error("process.env.INF_VOCABULARIES", process.env.INF_VOCABULARIES);
+                                  }
+
+                                  throw new Error("Inf file for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+
+                                case 56:
+                                case "end":
+                                  return _context27.stop();
+                              }
+                            }
+                          }, _callee27, null, [[8, 17]]);
+                        }));
+                        return _resolveUri.apply(this, arguments);
+                      };
+
+                      resolveUri = function _resolveUri2(_x45) {
+                        return _resolveUri.apply(this, arguments);
+                      };
+
+                      self = this;
+
+                      if (!self.options.resolveInfUri) {
+                        _context28.next = 7;
+                        break;
+                      }
+
+                      _context28.next = 6;
+                      return self.options.resolveInfUri(uri, self);
+
+                    case 6:
+                      uri = _context28.sent;
+
+                    case 7:
+                      if (/(\/|\.|!)$/.test(uri)) {
+                        _context28.next = 10;
+                        break;
+                      }
+
+                      CONSOLE.error("uri", uri);
+                      throw new Error("Invalid uri!. 'uri' must end with '/' to reference a package or '.' to reference a file. 'inf.json' is then appended by inf resolver.");
+
+                    case 10:
+                      isOptional = !!uri.match(/^!/);
+
+                      if (isOptional) {
+                        uri = uri.replace(/^!/, '');
+                      }
+
+                      _context28.prev = 12;
+                      _context28.next = 15;
+                      return resolveUri(uri);
+
+                    case 15:
+                      uri = _context28.sent;
+                      _context28.next = 24;
+                      break;
+
+                    case 18:
+                      _context28.prev = 18;
+                      _context28.t0 = _context28["catch"](12);
+
+                      if (!isOptional) {
+                        _context28.next = 23;
+                        break;
+                      }
+
+                      log("resolveInfUri()", "Could not resolve uri but not throwing due to '!' (optional include)");
+                      return _context28.abrupt("return", null);
+
+                    case 23:
+                      throw _context28.t0;
+
+                    case 24:
+                      return _context28.abrupt("return", uri);
+
+                    case 25:
+                    case "end":
+                      return _context28.stop();
+                  }
+                }
+              }, _callee28, this, [[12, 18]]);
+            }));
+
+            function resolveInfUri(_x44) {
+              return _resolveInfUri.apply(this, arguments);
+            }
+
+            return resolveInfUri;
+          }()
+        }, {
+          key: "resolveComponentUri",
+          value: function () {
+            var _resolveComponentUri = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee29(uri) {
+              var self, exactPath, filepath, cwdPath, libPath, vocabulariesPath, defaultVocabulariesPath;
+              return _regenerator["default"].wrap(function _callee29$(_context29) {
+                while (1) {
+                  switch (_context29.prev = _context29.next) {
+                    case 0:
+                      self = this; //        if (/\/$/.test(uri)) {
+                      //            throw new Error("Component uri '" + uri + "' may not end with '/'!");
+                      //        }
+                      //        uri = self.flipDomainInUri(uri);
+
+                      if (!/^\./.test(uri)) {
+                        _context29.next = 10;
+                        break;
+                      }
+
+                      exactPath = PATH.resolve(self.baseDir || "", uri);
+                      _context29.next = 5;
+                      return FS.existsAsync(exactPath);
+
+                    case 5:
+                      if (!_context29.sent) {
+                        _context29.next = 10;
+                        break;
+                      }
+
+                      _context29.next = 8;
+                      return FS.statAsync(exactPath);
+
+                    case 8:
+                      if (!_context29.sent.isFile()) {
+                        _context29.next = 10;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", exactPath);
+
+                    case 10:
+                      if (/(\/|\.|!)$/.test(uri)) {
+                        _context29.next = 13;
+                        break;
+                      }
+
+                      CONSOLE.error("uri", uri);
+                      throw new Error("'uri' must end with '/' to reference a pakage or '.' to reference a file. 'inf.js' is then appended by component resolver.");
+
+                    case 13:
+                      filepath = uri + "inf.js";
+
+                      if (!/^\./.test(uri)) {
+                        _context29.next = 22;
+                        break;
+                      }
+
+                      cwdPath = PATH.join(self.baseDir, filepath);
+                      _context29.next = 18;
+                      return FS.existsAsync(cwdPath);
+
+                    case 18:
+                      if (!_context29.sent) {
+                        _context29.next = 20;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", cwdPath);
+
+                    case 20:
+                      _context29.next = 27;
+                      break;
+
+                    case 22:
+                      if (!/^\//.test(uri)) {
+                        _context29.next = 27;
+                        break;
+                      }
+
+                      _context29.next = 25;
+                      return FS.existsAsync(filepath);
+
+                    case 25:
+                      if (!_context29.sent) {
+                        _context29.next = 27;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", filepath);
+
+                    case 27:
+                      _context29.prev = 27;
+                      libPath = self.lib.js.resolve(filepath);
+                      _context29.next = 31;
+                      return FS.existsAsync(libPath);
+
+                    case 31:
+                      if (!_context29.sent) {
+                        _context29.next = 33;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", libPath);
+
+                    case 33:
+                      _context29.next = 37;
+                      break;
+
+                    case 35:
+                      _context29.prev = 35;
+                      _context29.t0 = _context29["catch"](27);
+
+                    case 37:
+                      if (!self.options.vocabularies) {
+                        _context29.next = 50;
+                        break;
+                      }
+
+                      vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, "it.pinf.inf", filepath);
+                      _context29.next = 41;
+                      return FS.existsAsync(vocabulariesPath);
+
+                    case 41:
+                      if (!_context29.sent) {
+                        _context29.next = 43;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", vocabulariesPath);
+
+                    case 43:
+                      vocabulariesPath = PATH.join(self.baseDir, self.options.vocabularies, filepath);
+                      _context29.next = 46;
+                      return FS.existsAsync(vocabulariesPath);
+
+                    case 46:
+                      if (!_context29.sent) {
+                        _context29.next = 48;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", vocabulariesPath);
+
+                    case 48:
+                      _context29.next = 61;
+                      break;
+
+                    case 50:
+                      if (!process.env.INF_VOCABULARIES) {
+                        _context29.next = 61;
+                        break;
+                      }
+
+                      vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, "it.pinf.inf", filepath);
+                      _context29.next = 54;
+                      return FS.existsAsync(vocabulariesPath);
+
+                    case 54:
+                      if (!_context29.sent) {
+                        _context29.next = 56;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", vocabulariesPath);
+
+                    case 56:
+                      vocabulariesPath = PATH.resolve(process.env.INF_VOCABULARIES, filepath);
+                      _context29.next = 59;
+                      return FS.existsAsync(vocabulariesPath);
+
+                    case 59:
+                      if (!_context29.sent) {
+                        _context29.next = 61;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", vocabulariesPath);
+
+                    case 61:
+                      defaultVocabulariesPath = PATH.join(__dirname, "vocabularies/it.pinf.inf", filepath);
+                      _context29.next = 64;
+                      return FS.existsAsync(defaultVocabulariesPath);
+
+                    case 64:
+                      if (!_context29.sent) {
+                        _context29.next = 66;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", defaultVocabulariesPath);
+
+                    case 66:
+                      defaultVocabulariesPath = PATH.join(__dirname, "vocabularies", filepath);
+                      _context29.next = 69;
+                      return FS.existsAsync(defaultVocabulariesPath);
+
+                    case 69:
+                      if (!_context29.sent) {
+                        _context29.next = 71;
+                        break;
+                      }
+
+                      return _context29.abrupt("return", defaultVocabulariesPath);
+
+                    case 71:
+                      throw new Error("Component for uri '" + uri + "' (filepath: '" + filepath + "') not found from baseDir '" + self.baseDir + "'!");
+
+                    case 72:
+                    case "end":
+                      return _context29.stop();
+                  }
+                }
+              }, _callee29, this, [[27, 35]]);
+            }));
+
+            function resolveComponentUri(_x46) {
+              return _resolveComponentUri.apply(this, arguments);
+            }
+
+            return resolveComponentUri;
+          }()
+        }, {
+          key: "getComponentForUri",
+          value: function () {
+            var _getComponentForUri = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee30(uri, alias) {
+              var self, key, codeblock, _exports, _component, path, _component2;
+
+              return _regenerator["default"].wrap(function _callee30$(_context30) {
+                while (1) {
+                  switch (_context30.prev = _context30.next) {
+                    case 0:
+                      self = this;
+
+                      if (!((0, _typeof2["default"])(uri) === "object" && uri['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock')) {
+                        _context30.next = 12;
+                        break;
+                      }
+
+                      key = CRYPTO.createHash('sha1').update(JSON.stringify(uri)).digest('hex');
+
+                      if (self.components[key]) {
+                        _context30.next = 11;
+                        break;
+                      }
+
+                      codeblock = CODEBLOCK.thawFromJSON(uri);
+                      _exports = {};
+                      codeblock.run({
+                        process: process,
+                        exports: _exports
+                      }); // TODO: Get filepath from 'uri._filepath'
+
+                      _component = new Component(null);
+                      _context30.next = 10;
+                      return _component.init(self, {
+                        pathHash: key,
+                        exports: _exports
+                      });
+
+                    case 10:
+                      self.components[key] = _component;
+
+                    case 11:
+                      return _context30.abrupt("return", self.components[key]);
+
+                    case 12:
+                      _context30.next = 14;
+                      return self.resolveComponentUri(uri);
+
+                    case 14:
+                      path = _context30.sent;
+
+                      if (self.components[path]) {
+                        _context30.next = 21;
+                        break;
+                      }
+
+                      log("Load component for uri '" + uri + "' from file:", path);
+                      _component2 = new Component(path);
+                      _context30.next = 20;
+                      return _component2.init(self);
+
+                    case 20:
+                      self.components[path] = _component2;
+
+                    case 21:
+                      return _context30.abrupt("return", self.components[path]);
+
+                    case 22:
+                    case "end":
+                      return _context30.stop();
+                  }
+                }
+              }, _callee30, this);
+            }));
+
+            function getComponentForUri(_x47, _x48) {
+              return _getComponentForUri.apply(this, arguments);
+            }
+
+            return getComponentForUri;
+          }()
+        }, {
+          key: "mapComponent",
+          value: function () {
+            var _mapComponent = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee31(anchor, uri) {
+              var self, alias, component, prefixedAlias, prefixedNamespace;
+              return _regenerator["default"].wrap(function _callee31$(_context31) {
+                while (1) {
+                  switch (_context31.prev = _context31.next) {
+                    case 0:
+                      self = this;
+                      alias = anchor.alias;
+                      _context31.next = 4;
+                      return self.getComponentForUri(uri, alias);
+
+                    case 4:
+                      component = _context31.sent;
+
+                      if (!self.aliases[alias]) {
+                        _context31.next = 9;
+                        break;
+                      }
+
+                      if (!(component.path === self.aliases[alias].path)) {
+                        _context31.next = 8;
+                        break;
+                      }
+
+                      return _context31.abrupt("return", self.aliases[alias]);
+
+                    case 8:
+                      throw new Error("Cannot map component '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.aliases[alias].path + "'!");
+
+                    case 9:
+                      log("Map component for uri '" + uri + "' to alias '" + alias + "'");
+                      _context31.next = 12;
+                      return component.forAlias('component', alias, self, anchor.namespacePointer);
+
+                    case 12:
+                      self.aliases[alias] = _context31.sent;
+
+                      if (self.anchorPrefix) {
+                        //console.error("anchor", anchor);
+                        // TODO: Map directly into 'self.aliases' as it is inherited anyway or use 'self.forParent.mappedAliases'?
+                        if (anchor.anchorNamespaceAlias) {
+                          prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
+                          prefixedNamespace = self.anchorPrefix.replace(/\/$/, '') + '/' + alias.replace(/^\//, '');
+                          log("Map component for uri '" + uri + "' for parent namespace to alias '" + prefixedAlias + "'");
+                          self.forParent.aliases = self.forParent.aliases || {};
+                          self.forParent.aliases[prefixedAlias] = self.aliases[alias]; //await component.forAlias('component', prefixedNamespace, self);
+                        }
+
+                        self.forParent.mappedAliases = self.forParent.mappedAliases || {};
+                        self.forParent.mappedAliases[alias] = self.aliases[alias];
+                      }
+
+                      return _context31.abrupt("return", self.aliases[alias]);
+
+                    case 15:
+                    case "end":
+                      return _context31.stop();
+                  }
+                }
+              }, _callee31, this);
+            }));
+
+            function mapComponent(_x49, _x50) {
+              return _mapComponent.apply(this, arguments);
+            }
+
+            return mapComponent;
+          }()
         }, {
           key: "mapInterface",
-          value: function mapInterface(alias, uri) {
-            var self, instanceUri, component, interfaceComp;
-            return _regenerator["default"].async(function mapInterface$(_context33) {
-              while (1) {
-                switch (_context33.prev = _context33.next) {
-                  case 0:
-                    self = this;
-                    instanceUri = uri;
-                    component = null;
+          value: function () {
+            var _mapInterface = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee32(alias, uri) {
+              var self, instanceUri, component, interfaceComp;
+              return _regenerator["default"].wrap(function _callee32$(_context32) {
+                while (1) {
+                  switch (_context32.prev = _context32.next) {
+                    case 0:
+                      self = this;
+                      instanceUri = uri;
+                      component = null;
 
-                    if (!self.mappedAliases[uri]) {
-                      _context33.next = 8;
+                      if (!self.mappedAliases[uri]) {
+                        _context32.next = 8;
+                        break;
+                      }
+
+                      component = self.mappedAliases[uri][0];
+                      instanceUri = self.mappedAliases[uri][1];
+                      _context32.next = 12;
                       break;
-                    }
 
-                    component = self.mappedAliases[uri][0];
-                    instanceUri = self.mappedAliases[uri][1];
-                    _context33.next = 12;
-                    break;
+                    case 8:
+                      if (/(\/|\.)$/.test(uri)) {
+                        _context32.next = 12;
+                        break;
+                      }
 
-                  case 8:
-                    if (/(\/|\.)$/.test(uri)) {
-                      _context33.next = 12;
-                      break;
-                    }
+                      if (self.aliases[uri]) {
+                        _context32.next = 11;
+                        break;
+                      }
 
-                    if (self.aliases[uri]) {
-                      _context33.next = 11;
-                      break;
-                    }
+                      throw new Error("Cannot find component '" + uri + "' to map to interface alias '" + alias + "' as it does not seem to be already declared!");
 
-                    throw new Error("Cannot find component '" + uri + "' to map to interface alias '" + alias + "' as it does not seem to be already declared!");
+                    case 11:
+                      component = self.aliases[uri];
 
-                  case 11:
-                    component = self.aliases[uri];
+                    case 12:
+                      if (!component) {
+                        _context32.next = 21;
+                        break;
+                      }
 
-                  case 12:
-                    if (!component) {
-                      _context33.next = 21;
-                      break;
-                    }
+                      if (!self.interfaces[alias]) {
+                        _context32.next = 17;
+                        break;
+                      }
 
-                    if (!self.interfaces[alias]) {
-                      _context33.next = 17;
-                      break;
-                    }
+                      if (!(self.interfaces[alias].path === component.path)) {
+                        _context32.next = 16;
+                        break;
+                      }
 
-                    if (!(self.interfaces[alias].path === component.path)) {
-                      _context33.next = 16;
-                      break;
-                    }
+                      return _context32.abrupt("return", self.interfaces[alias]);
 
-                    return _context33.abrupt("return", self.interfaces[alias]);
+                    case 16:
+                      throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
 
-                  case 16:
-                    throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+                    case 17:
+                      log("Map interface for component '" + uri + "' to alias '" + alias + "'");
+                      interfaceComp = Object.create(component.getInstance('component', instanceUri)); // Cause interface to be re-initialized for the new alias.
 
-                  case 17:
-                    log("Map interface for component '" + uri + "' to alias '" + alias + "'");
-                    interfaceComp = Object.create(component.getInstance('component', instanceUri)); // Cause interface to be re-initialized for the new alias.
+                      interfaceComp.$instance = null;
+                      return _context32.abrupt("return", self.interfaces[alias] = interfaceComp);
 
-                    interfaceComp.$instance = null;
-                    return _context33.abrupt("return", self.interfaces[alias] = interfaceComp);
+                    case 21:
+                      _context32.next = 23;
+                      return self.getComponentForUri(uri);
 
-                  case 21:
-                    _context33.next = 23;
-                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
+                    case 23:
+                      component = _context32.sent;
 
-                  case 23:
-                    component = _context33.sent;
+                      if (!self.interfaces[alias]) {
+                        _context32.next = 28;
+                        break;
+                      }
 
-                    if (!self.interfaces[alias]) {
-                      _context33.next = 28;
-                      break;
-                    }
+                      if (!(self.interfaces[alias].path === component.path)) {
+                        _context32.next = 27;
+                        break;
+                      }
 
-                    if (!(self.interfaces[alias].path === component.path)) {
-                      _context33.next = 27;
-                      break;
-                    }
+                      return _context32.abrupt("return", self.interfaces[alias]);
 
-                    return _context33.abrupt("return", self.interfaces[alias]);
+                    case 27:
+                      throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
 
-                  case 27:
-                    throw new Error("Cannot map interface '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.interfaces[alias].path + "'!");
+                    case 28:
+                      log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+                      _context32.next = 31;
+                      return component.forAlias('interface', alias, self);
 
-                  case 28:
-                    log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
-                    _context33.next = 31;
-                    return _regenerator["default"].awrap(component.forAlias('interface', alias, self));
+                    case 31:
+                      return _context32.abrupt("return", self.interfaces[alias] = _context32.sent);
 
-                  case 31:
-                    return _context33.abrupt("return", self.interfaces[alias] = _context33.sent);
-
-                  case 32:
-                  case "end":
-                    return _context33.stop();
+                    case 32:
+                    case "end":
+                      return _context32.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee32, this);
+            }));
+
+            function mapInterface(_x51, _x52) {
+              return _mapInterface.apply(this, arguments);
+            }
+
+            return mapInterface;
+          }()
         }, {
           key: "mapContract",
-          value: function mapContract(anchor, uri) {
-            var self, alias, component;
-            return _regenerator["default"].async(function mapContract$(_context34) {
-              while (1) {
-                switch (_context34.prev = _context34.next) {
-                  case 0:
-                    self = this;
-                    alias = anchor.alias;
-                    _context34.next = 4;
-                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
+          value: function () {
+            var _mapContract = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee33(anchor, uri) {
+              var self, alias, component;
+              return _regenerator["default"].wrap(function _callee33$(_context33) {
+                while (1) {
+                  switch (_context33.prev = _context33.next) {
+                    case 0:
+                      self = this;
+                      alias = anchor.alias;
+                      _context33.next = 4;
+                      return self.getComponentForUri(uri);
 
-                  case 4:
-                    component = _context34.sent;
+                    case 4:
+                      component = _context33.sent;
 
-                    if (!self.contracts[alias]) {
-                      _context34.next = 7;
-                      break;
-                    }
+                      if (!self.contracts[alias]) {
+                        _context33.next = 7;
+                        break;
+                      }
 
-                    throw new Error("Cannot map contract '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.contracts[alias].path + "'!");
+                      throw new Error("Cannot map contract '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.contracts[alias].path + "'!");
 
-                  case 7:
-                    log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
-                    _context34.next = 10;
-                    return _regenerator["default"].awrap(component.forAlias('contract', alias, self));
+                    case 7:
+                      log("Map interface for uri '" + uri + "' to alias '" + alias + "'");
+                      _context33.next = 10;
+                      return component.forAlias('contract', alias, self);
 
-                  case 10:
-                    self.contracts[alias] = _context34.sent;
-                    self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
-                    return _context34.abrupt("return", self.contracts[alias]);
+                    case 10:
+                      self.contracts[alias] = _context33.sent;
+                      self.contracts[alias].namespacePrefix = anchor.namespacePrefix;
+                      return _context33.abrupt("return", self.contracts[alias]);
 
-                  case 13:
-                  case "end":
-                    return _context34.stop();
+                    case 13:
+                    case "end":
+                      return _context33.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee33, this);
+            }));
+
+            function mapContract(_x53, _x54) {
+              return _mapContract.apply(this, arguments);
+            }
+
+            return mapContract;
+          }()
         }, {
           key: "mapPlugin",
-          value: function mapPlugin(match, uri) {
-            var self, component;
-            return _regenerator["default"].async(function mapPlugin$(_context35) {
-              while (1) {
-                switch (_context35.prev = _context35.next) {
-                  case 0:
-                    self = this;
-                    _context35.next = 3;
-                    return _regenerator["default"].awrap(self.getComponentForUri(uri));
+          value: function () {
+            var _mapPlugin = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee34(match, uri) {
+              var self, component;
+              return _regenerator["default"].wrap(function _callee34$(_context34) {
+                while (1) {
+                  switch (_context34.prev = _context34.next) {
+                    case 0:
+                      self = this;
+                      _context34.next = 3;
+                      return self.getComponentForUri(uri);
 
-                  case 3:
-                    component = _context35.sent;
-                    log("Map plugin for uri '" + uri + "' to match '" + match + "'");
-                    _context35.t0 = self.plugins;
-                    _context35.t1 = match;
-                    _context35.t2 = new RegExp(match);
-                    _context35.next = 10;
-                    return _regenerator["default"].awrap(component.forAlias('plugin', match, self));
+                    case 3:
+                      component = _context34.sent;
+                      log("Map plugin for uri '" + uri + "' to match '" + match + "'");
+                      _context34.t0 = self.plugins;
+                      _context34.t1 = match;
+                      _context34.t2 = new RegExp(match);
+                      _context34.next = 10;
+                      return component.forAlias('plugin', match, self);
 
-                  case 10:
-                    _context35.t3 = _context35.sent;
-                    _context35.t4 = {
-                      match: _context35.t1,
-                      re: _context35.t2,
-                      component: _context35.t3
-                    };
+                    case 10:
+                      _context34.t3 = _context34.sent;
+                      _context34.t4 = {
+                        match: _context34.t1,
+                        re: _context34.t2,
+                        component: _context34.t3
+                      };
 
-                    _context35.t0.push.call(_context35.t0, _context35.t4);
+                      _context34.t0.push.call(_context34.t0, _context34.t4);
 
-                    return _context35.abrupt("return", component);
+                      return _context34.abrupt("return", component);
 
-                  case 14:
-                  case "end":
-                    return _context35.stop();
+                    case 14:
+                    case "end":
+                      return _context34.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee34, this);
+            }));
+
+            function mapPlugin(_x55, _x56) {
+              return _mapPlugin.apply(this, arguments);
+            }
+
+            return mapPlugin;
+          }()
         }, {
           key: "mapVariables",
-          value: function mapVariables(alias, value) {
-            var self;
-            return _regenerator["default"].async(function mapVariables$(_context36) {
-              while (1) {
-                switch (_context36.prev = _context36.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _mapVariables = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee35(alias, value) {
+              var self;
+              return _regenerator["default"].wrap(function _callee35$(_context35) {
+                while (1) {
+                  switch (_context35.prev = _context35.next) {
+                    case 0:
+                      self = this;
 
-                    if (!self.variables[alias]) {
-                      _context36.next = 3;
-                      break;
-                    }
+                      if (!self.variables[alias]) {
+                        _context35.next = 3;
+                        break;
+                      }
 
-                    throw new Error("Cannot map variables '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.variables[alias].path + "'!");
+                      throw new Error("Cannot map variables '" + component.path + "' to alias '" + alias + "' as alias is already mapped to '" + self.variables[alias].path + "'!");
 
-                  case 3:
-                    log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
-                    self.variables[alias] = value;
-                    return _context36.abrupt("return", value);
+                    case 3:
+                      log("Map variables for pointer '" + value.value + "' to alias '" + alias + "'");
+                      self.variables[alias] = value;
+                      return _context35.abrupt("return", value);
 
-                  case 6:
-                  case "end":
-                    return _context36.stop();
+                    case 6:
+                    case "end":
+                      return _context35.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee35, this);
+            }));
+
+            function mapVariables(_x57, _x58) {
+              return _mapVariables.apply(this, arguments);
+            }
+
+            return mapVariables;
+          }()
         }, {
           key: "getPluginsForMatch",
           value: function getPluginsForMatch(match) {
@@ -28847,138 +28991,151 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         }, {
           key: "getValueForVariablePath",
-          value: function getValueForVariablePath(path) {
-            var parts;
-            return _regenerator["default"].async(function getValueForVariablePath$(_context37) {
-              while (1) {
-                switch (_context37.prev = _context37.next) {
-                  case 0:
-                    parts = LODASH_TO_PATH(path);
+          value: function () {
+            var _getValueForVariablePath2 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee36(path) {
+              var parts;
+              return _regenerator["default"].wrap(function _callee36$(_context36) {
+                while (1) {
+                  switch (_context36.prev = _context36.next) {
+                    case 0:
+                      parts = LODASH_TO_PATH(path);
 
-                    if (this.variables[parts[0]]) {
-                      _context37.next = 4;
-                      break;
-                    }
+                      if (this.variables[parts[0]]) {
+                        _context36.next = 4;
+                        break;
+                      }
 
-                    console.error("this.variables", this.variables);
-                    throw new Error("Variables for alias '".concat(parts[0], "' not mapped! Needed for resolving '").concat(path, "'."));
+                      console.error("this.variables", this.variables);
+                      throw new Error("Variables for alias '".concat(parts[0], "' not mapped! Needed for resolving '").concat(path, "'."));
 
-                  case 4:
-                    if (this.variables[parts[0]].$instance) {
-                      _context37.next = 13;
-                      break;
-                    }
+                    case 4:
+                      if (this.variables[parts[0]].$instance) {
+                        _context36.next = 10;
+                        break;
+                      }
 
-                    _context37.t0 = _regenerator["default"];
-                    _context37.next = 8;
-                    return _regenerator["default"].awrap(this.variables[parts[0]]);
+                      _context36.next = 7;
+                      return this.variables[parts[0]];
 
-                  case 8:
-                    _context37.t1 = {
-                      // TODO: Provide full calling context?
-                      value: parts
-                    };
-                    _context37.t2 = _context37.sent.value(_context37.t1);
-                    _context37.next = 12;
-                    return _context37.t0.awrap.call(_context37.t0, _context37.t2);
+                    case 7:
+                      _context36.next = 9;
+                      return _context36.sent.value({
+                        // TODO: Provide full calling context?
+                        value: parts
+                      });
 
-                  case 12:
-                    this.variables[parts[0]].$instance = _context37.sent.value;
+                    case 9:
+                      this.variables[parts[0]].$instance = _context36.sent.value;
 
-                  case 13:
-                    return _context37.abrupt("return", this.variables[parts[0]].$instance(parts.slice(1)));
+                    case 10:
+                      return _context36.abrupt("return", this.variables[parts[0]].$instance(parts.slice(1)));
 
-                  case 14:
-                  case "end":
-                    return _context37.stop();
+                    case 11:
+                    case "end":
+                      return _context36.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee36, this);
+            }));
+
+            function getValueForVariablePath(_x59) {
+              return _getValueForVariablePath2.apply(this, arguments);
+            }
+
+            return getValueForVariablePath;
+          }()
         }, {
           key: "replaceVariablesInString",
-          value: function replaceVariablesInString(value) {
-            var self, re, m, vars, replaceVariable, done;
-            return _regenerator["default"].async(function replaceVariablesInString$(_context39) {
-              while (1) {
-                switch (_context39.prev = _context39.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _replaceVariablesInString = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee38(value) {
+              var self, re, m, vars, replaceVariable, done;
+              return _regenerator["default"].wrap(function _callee38$(_context38) {
+                while (1) {
+                  switch (_context38.prev = _context38.next) {
+                    case 0:
+                      self = this;
 
-                    if (!(typeof value === "string" && /\$\{([^\}]+)\}/.test(value))) {
-                      _context39.next = 10;
-                      break;
-                    }
-
-                    replaceVariable = function replaceVariable(m) {
-                      if (m[1] === '\\') {
-                        // This variable is escaped so we do not replace it.
-                        vars[m[0]] = '${' + m[2] + '}';
-                      } else if (/^__(.+)__$/.test(m[2])) {
-                        vars[m[0]] = self.getSelfVariable(m[2]);
-                      } else if (/^@\s*.+$/.test(m[2])) {
-                        var key = m[2].replace(/^@\s*/, '');
-
-                        if (typeof self.mappedNamespaceAliases[key] === "undefined") {
-                          throw new Error("Value for namespace prefix '".concat(key, "' came back as undefined!"));
-                        }
-
-                        vars[m[0]] = self.mappedNamespaceAliases[key];
-                      } else {
-                        done = done.then(function _callee16() {
-                          return _regenerator["default"].async(function _callee16$(_context38) {
-                            while (1) {
-                              switch (_context38.prev = _context38.next) {
-                                case 0:
-                                  _context38.next = 2;
-                                  return _regenerator["default"].awrap(self.getValueForVariablePath(m[2]));
-
-                                case 2:
-                                  vars[m[0]] = _context38.sent;
-
-                                  if (!(typeof vars[m[0]] === "undefined")) {
-                                    _context38.next = 5;
-                                    break;
-                                  }
-
-                                  throw new Error("Value for variable '".concat(m[2], "' came back as undefined!"));
-
-                                case 5:
-                                case "end":
-                                  return _context38.stop();
-                              }
-                            }
-                          });
-                        });
+                      if (!(typeof value === "string" && /\$\{([^\}]+)\}/.test(value))) {
+                        _context38.next = 10;
+                        break;
                       }
-                    };
 
-                    done = Promise.resolve();
-                    vars = {};
-                    re = /(\\)?\$\{([^\}]+)\}/g;
+                      replaceVariable = function replaceVariable(m) {
+                        if (m[1] === '\\') {
+                          // This variable is escaped so we do not replace it.
+                          vars[m[0]] = '${' + m[2] + '}';
+                        } else if (/^__(.+)__$/.test(m[2])) {
+                          vars[m[0]] = self.getSelfVariable(m[2]);
+                        } else if (/^@\s*.+$/.test(m[2])) {
+                          var key = m[2].replace(/^@\s*/, '');
 
-                    while (m = re.exec(value)) {
-                      replaceVariable(m);
-                    }
+                          if (typeof self.mappedNamespaceAliases[key] === "undefined") {
+                            throw new Error("Value for namespace prefix '".concat(key, "' came back as undefined!"));
+                          }
 
-                    _context39.next = 9;
-                    return _regenerator["default"].awrap(done);
+                          vars[m[0]] = self.mappedNamespaceAliases[key];
+                        } else {
+                          done = done.then( /*#__PURE__*/(0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee37() {
+                            return _regenerator["default"].wrap(function _callee37$(_context37) {
+                              while (1) {
+                                switch (_context37.prev = _context37.next) {
+                                  case 0:
+                                    _context37.next = 2;
+                                    return self.getValueForVariablePath(m[2]);
 
-                  case 9:
-                    Object.keys(vars).forEach(function (key) {
-                      value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
-                    });
+                                  case 2:
+                                    vars[m[0]] = _context37.sent;
 
-                  case 10:
-                    return _context39.abrupt("return", value);
+                                    if (!(typeof vars[m[0]] === "undefined")) {
+                                      _context37.next = 5;
+                                      break;
+                                    }
 
-                  case 11:
-                  case "end":
-                    return _context39.stop();
+                                    throw new Error("Value for variable '".concat(m[2], "' came back as undefined!"));
+
+                                  case 5:
+                                  case "end":
+                                    return _context37.stop();
+                                }
+                              }
+                            }, _callee37);
+                          })));
+                        }
+                      };
+
+                      done = Promise.resolve();
+                      vars = {};
+                      re = /(\\)?\$\{([^\}]+)\}/g;
+
+                      while (m = re.exec(value)) {
+                        replaceVariable(m);
+                      }
+
+                      _context38.next = 9;
+                      return done;
+
+                    case 9:
+                      Object.keys(vars).forEach(function (key) {
+                        value = value.replace(new RegExp(ESCAPE_REGEXP(key), "g"), vars[key]);
+                      });
+
+                    case 10:
+                      return _context38.abrupt("return", value);
+
+                    case 11:
+                    case "end":
+                      return _context38.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee38, this);
+            }));
+
+            function replaceVariablesInString(_x60) {
+              return _replaceVariablesInString.apply(this, arguments);
+            }
+
+            return replaceVariablesInString;
+          }()
         }, {
           key: "makeNamespacePointerForString",
           value: function makeNamespacePointerForString(parentPointer, value) {
@@ -28986,231 +29143,263 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           }
         }, {
           key: "getImplementationAdapterForId",
-          value: function getImplementationAdapterForId(adapterId) {
-            var self, adapterPath, adapter;
-            return _regenerator["default"].async(function getImplementationAdapterForId$(_context40) {
-              while (1) {
-                switch (_context40.prev = _context40.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _getImplementationAdapterForId = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee39(adapterId) {
+              var self, adapterPath, adapter;
+              return _regenerator["default"].wrap(function _callee39$(_context39) {
+                while (1) {
+                  switch (_context39.prev = _context39.next) {
+                    case 0:
+                      self = this;
 
-                    if (self.implementationAdapters[adapterId]) {
-                      _context40.next = 5;
-                      break;
-                    }
+                      if (self.implementationAdapters[adapterId]) {
+                        _context39.next = 5;
+                        break;
+                      }
 
-                    if (self.options.implementationAdapters[adapterId]) {
-                      _context40.next = 4;
-                      break;
-                    }
+                      if (self.options.implementationAdapters[adapterId]) {
+                        _context39.next = 4;
+                        break;
+                      }
 
-                    return _context40.abrupt("return", null);
+                      return _context39.abrupt("return", null);
 
-                  case 4:
-                    if (typeof self.options.implementationAdapters[adapterId] === 'string') {
-                      adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
-                      adapter = require(adapterPath);
-                      self.implementationAdapters[adapterId] = adapter;
-                    } else {
-                      self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
-                    }
+                    case 4:
+                      if (typeof self.options.implementationAdapters[adapterId] === 'string') {
+                        adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
+                        adapter = require(adapterPath);
+                        self.implementationAdapters[adapterId] = adapter;
+                      } else {
+                        self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
+                      }
 
-                  case 5:
-                    return _context40.abrupt("return", self.implementationAdapters[adapterId]);
+                    case 5:
+                      return _context39.abrupt("return", self.implementationAdapters[adapterId]);
 
-                  case 6:
-                  case "end":
-                    return _context40.stop();
+                    case 6:
+                    case "end":
+                      return _context39.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee39, this);
+            }));
+
+            function getImplementationAdapterForId(_x61) {
+              return _getImplementationAdapterForId.apply(this, arguments);
+            }
+
+            return getImplementationAdapterForId;
+          }()
         }, {
           key: "getComponentForAlias",
-          value: function getComponentForAlias(alias, resolvedNamespace) {
-            var self;
-            return _regenerator["default"].async(function getComponentForAlias$(_context41) {
-              while (1) {
-                switch (_context41.prev = _context41.next) {
-                  case 0:
-                    self = this;
+          value: function () {
+            var _getComponentForAlias = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee40(alias, resolvedNamespace) {
+              var self;
+              return _regenerator["default"].wrap(function _callee40$(_context40) {
+                while (1) {
+                  switch (_context40.prev = _context40.next) {
+                    case 0:
+                      self = this;
 
-                    if (!(alias === '')) {
-                      _context41.next = 7;
-                      break;
-                    }
+                      if (!(alias === '')) {
+                        _context40.next = 5;
+                        break;
+                      }
 
-                    _context41.next = 4;
-                    return _regenerator["default"].awrap(self.getComponentForUri("inf."));
+                      _context40.next = 4;
+                      return self.getComponentForUri("inf.");
 
-                  case 4:
-                    _context41.t0 = self;
-                    _context41.t1 = resolvedNamespace;
-                    return _context41.abrupt("return", _context41.sent.forAlias('component', '', _context41.t0, _context41.t1));
+                    case 4:
+                      return _context40.abrupt("return", _context40.sent.forAlias('component', '', self, resolvedNamespace));
 
-                  case 7:
-                    if (!self.aliases[alias]) {
-                      _context41.next = 9;
-                      break;
-                    }
+                    case 5:
+                      if (!self.aliases[alias]) {
+                        _context40.next = 7;
+                        break;
+                      }
 
-                    return _context41.abrupt("return", self.aliases[alias]);
+                      return _context40.abrupt("return", self.aliases[alias]);
 
-                  case 9:
-                    if (!self.mappedAliases[alias]) {
-                      _context41.next = 11;
-                      break;
-                    }
+                    case 7:
+                      if (!self.mappedAliases[alias]) {
+                        _context40.next = 9;
+                        break;
+                      }
 
-                    return _context41.abrupt("return", self.mappedAliases[alias][0]);
+                      return _context40.abrupt("return", self.mappedAliases[alias][0]);
 
-                  case 11:
-                    console.error("self.aliases", self.aliases);
-                    console.error("self.mappedAliases", self.mappedAliases);
-                    throw new Error("No component mapped to alias '" + alias + "'!");
+                    case 9:
+                      console.error("self.aliases", self.aliases);
+                      console.error("self.mappedAliases", self.mappedAliases);
+                      throw new Error("No component mapped to alias '" + alias + "'!");
 
-                  case 14:
-                  case "end":
-                    return _context41.stop();
+                    case 12:
+                    case "end":
+                      return _context40.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee40, this);
+            }));
+
+            function getComponentForAlias(_x62, _x63) {
+              return _getComponentForAlias.apply(this, arguments);
+            }
+
+            return getComponentForAlias;
+          }()
         }, {
           key: "gatherComponentAspect",
-          value: function gatherComponentAspect(aspectName) {
-            var self;
-            return _regenerator["default"].async(function gatherComponentAspect$(_context44) {
-              while (1) {
-                switch (_context44.prev = _context44.next) {
-                  case 0:
-                    self = this;
-                    return _context44.abrupt("return", Promise.map(Object.keys(self.components), function _callee18(uri) {
-                      var aliases, aspectsCode;
-                      return _regenerator["default"].async(function _callee18$(_context43) {
-                        while (1) {
-                          switch (_context43.prev = _context43.next) {
-                            case 0:
-                              aliases = self.components[uri].getComponentAliases();
-                              aspectsCode = {};
-                              _context43.next = 4;
-                              return _regenerator["default"].awrap(Promise.map(aliases, function _callee17(alias) {
-                                var aspectCode, args, argsByName;
-                                return _regenerator["default"].async(function _callee17$(_context42) {
-                                  while (1) {
-                                    switch (_context42.prev = _context42.next) {
-                                      case 0:
-                                        _context42.next = 2;
-                                        return _regenerator["default"].awrap(self.components[uri].forAlias('component', alias, self));
+          value: function () {
+            var _gatherComponentAspect = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee43(aspectName) {
+              var self;
+              return _regenerator["default"].wrap(function _callee43$(_context43) {
+                while (1) {
+                  switch (_context43.prev = _context43.next) {
+                    case 0:
+                      self = this;
+                      return _context43.abrupt("return", Promise.map(Object.keys(self.components), /*#__PURE__*/function () {
+                        var _ref22 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee42(uri) {
+                          var aliases, aspectsCode;
+                          return _regenerator["default"].wrap(function _callee42$(_context42) {
+                            while (1) {
+                              switch (_context42.prev = _context42.next) {
+                                case 0:
+                                  aliases = self.components[uri].getComponentAliases();
+                                  aspectsCode = {};
+                                  _context42.next = 4;
+                                  return Promise.map(aliases, /*#__PURE__*/function () {
+                                    var _ref23 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee41(alias) {
+                                      var aspectCode, args, argsByName;
+                                      return _regenerator["default"].wrap(function _callee41$(_context41) {
+                                        while (1) {
+                                          switch (_context41.prev = _context41.next) {
+                                            case 0:
+                                              _context41.next = 2;
+                                              return self.components[uri].forAlias('component', alias, self);
 
-                                      case 2:
-                                        _context42.t0 = 'to' + aspectName;
-                                        aspectCode = _context42.sent.impl[_context42.t0];
+                                            case 2:
+                                              _context41.t0 = 'to' + aspectName;
+                                              aspectCode = _context41.sent.impl[_context41.t0];
 
-                                        if (aspectCode) {
-                                          _context42.next = 6;
-                                          break;
-                                        }
+                                              if (aspectCode) {
+                                                _context41.next = 6;
+                                                break;
+                                              }
 
-                                        return _context42.abrupt("return");
+                                              return _context41.abrupt("return");
 
-                                      case 6:
-                                        if (!(typeof aspectCode === "function")) {
-                                          _context42.next = 10;
-                                          break;
-                                        }
+                                            case 6:
+                                              if (!(typeof aspectCode === "function")) {
+                                                _context41.next = 10;
+                                                break;
+                                              }
 
-                                        _context42.next = 9;
-                                        return _regenerator["default"].awrap(aspectCode());
+                                              _context41.next = 9;
+                                              return aspectCode();
 
-                                      case 9:
-                                        aspectCode = _context42.sent;
+                                            case 9:
+                                              aspectCode = _context41.sent;
 
-                                      case 10:
-                                        if (typeof aspectCode === "string") {
-                                          // Purify codeblocks in a string payload which is assumed to be JavaScript so that
-                                          // the payload becomes valid javascript and can be combined with other JS code without
-                                          // further processing by the consuming component.
-                                          aspectCode = CODEBLOCK.purifyCode(aspectCode, {
-                                            freezeToJavaScript: true
-                                          }).toString();
-                                        } else if ((0, _typeof2["default"])(aspectCode) === "object" && aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
-                                          // Compile codeblock with no args so that consuming component does not need to deal
-                                          // with codeblock processing and is able to use payload as-is.
-                                          aspectCode = aspectCode.compile().getCode();
-                                        } else if ((0, _typeof2["default"])(aspectCode) === "object" && typeof aspectCode.codeblock === "function") {
-                                          // Compile codeblock using provided args so that consuming component does not need to deal
-                                          // with codeblock processing and is able to use payload as-is.
-                                          args = aspectCode.args || [];
-                                          aspectCode = aspectCode.codeblock();
-                                          argsByName = {};
+                                            case 10:
+                                              if (typeof aspectCode === "string") {
+                                                // Purify codeblocks in a string payload which is assumed to be JavaScript so that
+                                                // the payload becomes valid javascript and can be combined with other JS code without
+                                                // further processing by the consuming component.
+                                                aspectCode = CODEBLOCK.purifyCode(aspectCode, {
+                                                  freezeToJavaScript: true
+                                                }).toString();
+                                              } else if ((0, _typeof2["default"])(aspectCode) === "object" && aspectCode['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+                                                // Compile codeblock with no args so that consuming component does not need to deal
+                                                // with codeblock processing and is able to use payload as-is.
+                                                aspectCode = aspectCode.compile().getCode();
+                                              } else if ((0, _typeof2["default"])(aspectCode) === "object" && typeof aspectCode.codeblock === "function") {
+                                                // Compile codeblock using provided args so that consuming component does not need to deal
+                                                // with codeblock processing and is able to use payload as-is.
+                                                args = aspectCode.args || [];
+                                                aspectCode = aspectCode.codeblock();
+                                                argsByName = {};
 
-                                          if (Array.isArray(args)) {
-                                            /*
-                                            return {
-                                                args: [ arg1 ],
-                                                codeblock: (javascript (arg1) >>>
-                                                <<<)
-                                            };                    
-                                            */
-                                            aspectCode._args.forEach(function (name, i) {
-                                              argsByName[name] = args[i];
-                                            });
-                                          } else if ((0, _typeof2["default"])(args) === "object") {
-                                            /*
-                                            return {
-                                                args: {
-                                                    arg1: arg1
-                                                },
-                                                codeblock: (javascript (arg1) >>>
-                                                <<<)
-                                            };                    
-                                            */
-                                            argsByName = args;
+                                                if (Array.isArray(args)) {
+                                                  /*
+                                                  return {
+                                                      args: [ arg1 ],
+                                                      codeblock: (javascript (arg1) >>>
+                                                      <<<)
+                                                  };                    
+                                                  */
+                                                  aspectCode._args.forEach(function (name, i) {
+                                                    argsByName[name] = args[i];
+                                                  });
+                                                } else if ((0, _typeof2["default"])(args) === "object") {
+                                                  /*
+                                                  return {
+                                                      args: {
+                                                          arg1: arg1
+                                                      },
+                                                      codeblock: (javascript (arg1) >>>
+                                                      <<<)
+                                                  };                    
+                                                  */
+                                                  argsByName = args;
+                                                }
+
+                                                aspectCode = aspectCode.compile(argsByName).getCode();
+                                              }
+
+                                              aspectsCode[alias] = aspectCode;
+
+                                            case 12:
+                                            case "end":
+                                              return _context41.stop();
                                           }
-
-                                          aspectCode = aspectCode.compile(argsByName).getCode();
                                         }
+                                      }, _callee41);
+                                    }));
 
-                                        aspectsCode[alias] = aspectCode;
+                                    return function (_x66) {
+                                      return _ref23.apply(this, arguments);
+                                    };
+                                  }());
 
-                                      case 12:
-                                      case "end":
-                                        return _context42.stop();
-                                    }
-                                  }
-                                });
-                              }));
+                                case 4:
+                                  return _context42.abrupt("return", {
+                                    uri: uri,
+                                    pathHash: self.components[uri].pathHash,
+                                    aspect: aspectsCode
+                                  });
 
-                            case 4:
-                              return _context43.abrupt("return", {
-                                uri: uri,
-                                pathHash: self.components[uri].pathHash,
-                                aspect: aspectsCode
-                              });
+                                case 5:
+                                case "end":
+                                  return _context42.stop();
+                              }
+                            }
+                          }, _callee42);
+                        }));
 
-                            case 5:
-                            case "end":
-                              return _context43.stop();
-                          }
-                        }
-                      });
-                    }));
+                        return function (_x65) {
+                          return _ref22.apply(this, arguments);
+                        };
+                      }()));
 
-                  case 2:
-                  case "end":
-                    return _context44.stop();
+                    case 2:
+                    case "end":
+                      return _context43.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee43, this);
+            }));
+
+            function gatherComponentAspect(_x64) {
+              return _gatherComponentAspect.apply(this, arguments);
+            }
+
+            return gatherComponentAspect;
+          }()
         }]);
         return Namespace;
       }();
 
-      var Node =
-      /*#__PURE__*/
-      function () {
+      var Node = /*#__PURE__*/function () {
         (0, _createClass2["default"])(Node, null, [{
           key: "WrapInstructionNode",
           value: function WrapInstructionNode(namespace, value) {
@@ -29219,13 +29408,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
             } else if (!value) {
               return new Node(namespace, value);
             } else if (CodeblockNode.handlesValue(value)) {
-              var _codeblock2 = new CodeblockNode(namespace, value);
+              var codeblock = new CodeblockNode(namespace, value);
 
-              if (_codeblock2.getFormat() === 'inf') {
-                return new InfNode(namespace, _codeblock2);
+              if (codeblock.getFormat() === 'inf') {
+                return new InfNode(namespace, codeblock);
               }
 
-              return _codeblock2;
+              return codeblock;
             } else if (InterfaceReferenceNode.handlesValue(value)) {
               log("new InterfaceReferenceNode for value:", value);
               return new InterfaceReferenceNode(namespace, value);
@@ -29325,14 +29514,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         throw new Error("Call to factory '".concat(method, "' did not retrurn a function").concat(component ? " for component '".concat(component.path, "'") : ''));
       }
 
-      var CodeblockNode =
-      /*#__PURE__*/
-      function (_Node) {
+      var CodeblockNode = /*#__PURE__*/function (_Node) {
         (0, _inherits2["default"])(CodeblockNode, _Node);
+
+        var _super4 = _createSuper(CodeblockNode);
 
         function CodeblockNode() {
           (0, _classCallCheck2["default"])(this, CodeblockNode);
-          return (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(CodeblockNode).apply(this, arguments));
+          return _super4.apply(this, arguments);
         }
 
         (0, _createClass2["default"])(CodeblockNode, [{
@@ -29364,40 +29553,53 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return CodeblockNode;
       }(Node);
 
-      var InfNode =
-      /*#__PURE__*/
-      function (_Node2) {
+      exports.CodeblockNode = CodeblockNode;
+
+      var InfNode = /*#__PURE__*/function (_Node2) {
         (0, _inherits2["default"])(InfNode, _Node2);
+
+        var _super5 = _createSuper(InfNode);
 
         function InfNode() {
           (0, _classCallCheck2["default"])(this, InfNode);
-          return (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(InfNode).apply(this, arguments));
+          return _super5.apply(this, arguments);
         }
 
         (0, _createClass2["default"])(InfNode, [{
           key: "toInstructions",
-          value: function toInstructions(vars) {
-            return _regenerator["default"].async(function toInstructions$(_context45) {
-              while (1) {
-                switch (_context45.prev = _context45.next) {
-                  case 0:
-                    return _context45.abrupt("return", this.value.toString(vars));
+          value: function () {
+            var _toInstructions = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee44(vars) {
+              return _regenerator["default"].wrap(function _callee44$(_context44) {
+                while (1) {
+                  switch (_context44.prev = _context44.next) {
+                    case 0:
+                      return _context44.abrupt("return", this.value.toString(vars));
 
-                  case 1:
-                  case "end":
-                    return _context45.stop();
+                    case 1:
+                    case "end":
+                      return _context44.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee44, this);
+            }));
+
+            function toInstructions(_x67) {
+              return _toInstructions.apply(this, arguments);
+            }
+
+            return toInstructions;
+          }()
         }]);
         return InfNode;
       }(Node);
 
-      var ReferenceNode =
-      /*#__PURE__*/
-      function (_Node3) {
+      exports.InfNode = InfNode;
+
+      var ReferenceNode = /*#__PURE__*/function (_Node3) {
         (0, _inherits2["default"])(ReferenceNode, _Node3);
+
+        var _super6 = _createSuper(ReferenceNode);
+
         (0, _createClass2["default"])(ReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
@@ -29411,7 +29613,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           var _this4;
 
           (0, _classCallCheck2["default"])(this, ReferenceNode);
-          _this4 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ReferenceNode).call(this, namespace, value));
+          _this4 = _super6.call(this, namespace, value);
 
           if (value instanceof NamespacePointer) {
             _this4.namespacePointer = value;
@@ -29439,10 +29641,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return ReferenceNode;
       }(Node);
 
-      var InterfaceReferenceNode =
-      /*#__PURE__*/
-      function (_ReferenceNode) {
+      exports.ReferenceNode = ReferenceNode;
+
+      var InterfaceReferenceNode = /*#__PURE__*/function (_ReferenceNode) {
         (0, _inherits2["default"])(InterfaceReferenceNode, _ReferenceNode);
+
+        var _super7 = _createSuper(InterfaceReferenceNode);
+
         (0, _createClass2["default"])(InterfaceReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
@@ -29457,7 +29662,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           var _this5;
 
           (0, _classCallCheck2["default"])(this, InterfaceReferenceNode);
-          _this5 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(InterfaceReferenceNode).call(this, namespace, ''));
+          _this5 = _super7.call(this, namespace, '');
 
           if (value instanceof NamespacePointer) {
             _this5.namespacePointer = value;
@@ -29484,10 +29689,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return InterfaceReferenceNode;
       }(ReferenceNode);
 
-      var ContractReferenceNode =
-      /*#__PURE__*/
-      function (_ReferenceNode2) {
+      exports.InterfaceReferenceNode = InterfaceReferenceNode;
+
+      var ContractReferenceNode = /*#__PURE__*/function (_ReferenceNode2) {
         (0, _inherits2["default"])(ContractReferenceNode, _ReferenceNode2);
+
+        var _super8 = _createSuper(ContractReferenceNode);
+
         (0, _createClass2["default"])(ContractReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
@@ -29501,7 +29709,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           var _this6;
 
           (0, _classCallCheck2["default"])(this, ContractReferenceNode);
-          _this6 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(ContractReferenceNode).call(this, namespace, ''));
+          _this6 = _super8.call(this, namespace, '');
 
           if (value instanceof NamespacePointer) {
             _this6.namespacePointer = value;
@@ -29523,10 +29731,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return ContractReferenceNode;
       }(ReferenceNode);
 
-      var VariablesReferenceNode =
-      /*#__PURE__*/
-      function (_ReferenceNode3) {
+      exports.ContractReferenceNode = ContractReferenceNode;
+
+      var VariablesReferenceNode = /*#__PURE__*/function (_ReferenceNode3) {
         (0, _inherits2["default"])(VariablesReferenceNode, _ReferenceNode3);
+
+        var _super9 = _createSuper(VariablesReferenceNode);
+
         (0, _createClass2["default"])(VariablesReferenceNode, null, [{
           key: "handlesValue",
           value: function handlesValue(value) {
@@ -29540,7 +29751,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
           var _this7;
 
           (0, _classCallCheck2["default"])(this, VariablesReferenceNode);
-          _this7 = (0, _possibleConstructorReturn2["default"])(this, (0, _getPrototypeOf2["default"])(VariablesReferenceNode).call(this, namespace, ''));
+          _this7 = _super9.call(this, namespace, '');
 
           if (value instanceof NamespacePointer) {
             _this7.namespacePointer = value;
@@ -29562,9 +29773,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         return VariablesReferenceNode;
       }(ReferenceNode);
 
-      var Processor =
-      /*#__PURE__*/
-      function () {
+      exports.VariablesReferenceNode = VariablesReferenceNode;
+
+      var Processor = /*#__PURE__*/function () {
         function Processor(namespace) {
           (0, _classCallCheck2["default"])(this, Processor);
           var self = this;
@@ -29573,1542 +29784,1600 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
         (0, _createClass2["default"])(Processor, [{
           key: "closureForValueIfReference",
-          value: function closureForValueIfReference(value, valueProcessor) {
-            var self, wrapValue, wrappedValues, wrappedValuesIndex;
-            return _regenerator["default"].async(function closureForValueIfReference$(_context49) {
-              while (1) {
-                switch (_context49.prev = _context49.next) {
-                  case 0:
-                    wrapValue = function _ref2(_value, topLevel) {
-                      var referenceMatch, referenceValue, referencedComponent, wrappedValue;
-                      return _regenerator["default"].async(function wrapValue$(_context47) {
-                        while (1) {
-                          switch (_context47.prev = _context47.next) {
-                            case 0:
-                              // See if we are referencing an aliased component. If we are we resolve the reference
-                              // and pass it along with the component invocation.
-                              referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
+          value: function () {
+            var _closureForValueIfReference = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee48(value, valueProcessor) {
+              var self, wrapValue, _wrapValue, wrappedValues, wrappedValuesIndex;
 
-                              if (!(referenceMatch && !/_#_/.test(referenceMatch[0]))) {
-                                _context47.next = 18;
-                                break;
-                              }
+              return _regenerator["default"].wrap(function _callee48$(_context48) {
+                while (1) {
+                  switch (_context48.prev = _context48.next) {
+                    case 0:
+                      _wrapValue = function _wrapValue3() {
+                        _wrapValue = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee47(_value, topLevel) {
+                          var referenceMatch, referenceValue, referencedComponent, wrappedValue;
+                          return _regenerator["default"].wrap(function _callee47$(_context47) {
+                            while (1) {
+                              switch (_context47.prev = _context47.next) {
+                                case 0:
+                                  // See if we are referencing an aliased component. If we are we resolve the reference
+                                  // and pass it along with the component invocation.
+                                  referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
 
-                              referenceValue = value;
-
-                              if (!topLevel) {
-                                referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
-                              }
-
-                              referenceValue.propertyPathMount = _value.propertyPathMount || [];
-                              _context47.next = 7;
-                              return _regenerator["default"].awrap(self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace));
-
-                            case 7:
-                              referencedComponent = _context47.sent;
-                              // We create an invocation wrapper to avoid leaking references.
-                              _value = Node.WrapInstructionNode(self.namespace, function _callee19(instruction) {
-                                var wrappedValue;
-                                return _regenerator["default"].async(function _callee19$(_context46) {
-                                  while (1) {
-                                    switch (_context46.prev = _context46.next) {
-                                      case 0:
-                                        wrappedValue = Node.WrapInstructionNode(self.namespace, instruction);
-                                        _context46.next = 3;
-                                        return _regenerator["default"].awrap(referencedComponent.invoke(referenceValue.pointer, wrappedValue));
-
-                                      case 3:
-                                        wrappedValue = _context46.sent;
-                                        wrappedValue = Node.WrapInstructionNode(self.namespace, wrappedValue);
-
-                                        if (!valueProcessor) {
-                                          _context46.next = 9;
-                                          break;
-                                        }
-
-                                        _context46.next = 8;
-                                        return _regenerator["default"].awrap(valueProcessor(referenceValue, wrappedValue));
-
-                                      case 8:
-                                        wrappedValue = _context46.sent;
-
-                                      case 9:
-                                        return _context46.abrupt("return", wrappedValue);
-
-                                      case 10:
-                                      case "end":
-                                        return _context46.stop();
-                                    }
+                                  if (!(referenceMatch && !/_#_/.test(referenceMatch[0]))) {
+                                    _context47.next = 23;
+                                    break;
                                   }
-                                });
-                              });
-                              _value["interface"] = value["interface"] || null;
-                              _value.contract = value.contract || null;
-                              _value.wrapped = true;
-                              _value.alias = referenceValue.alias;
-                              _value.pointer = referenceValue.pointer;
-                              _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
-                              _value.meta = referenceValue.meta;
-                              _context47.next = 26;
-                              break;
 
-                            case 18:
-                              if (!(!referenceMatch && !topLevel)) {
-                                _context47.next = 26;
-                                break;
+                                  referenceValue = value;
+
+                                  if (!topLevel) {
+                                    referenceValue = Node.WrapInstructionNode(self.namespace, referenceMatch[0]);
+                                  }
+
+                                  referenceValue.propertyPathMount = _value.propertyPathMount || [];
+
+                                  if (!referenceValue.pointer) {
+                                    _context47.next = 9;
+                                    break;
+                                  }
+
+                                  _context47.next = 8;
+                                  return self.namespace.replaceVariablesInString(referenceValue.pointer);
+
+                                case 8:
+                                  referenceValue.pointer = _context47.sent;
+
+                                case 9:
+                                  if (referenceValue.alias) {
+                                    referenceValue.alias = self.namespace.makeNamespacePointerForString(null, referenceValue.alias);
+                                  }
+
+                                  _context47.next = 12;
+                                  return self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace);
+
+                                case 12:
+                                  referencedComponent = _context47.sent;
+                                  // We create an invocation wrapper to avoid leaking references.
+                                  _value = Node.WrapInstructionNode(self.namespace, /*#__PURE__*/function () {
+                                    var _ref25 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee46(instruction) {
+                                      var wrappedValue;
+                                      return _regenerator["default"].wrap(function _callee46$(_context46) {
+                                        while (1) {
+                                          switch (_context46.prev = _context46.next) {
+                                            case 0:
+                                              wrappedValue = Node.WrapInstructionNode(self.namespace, instruction);
+                                              _context46.next = 3;
+                                              return referencedComponent.invoke(referenceValue.pointer, wrappedValue);
+
+                                            case 3:
+                                              wrappedValue = _context46.sent;
+                                              wrappedValue = Node.WrapInstructionNode(self.namespace, wrappedValue);
+
+                                              if (!valueProcessor) {
+                                                _context46.next = 9;
+                                                break;
+                                              }
+
+                                              _context46.next = 8;
+                                              return valueProcessor(referenceValue, wrappedValue);
+
+                                            case 8:
+                                              wrappedValue = _context46.sent;
+
+                                            case 9:
+                                              return _context46.abrupt("return", wrappedValue);
+
+                                            case 10:
+                                            case "end":
+                                              return _context46.stop();
+                                          }
+                                        }
+                                      }, _callee46);
+                                    }));
+
+                                    return function (_x73) {
+                                      return _ref25.apply(this, arguments);
+                                    };
+                                  }());
+                                  _value["interface"] = value["interface"] || null;
+                                  _value.contract = value.contract || null;
+                                  _value.wrapped = true;
+                                  _value.alias = referenceValue.alias;
+                                  _value.pointer = referenceValue.pointer;
+                                  _value.jsId = "./" + referencedComponent.pathHash + "-" + _value.alias;
+                                  _value.meta = referenceValue.meta;
+                                  _context47.next = 31;
+                                  break;
+
+                                case 23:
+                                  if (!(!referenceMatch && !topLevel)) {
+                                    _context47.next = 31;
+                                    break;
+                                  }
+
+                                  wrappedValue = Node.WrapInstructionNode(self.namespace, _value.value);
+                                  wrappedValue.propertyPathMount = _value.propertyPathMount || [];
+
+                                  if (!valueProcessor) {
+                                    _context47.next = 30;
+                                    break;
+                                  }
+
+                                  _context47.next = 29;
+                                  return valueProcessor(_value, wrappedValue);
+
+                                case 29:
+                                  wrappedValue = _context47.sent;
+
+                                case 30:
+                                  _value = wrappedValue;
+
+                                case 31:
+                                  return _context47.abrupt("return", _value);
+
+                                case 32:
+                                case "end":
+                                  return _context47.stop();
                               }
+                            }
+                          }, _callee47);
+                        }));
+                        return _wrapValue.apply(this, arguments);
+                      };
 
-                              wrappedValue = Node.WrapInstructionNode(self.namespace, _value.value);
-                              wrappedValue.propertyPathMount = _value.propertyPathMount || [];
+                      wrapValue = function _wrapValue2(_x70, _x71) {
+                        return _wrapValue.apply(this, arguments);
+                      };
 
-                              if (!valueProcessor) {
-                                _context47.next = 25;
-                                break;
-                              }
+                      self = this;
 
-                              _context47.next = 24;
-                              return _regenerator["default"].awrap(valueProcessor(_value, wrappedValue));
+                      if (!(value instanceof InfNode)) {
+                        _context48.next = 7;
+                        break;
+                      }
 
-                            case 24:
-                              wrappedValue = _context47.sent;
+                      return _context48.abrupt("return", value);
 
-                            case 25:
-                              _value = wrappedValue;
+                    case 7:
+                      if (!(value instanceof CodeblockNode)) {
+                        _context48.next = 11;
+                        break;
+                      }
 
-                            case 26:
-                              return _context47.abrupt("return", _value);
+                      return _context48.abrupt("return", value);
 
-                            case 27:
-                            case "end":
-                              return _context47.stop();
-                          }
+                    case 11:
+                      if (!(typeof value.value === "string")) {
+                        _context48.next = 17;
+                        break;
+                      }
+
+                      _context48.next = 14;
+                      return wrapValue(value, true);
+
+                    case 14:
+                      value = _context48.sent;
+                      _context48.next = 24;
+                      break;
+
+                    case 17:
+                      if (!((0, _typeof2["default"])(value.value) === "object")) {
+                        _context48.next = 24;
+                        break;
+                      }
+
+                      wrappedValues = {};
+                      wrappedValuesIndex = 0;
+                      TRAVERSE(value.value).forEach(function (obj) {
+                        if (this.parent && this.parent.node && this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
+                          // A CodeblockNode never contains sub-references.
+                          return;
+                        }
+
+                        if (typeof obj === "string" && (/^([^#]*?)\s*#\s*(.+?)$/.test(obj) || /^:[^:]+:\s*/.test(obj))) {
+                          wrappedValuesIndex++;
+                          wrappedValues[wrappedValuesIndex] = wrapValue({
+                            value: obj,
+                            propertyPathMount: this.path
+                          });
+                          this.update("___WRAPPED_VALUE_".concat(wrappedValuesIndex, "___"), true);
                         }
                       });
-                    };
+                      _context48.next = 23;
+                      return Promise.mapSeries(Object.keys(wrappedValues), /*#__PURE__*/function () {
+                        var _ref24 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee45(key) {
+                          return _regenerator["default"].wrap(function _callee45$(_context45) {
+                            while (1) {
+                              switch (_context45.prev = _context45.next) {
+                                case 0:
+                                  _context45.next = 2;
+                                  return wrappedValues[key];
 
-                    self = this;
+                                case 2:
+                                  wrappedValues[key] = _context45.sent;
 
-                    if (!(value instanceof InfNode)) {
-                      _context49.next = 6;
-                      break;
-                    }
+                                case 3:
+                                case "end":
+                                  return _context45.stop();
+                              }
+                            }
+                          }, _callee45);
+                        }));
 
-                    return _context49.abrupt("return", value);
+                        return function (_x72) {
+                          return _ref24.apply(this, arguments);
+                        };
+                      }());
 
-                  case 6:
-                    if (!(value instanceof CodeblockNode)) {
-                      _context49.next = 10;
-                      break;
-                    }
-
-                    return _context49.abrupt("return", value);
-
-                  case 10:
-                    if (!(typeof value.value === "string")) {
-                      _context49.next = 16;
-                      break;
-                    }
-
-                    _context49.next = 13;
-                    return _regenerator["default"].awrap(wrapValue(value, true));
-
-                  case 13:
-                    value = _context49.sent;
-                    _context49.next = 23;
-                    break;
-
-                  case 16:
-                    if (!((0, _typeof2["default"])(value.value) === "object")) {
-                      _context49.next = 23;
-                      break;
-                    }
-
-                    wrappedValues = {};
-                    wrappedValuesIndex = 0;
-                    TRAVERSE(value.value).forEach(function (obj) {
-                      if (this.parent && this.parent.node && this.parent.node['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock') {
-                        // A CodeblockNode never contains sub-references.
-                        return;
-                      }
-
-                      if (typeof obj === "string" && (/^([^#]*?)\s*#\s*(.+?)$/.test(obj) || /^:[^:]+:\s*/.test(obj))) {
-                        wrappedValuesIndex++;
-                        wrappedValues[wrappedValuesIndex] = wrapValue({
-                          value: obj,
-                          propertyPathMount: this.path
-                        });
-                        this.update("___WRAPPED_VALUE_".concat(wrappedValuesIndex, "___"), true);
-                      }
-                    });
-                    _context49.next = 22;
-                    return _regenerator["default"].awrap(Promise.mapSeries(Object.keys(wrappedValues), function _callee20(key) {
-                      return _regenerator["default"].async(function _callee20$(_context48) {
-                        while (1) {
-                          switch (_context48.prev = _context48.next) {
-                            case 0:
-                              _context48.next = 2;
-                              return _regenerator["default"].awrap(wrappedValues[key]);
-
-                            case 2:
-                              wrappedValues[key] = _context48.sent;
-
-                            case 3:
-                            case "end":
-                              return _context48.stop();
-                          }
+                    case 23:
+                      TRAVERSE(value.value).forEach(function (obj) {
+                        if (typeof obj === "string" && /^___WRAPPED_VALUE_/.test(obj)) {
+                          this.update(wrappedValues[parseInt(obj.replace(/^.+_(\d+)_.+$/, "$1"))], true);
                         }
                       });
-                    }));
 
-                  case 22:
-                    TRAVERSE(value.value).forEach(function (obj) {
-                      if (typeof obj === "string" && /^___WRAPPED_VALUE_/.test(obj)) {
-                        this.update(wrappedValues[parseInt(obj.replace(/^.+_(\d+)_.+$/, "$1"))], true);
-                      }
-                    });
+                    case 24:
+                      return _context48.abrupt("return", value);
 
-                  case 23:
-                    return _context49.abrupt("return", value);
-
-                  case 24:
-                  case "end":
-                    return _context49.stop();
+                    case 25:
+                    case "end":
+                      return _context48.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee48, this);
+            }));
+
+            function closureForValueIfReference(_x68, _x69) {
+              return _closureForValueIfReference.apply(this, arguments);
+            }
+
+            return closureForValueIfReference;
+          }()
         }, {
           key: "processInstruction",
-          value: function processInstruction(anchor, value, meta) {
-            var self, nsPointerAnchor, anchorNamespaceAlias, anchorNamespacePrefix, alias, m, valueAlias, valuePointer, _m, _alias, pointer, valueM, _valueAlias, _valuePointer, uris, key, interfaceComponent, interfaces, _interfaces, getResolvedAlias, _component3, response, apiKey, plugins;
-
-            return _regenerator["default"].async(function processInstruction$(_context59) {
-              while (1) {
-                switch (_context59.prev = _context59.next) {
-                  case 0:
-                    self = this;
-                    log("");
-                    log(" ", anchor, ":", value); // Detect comment
-
-                    if (!(anchor === '//')) {
-                      _context59.next = 5;
-                      break;
-                    }
-
-                    return _context59.abrupt("return");
-
-                  case 5:
-                    nsPointerAnchor = null; // Handle namespaces
-
-                    anchorNamespaceAlias = null;
-                    anchorNamespacePrefix = null;
-
-                    if (!/^[^@]+?\s*@$/.test(anchor)) {
-                      _context59.next = 29;
-                      break;
-                    }
-
-                    // Namespace mapping
-                    alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
-                    _context59.next = 12;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(alias));
-
-                  case 12:
-                    alias = _context59.sent;
-                    _context59.next = 15;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value));
-
-                  case 15:
-                    value = _context59.sent;
-                    m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
-
-                    if (!m) {
-                      _context59.next = 25;
-                      break;
-                    }
-
-                    valueAlias = m[1];
-                    valuePointer = m[2];
-
-                    if (!(typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined")) {
-                      _context59.next = 23;
-                      break;
-                    }
-
-                    console.error("self.namespace", self.namespace);
-                    throw new Error("Namespace alias '".concat(valueAlias, "' is not mapped!"));
-
-                  case 23:
-                    log("Replace namespace alias '".concat(valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[valueAlias]);
-                    value = [self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""), valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, "");
-
-                  case 25:
-                    log("Map namespace alias '".concat(alias, "' to:"), value);
-                    self.namespace.mappedNamespaceAliases[alias] = value;
-
-                    if (self.namespace.anchorPrefix && self.namespace.referringNamespace) {
-                      // const parentAnchorPrefix = PATH.join(
-                      //     self.namespace.anchorPrefix.toString(),
-                      //     alias
-                      // );
-                      //self.namespace.referringNamespace.mappedNamespaceAliases[parentAnchorPrefix] = value;
-                      self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
-                      self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
-                        if (anchorPrefix) {
-                          var parentAnchorPrefix = PATH.join(anchorPrefix.toString(), alias);
-                          return [parentAnchorPrefix, value];
-                        }
-
-                        return [alias, value];
-                      }); //console.error("ANCHOR PREFIX", parentAnchorPrefix,  value);                
-                    }
-
-                    return _context59.abrupt("return");
-
-                  case 29:
-                    if (!/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
-                      _context59.next = 40;
-                      break;
-                    }
-
-                    // Namespace usage for contracts
-                    _m = anchor.match(/^.*?<\s*([^@]+?)\s*@\s*([\S]+)\s*>.*?$/);
-                    _alias = _m[1];
-                    pointer = _m[2];
-
-                    if (!(typeof self.namespace.mappedNamespaceAliases[_alias] === "undefined")) {
-                      _context59.next = 36;
-                      break;
-                    }
-
-                    console.error("self.namespace", self.namespace);
-                    throw new Error("Namespace alias '".concat(_alias, "' is not mapped!"));
-
-                  case 36:
-                    log("Replace namespace alias '".concat(_alias, "' with:"), self.namespace.mappedNamespaceAliases[_alias]);
-                    anchorNamespaceAlias = _alias;
-                    anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, "");
-                    anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, "$1".concat([anchorNamespacePrefix, pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$2"));
-
-                  case 40:
-                    if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
-                      _context59.next = 49;
-                      break;
-                    }
-
-                    _context59.next = 43;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor));
-
-                  case 43:
-                    anchor = _context59.sent;
-                    anchor = self.namespace.makeNamespacePointerForString(null, anchor); // TODO: just keep and use 'anchor' NamespacePointer' object instead of these extra vars.
-
-                    anchorNamespaceAlias = anchor.getFirstSegment().alias;
-                    anchorNamespacePrefix = anchor.getFirstSegment().resolved; //.replace(/\/$/, "");
-
-                    log("Replace namespace alias '".concat(anchorNamespaceAlias, "' with:"), anchorNamespacePrefix);
-                    nsPointerAnchor = anchor;
-
-                  case 49:
-                    if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
-                      _context59.next = 61;
-                      break;
-                    }
-
-                    // Namespace usage for value
-                    valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
-                    _valueAlias = valueM[1];
-                    _context59.next = 54;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(_valueAlias));
-
-                  case 54:
-                    _valueAlias = _context59.sent;
-                    _valuePointer = valueM[2];
-
-                    if (!(typeof self.namespace.mappedNamespaceAliases[_valueAlias] === "undefined")) {
-                      _context59.next = 59;
-                      break;
-                    }
-
-                    console.error("self.namespace", self.namespace);
-                    throw new Error("Namespace alias '".concat(_valueAlias, "' is not mapped!"));
-
-                  case 59:
-                    log("Replace namespace alias '".concat(_valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[_valueAlias]);
-                    value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_valueAlias].replace(/\/$/, ""), _valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
-
-                  case 61:
-                    meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1]; // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
-
-                    anchor = Node.WrapInstructionNode(self.namespace, anchor);
-                    anchor.meta = meta;
-                    anchor.value = anchor.value.replace(/\s*\+([^\+]+)$/, '');
-                    anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
-                    value = Node.WrapInstructionNode(self.namespace, value);
-                    value.meta = meta;
-
-                    if (anchorNamespacePrefix) {
-                      anchor.anchorNamespaceAlias = anchorNamespaceAlias;
-                      anchor.namespacePrefix = anchorNamespacePrefix; //            value.anchorNamespacePrefix = anchor.namespacePrefix;
-                    }
-
-                    if (!(!anchor instanceof ReferenceNode)) {
-                      _context59.next = 72;
-                      break;
-                    }
-
-                    CONSOLE.error("anchor", anchor);
-                    throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
-
-                  case 72:
-                    log("anchor.type:", anchor.type); // Run various codeblocks if applicable.
-
-                    if (!(value instanceof CodeblockNode)) {
-                      _context59.next = 96;
-                      break;
-                    }
-
-                    if (!(value.getFormat() === 'run.bash')) {
-                      _context59.next = 80;
-                      break;
-                    }
-
-                    _context59.next = 77;
-                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
-
-                  case 77:
-                    value.value = _context59.sent;
-                    _context59.next = 96;
-                    break;
-
-                  case 80:
-                    if (!(value.getFormat() === 'run.bash.progress')) {
-                      _context59.next = 86;
-                      break;
-                    }
-
-                    _context59.next = 83;
-                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
-
-                  case 83:
-                    value.value = _context59.sent;
-                    _context59.next = 96;
-                    break;
-
-                  case 86:
-                    if (!(value.getFormat() === 'run.javascript')) {
-                      _context59.next = 92;
-                      break;
-                    }
-
-                    _context59.next = 89;
-                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
-
-                  case 89:
-                    value.value = _context59.sent;
-                    _context59.next = 96;
-                    break;
-
-                  case 92:
-                    if (!(value.getFormat() === 'run.javascript.progress')) {
-                      _context59.next = 96;
-                      break;
-                    }
-
-                    _context59.next = 95;
-                    return _regenerator["default"].awrap(runCodeblock(self.namespace, value.value));
-
-                  case 95:
-                    value.value = _context59.sent;
-
-                  case 96:
-                    if (!(anchor.value === "#")) {
-                      _context59.next = 103;
-                      break;
-                    }
-
-                    uris = [];
-
-                    if (typeof value.value === "string") {
-                      uris = [{
-                        reference: value.value
-                      }];
-                    } else if (Array.isArray(value.value)) {
-                      uris = value.value.map(function (reference) {
-                        return {
-                          reference: reference
-                        };
-                      });
-                    } else if ((0, _typeof2["default"])(value.value) === "object") {
-                      uris = Object.keys(value.value).map(function (alias) {
-                        return {
-                          alias: alias,
-                          reference: value.value[alias]
-                        };
-                      });
-                    }
-
-                    _context59.next = 101;
-                    return _regenerator["default"].awrap(Promise.mapSeries(uris, function _callee22(uri) {
-                      var alias, reference, paths;
-                      return _regenerator["default"].async(function _callee22$(_context51) {
-                        while (1) {
-                          switch (_context51.prev = _context51.next) {
-                            case 0:
-                              alias = uri.alias, reference = uri.reference;
-                              _context51.next = 3;
-                              return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(reference));
-
-                            case 3:
-                              reference = _context51.sent;
-                              log('processInstruction() alias, reference', alias, reference);
-                              _context51.next = 7;
-                              return _regenerator["default"].awrap(self.namespace.resolveInfUri(reference));
-
-                            case 7:
-                              paths = _context51.sent;
-                              log("Load inf.json file into '".concat(alias, "' from paths:"), paths);
-
-                              if (!alias) {
-                                _context51.next = 14;
-                                break;
-                              }
-
-                              _context51.next = 12;
-                              return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(alias));
-
-                            case 12:
-                              alias = _context51.sent;
-                              alias = self.namespace.makeNamespacePointerForString(null, alias);
-
-                            case 14:
-                              log('processInstruction() paths', paths);
-
-                              if (!paths) {
-                                _context51.next = 18;
-                                break;
-                              }
-
-                              _context51.next = 18;
-                              return _regenerator["default"].awrap(Promise.mapSeries(paths, function _callee21(path) {
-                                var inf, _inf2;
-
-                                return _regenerator["default"].async(function _callee21$(_context50) {
-                                  while (1) {
-                                    switch (_context50.prev = _context50.next) {
-                                      case 0:
-                                        log('processInstruction() path', path);
-
-                                        if (!(!self.namespace.isInheritingFrom(path) && self.namespace.pathStack.indexOf(path) === -1)) {
-                                          _context50.next = 15;
-                                          break;
-                                        }
-
-                                        log("Inherit from inf file:", path);
-
-                                        if (alias) {
-                                          self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString(); // NOTE: Each namespace layer needs to export its own data so that
-                                          //       aliased data can be applied to multiple namespaces.
-                                        }
-
-                                        inf = new INF(PATH.dirname(path), self.namespace, LODASH_MERGE({}, self.namespace.options, {
-                                          anchorPrefix: alias || self.namespace.anchorPrefix || null,
-                                          mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
-                                          skipAddToAnchorPrefixStack: !!alias
-                                        }));
-                                        self.namespace.childInfByPath[path] = inf;
-                                        _context50.next = 8;
-                                        return _regenerator["default"].awrap(inf.runInstructionsFile(PATH.basename(path)));
-
-                                      case 8:
-                                        if (!alias) {
-                                          if (inf.namespace.forParent.allPaths) {
-                                            self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
-                                            inf.namespace.forParent.allPaths.forEach(function (path) {
-                                              self.namespace.forParent.allPaths.push(path);
-                                            });
-                                          }
-
-                                          if (inf.namespace.forParent.mappedNamespaceAliases) {
-                                            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
-                                            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases.concat(inf.namespace.forParent.mappedNamespaceAliases);
-                                          }
-
-                                          if (inf.namespace.forParent.aliases) {
-                                            self.namespace.forParent.aliases = self.namespace.forParent.aliases || {};
-                                            Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
-                                              self.namespace.forParent.aliases[name] = inf.namespace.forParent.aliases[name];
-                                            });
-                                          }
-
-                                          if (inf.namespace.forParent.mappedAliases) {
-                                            self.namespace.forParent.mappedAliases = self.namespace.forParent.mappedAliases || {};
-                                            Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
-                                              self.namespace.forParent.mappedAliases[name] = inf.namespace.forParent.mappedAliases[name];
-                                            });
-                                          }
-                                        }
-
-                                        if (inf.namespace.forParent.allPaths) {
-                                          inf.namespace.forParent.allPaths.forEach(function (path) {
-                                            self.namespace.allPaths.push(path);
-                                          });
-                                        }
-
-                                        if (inf.namespace.forParent.mappedNamespaceAliases) {
-                                          inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
-                                            var val = getter(alias);
-                                            self.namespace.mappedNamespaceAliases[val[0]] = val[1];
-                                          });
-                                        }
-
-                                        if (inf.namespace.forParent.aliases) {
-                                          Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
-                                            self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
-                                          });
-                                        }
-
-                                        if (alias) {
-                                          if (inf.namespace.forParent.mappedAliases) {
-                                            Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
-                                              self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [inf.namespace.forParent.mappedAliases[name], name];
-                                            });
-                                          }
-                                        }
-
-                                        _context50.next = 16;
-                                        break;
-
-                                      case 15:
-                                        // 'inf.json' file is already loaded so we need to map it to the new alias if applicable.
-                                        if (alias) {
-                                          log("Mounting already inherited file '".concat(path, "' for alias '").concat(alias, "'."));
-                                          self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
-                                          _inf2 = self.namespace.childInfByPath[path];
-
-                                          if (_inf2.namespace.forParent.allPaths) {
-                                            _inf2.namespace.forParent.allPaths.forEach(function (path) {
-                                              self.namespace.allPaths.push(path);
-                                            });
-                                          }
-
-                                          if (_inf2.namespace.forParent.mappedNamespaceAliases) {
-                                            _inf2.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
-                                              var val = getter(alias);
-                                              self.namespace.mappedNamespaceAliases[val[0]] = val[1];
-                                            });
-                                          }
-
-                                          if (_inf2.namespace.forParent.aliases) {
-                                            Object.keys(_inf2.namespace.forParent.aliases).forEach(function (name) {
-                                              self.namespace.aliases[name] = _inf2.namespace.forParent.aliases[name];
-                                            });
-                                          }
-
-                                          if (_inf2.namespace.forParent.mappedAliases) {
-                                            Object.keys(_inf2.namespace.forParent.mappedAliases).forEach(function (name) {
-                                              self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [_inf2.namespace.forParent.mappedAliases[name], name];
-                                            });
-                                          }
-                                        }
-
-                                      case 16:
-                                      case "end":
-                                        return _context50.stop();
-                                    }
-                                  }
-                                });
-                              }));
-
-                            case 18:
-                            case "end":
-                              return _context51.stop();
-                          }
-                        }
-                      });
-                    }));
-
-                  case 101:
-                    _context59.next = 277;
-                    break;
-
-                  case 103:
-                    if (!(anchor.pointer === '')) {
-                      _context59.next = 159;
-                      break;
-                    }
-
-                    if (!(anchor.type === 'component')) {
-                      _context59.next = 112;
-                      break;
-                    }
-
-                    _context59.next = 107;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
-
-                  case 107:
-                    value.value = _context59.sent;
-                    _context59.next = 110;
-                    return _regenerator["default"].awrap(self.namespace.mapComponent(anchor, value.value));
-
-                  case 110:
-                    _context59.next = 157;
-                    break;
-
-                  case 112:
-                    if (!(anchor.type === 'interface')) {
-                      _context59.next = 138;
-                      break;
-                    }
-
-                    _context59.next = 115;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
-
-                  case 115:
-                    value.value = _context59.sent;
-                    value.value = self.namespace.makeNamespacePointerForString(null, value.value);
-
-                    if (!(value.value.getSegments().length > 1)) {
-                      _context59.next = 131;
-                      break;
-                    }
-
-                    key = value.value.toString();
-
-                    if (!self.namespace.mappedAliases[key]) {
-                      _context59.next = 123;
-                      break;
-                    }
-
-                    value.value = key;
-                    _context59.next = 129;
-                    break;
-
-                  case 123:
-                    if (!(typeof self.namespace.mappedNamespaceAliases[key] !== "undefined")) {
-                      _context59.next = 127;
-                      break;
-                    }
-
-                    value.value = self.namespace.mappedNamespaceAliases[key];
-                    _context59.next = 129;
-                    break;
-
-                  case 127:
-                    console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
-                    throw new Error("Alias '".concat(key, "' is not mapped in 'self.namespace.mappedAliases' nor 'self.namespace.mappedNamespaceAliases'!"));
-
-                  case 129:
-                    _context59.next = 132;
-                    break;
-
-                  case 131:
-                    value.value = value.value.toString();
-
-                  case 132:
-                    _context59.next = 134;
-                    return _regenerator["default"].awrap(self.namespace.mapInterface(anchor.alias, value.value));
-
-                  case 134:
-                    interfaceComponent = _context59.sent;
-
-                    if (anchor.contract) {
-                      interfaceComponent.contract = [anchor.contract, self.namespace.getContractForAlias(anchor.contract)];
-                    }
-
-                    _context59.next = 157;
-                    break;
-
-                  case 138:
-                    if (!(anchor.type === 'contract')) {
-                      _context59.next = 143;
-                      break;
-                    }
-
-                    _context59.next = 141;
-                    return _regenerator["default"].awrap(self.namespace.mapContract(anchor, value.value));
-
-                  case 141:
-                    _context59.next = 157;
-                    break;
-
-                  case 143:
-                    if (!(anchor.type === 'plugin')) {
-                      _context59.next = 148;
-                      break;
-                    }
-
-                    _context59.next = 146;
-                    return _regenerator["default"].awrap(self.namespace.mapPlugin(anchor.alias, value.value));
-
-                  case 146:
-                    _context59.next = 157;
-                    break;
-
-                  case 148:
-                    if (!(anchor.type === 'variables')) {
-                      _context59.next = 156;
-                      break;
-                    }
-
-                    _context59.next = 151;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor.alias));
-
-                  case 151:
-                    anchor.alias = _context59.sent;
-                    _context59.next = 154;
-                    return _regenerator["default"].awrap(self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value)));
-
-                  case 154:
-                    _context59.next = 157;
-                    break;
-
-                  case 156:
-                    throw new Error("Anchor of type '".concat(anchor.type, "' not supported!"));
-
-                  case 157:
-                    _context59.next = 277;
-                    break;
-
-                  case 159:
-                    if (!(anchor.pointer != '')) {
-                      _context59.next = 273;
-                      break;
-                    }
-
-                    _context59.next = 162;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(anchor.pointer));
-
-                  case 162:
-                    anchor.pointer = _context59.sent;
-                    _context59.next = 165;
-                    return _regenerator["default"].awrap(self.namespace.replaceVariablesInString(value.value));
-
-                  case 165:
-                    value.value = _context59.sent;
-                    _context59.next = 168;
-                    return _regenerator["default"].awrap(self.closureForValueIfReference(value, function _callee26(value, _value) {
-                      return _regenerator["default"].async(function _callee26$(_context55) {
-                        while (1) {
-                          switch (_context55.prev = _context55.next) {
-                            case 0:
-                              if (!value["interface"]) {
-                                _context55.next = 18;
-                                break;
-                              }
-
-                              _context55.next = 3;
-                              return _regenerator["default"].awrap(Promise.mapSeries(value["interface"], function _callee23(_interface) {
-                                return _regenerator["default"].async(function _callee23$(_context52) {
-                                  while (1) {
-                                    switch (_context52.prev = _context52.next) {
-                                      case 0:
-                                        if (!_value.contract) {
-                                          _context52.next = 5;
-                                          break;
-                                        }
-
-                                        if (!(_interface[1].contract !== _value.contract)) {
-                                          _context52.next = 3;
-                                          break;
-                                        }
-
-                                        throw new Error('Contract mis-match!');
-
-                                      case 3:
-                                        _context52.next = 6;
-                                        break;
-
-                                      case 5:
-                                        _value.contract = _interface[1].contract || null;
-
-                                      case 6:
-                                        _context52.t0 = _regenerator["default"];
-                                        _context52.next = 9;
-                                        return _regenerator["default"].awrap(_interface[1].$instance);
-
-                                      case 9:
-                                        _context52.t1 = _context52.sent;
-                                        _context52.t2 = _value;
-                                        _context52.t3 = anchor.pointer;
-                                        _context52.t4 = value.propertyPathMount;
-                                        _context52.t5 = (0, _context52.t1)(_context52.t2, _context52.t3, _context52.t4);
-                                        _context52.next = 16;
-                                        return _context52.t0.awrap.call(_context52.t0, _context52.t5);
-
-                                      case 16:
-                                        _value = _context52.sent;
-
-                                        if (!(typeof _value === "undefined")) {
-                                          _context52.next = 19;
-                                          break;
-                                        }
-
-                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                      case 19:
-                                      case "end":
-                                        return _context52.stop();
-                                    }
-                                  }
-                                });
-                              }));
-
-                            case 3:
-                              if (!_value.contract) {
-                                _context55.next = 16;
-                                break;
-                              }
-
-                              // Verify output of interface via contract
-                              log("Verify local interface output from '".concat(value["interface"].map(function (_interface) {
-                                return _interface[0];
-                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                              _context55.t0 = _regenerator["default"];
-                              _context55.next = 8;
-                              return _regenerator["default"].awrap(_value.contract[1].$instance);
-
-                            case 8:
-                              _context55.t1 = _context55.sent;
-                              _context55.t2 = _value;
-                              _context55.t3 = anchor.pointer;
-                              _context55.t4 = value.propertyPathMount;
-                              _context55.t5 = (0, _context55.t1)(_context55.t2, _context55.t3, _context55.t4);
-                              _context55.next = 15;
-                              return _context55.t0.awrap.call(_context55.t0, _context55.t5);
-
-                            case 15:
-                              _value = _context55.sent;
-
-                            case 16:
-                              _context55.next = 34;
-                              break;
-
-                            case 18:
-                              if (!_value["interface"]) {
-                                _context55.next = 34;
-                                break;
-                              }
-
-                              _context55.next = 21;
-                              return _regenerator["default"].awrap(Promise.mapSeries(_value["interface"], function _callee24(_interface) {
-                                return _regenerator["default"].async(function _callee24$(_context53) {
-                                  while (1) {
-                                    switch (_context53.prev = _context53.next) {
-                                      case 0:
-                                        if (!_value.contract) {
-                                          _context53.next = 5;
-                                          break;
-                                        }
-
-                                        if (!(_interface[1].contract !== _value.contract)) {
-                                          _context53.next = 3;
-                                          break;
-                                        }
-
-                                        throw new Error('Contract mis-match!');
-
-                                      case 3:
-                                        _context53.next = 6;
-                                        break;
-
-                                      case 5:
-                                        _value.contract = _interface[1].contract || null;
-
-                                      case 6:
-                                        _context53.t0 = _regenerator["default"];
-                                        _context53.next = 9;
-                                        return _regenerator["default"].awrap(_interface[1].$instance);
-
-                                      case 9:
-                                        _context53.t1 = _context53.sent;
-                                        _context53.t2 = _value;
-                                        _context53.t3 = anchor.pointer;
-                                        _context53.t4 = value.propertyPathMount;
-                                        _context53.t5 = (0, _context53.t1)(_context53.t2, _context53.t3, _context53.t4);
-                                        _context53.next = 16;
-                                        return _context53.t0.awrap.call(_context53.t0, _context53.t5);
-
-                                      case 16:
-                                        _value = _context53.sent;
-
-                                        if (!(typeof _value === "undefined")) {
-                                          _context53.next = 19;
-                                          break;
-                                        }
-
-                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                      case 19:
-                                      case "end":
-                                        return _context53.stop();
-                                    }
-                                  }
-                                });
-                              }));
-
-                            case 21:
-                              if (!_value.contract) {
-                                _context55.next = 34;
-                                break;
-                              }
-
-                              // Verify output of interface via contract
-                              log("Verify local interface output from '".concat(_value["interface"].map(function (_interface) {
-                                return _interface[0];
-                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                              _context55.t6 = _regenerator["default"];
-                              _context55.next = 26;
-                              return _regenerator["default"].awrap(_value.contract[1].$instance);
-
-                            case 26:
-                              _context55.t7 = _context55.sent;
-                              _context55.t8 = _value;
-                              _context55.t9 = anchor.pointer;
-                              _context55.t10 = value.propertyPathMount;
-                              _context55.t11 = (0, _context55.t7)(_context55.t8, _context55.t9, _context55.t10);
-                              _context55.next = 33;
-                              return _context55.t6.awrap.call(_context55.t6, _context55.t11);
-
-                            case 33:
-                              _value = _context55.sent;
-
-                            case 34:
-                              if (!anchor["interface"]) {
-                                _context55.next = 50;
-                                break;
-                              }
-
-                              _context55.next = 37;
-                              return _regenerator["default"].awrap(Promise.mapSeries(anchor["interface"], function _callee25(_interface) {
-                                return _regenerator["default"].async(function _callee25$(_context54) {
-                                  while (1) {
-                                    switch (_context54.prev = _context54.next) {
-                                      case 0:
-                                        if (!_value.contract) {
-                                          _context54.next = 5;
-                                          break;
-                                        }
-
-                                        if (!(_interface[1].contract !== _value.contract)) {
-                                          _context54.next = 3;
-                                          break;
-                                        }
-
-                                        throw new Error('Contract mis-match!');
-
-                                      case 3:
-                                        _context54.next = 6;
-                                        break;
-
-                                      case 5:
-                                        _value.contract = _interface[1].contract || null;
-
-                                      case 6:
-                                        _context54.t0 = _regenerator["default"];
-                                        _context54.next = 9;
-                                        return _regenerator["default"].awrap(_interface[1].$instance);
-
-                                      case 9:
-                                        _context54.t1 = _context54.sent;
-                                        _context54.t2 = _value;
-                                        _context54.t3 = anchor.pointer;
-                                        _context54.t4 = value.propertyPathMount;
-                                        _context54.t5 = (0, _context54.t1)(_context54.t2, _context54.t3, _context54.t4);
-                                        _context54.next = 16;
-                                        return _context54.t0.awrap.call(_context54.t0, _context54.t5);
-
-                                      case 16:
-                                        _value = _context54.sent;
-
-                                        if (!(typeof _value === "undefined")) {
-                                          _context54.next = 19;
-                                          break;
-                                        }
-
-                                        throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                                      case 19:
-                                      case "end":
-                                        return _context54.stop();
-                                    }
-                                  }
-                                });
-                              }));
-
-                            case 37:
-                              if (!_value.contract) {
-                                _context55.next = 50;
-                                break;
-                              }
-
-                              // Verify output of interface via contract
-                              log("Verify local interface output from '".concat(anchor["interface"].map(function (_interface) {
-                                return _interface[0];
-                              }), "' using contract '").concat(_value.contract[1].alias, "'"));
-                              _context55.t12 = _regenerator["default"];
-                              _context55.next = 42;
-                              return _regenerator["default"].awrap(_value.contract[1].$instance);
-
-                            case 42:
-                              _context55.t13 = _context55.sent;
-                              _context55.t14 = _value;
-                              _context55.t15 = anchor.pointer;
-                              _context55.t16 = value.propertyPathMount;
-                              _context55.t17 = (0, _context55.t13)(_context55.t14, _context55.t15, _context55.t16);
-                              _context55.next = 49;
-                              return _context55.t12.awrap.call(_context55.t12, _context55.t17);
-
-                            case 49:
-                              _value = _context55.sent;
-
-                            case 50:
-                              return _context55.abrupt("return", _value);
-
-                            case 51:
-                            case "end":
-                              return _context55.stop();
-                          }
-                        }
-                      });
-                    }));
-
-                  case 168:
-                    value = _context59.sent;
-
-                    if (value.wrapped) {
-                      _context59.next = 235;
-                      break;
-                    }
-
-                    if (!value["interface"]) {
-                      _context59.next = 189;
-                      break;
-                    }
-
-                    interfaces = value["interface"];
-                    delete value["interface"];
-                    _context59.next = 175;
-                    return _regenerator["default"].awrap(Promise.mapSeries(interfaces, function _callee27(_interface) {
-                      return _regenerator["default"].async(function _callee27$(_context56) {
-                        while (1) {
-                          switch (_context56.prev = _context56.next) {
-                            case 0:
-                              if (!value.contract) {
-                                _context56.next = 5;
-                                break;
-                              }
-
-                              if (!(_interface[1].contract !== value.contract)) {
-                                _context56.next = 3;
-                                break;
-                              }
-
-                              throw new Error('Contract mis-match!');
-
-                            case 3:
-                              _context56.next = 6;
-                              break;
-
-                            case 5:
-                              value.contract = _interface[1].contract || null;
-
-                            case 6:
-                              _context56.t0 = _regenerator["default"];
-                              _context56.next = 9;
-                              return _regenerator["default"].awrap(_interface[1].$instance);
-
-                            case 9:
-                              _context56.t1 = _context56.sent;
-                              _context56.t2 = value;
-                              _context56.t3 = anchor.pointer;
-                              _context56.t4 = (0, _context56.t1)(_context56.t2, _context56.t3);
-                              _context56.next = 15;
-                              return _context56.t0.awrap.call(_context56.t0, _context56.t4);
-
-                            case 15:
-                              value = _context56.sent;
-
-                              if (!(typeof value === "undefined")) {
-                                _context56.next = 18;
-                                break;
-                              }
-
-                              throw new Error("Value is undefined after processing by remote interface '".concat(_interface[0], "'!"));
-
-                            case 18:
-                            case "end":
-                              return _context56.stop();
-                          }
-                        }
-                      });
-                    }));
-
-                  case 175:
-                    if (!value.contract) {
-                      _context59.next = 187;
-                      break;
-                    }
-
-                    // Verify output of interface via contract
-                    log("Verify remote interface output from '".concat(interfaces.map(function (_interface) {
-                      return _interface[0];
-                    }), "' using contract '").concat(value.contract[1].alias, "'"));
-                    _context59.t0 = _regenerator["default"];
-                    _context59.next = 180;
-                    return _regenerator["default"].awrap(value.contract[1].$instance);
-
-                  case 180:
-                    _context59.t1 = _context59.sent;
-                    _context59.t2 = value;
-                    _context59.t3 = anchor.pointer;
-                    _context59.t4 = (0, _context59.t1)(_context59.t2, _context59.t3);
-                    _context59.next = 186;
-                    return _context59.t0.awrap.call(_context59.t0, _context59.t4);
-
-                  case 186:
-                    value = _context59.sent;
-
-                  case 187:
-                    _context59.next = 201;
-                    break;
-
-                  case 189:
-                    if (!value.contract) {
-                      _context59.next = 201;
-                      break;
-                    }
-
-                    log("Verify inline value using contract '".concat(value.contract[1].alias, "'"));
-                    _context59.t5 = _regenerator["default"];
-                    _context59.next = 194;
-                    return _regenerator["default"].awrap(value.contract[1].$instance);
-
-                  case 194:
-                    _context59.t6 = _context59.sent;
-                    _context59.t7 = value;
-                    _context59.t8 = anchor.pointer;
-                    _context59.t9 = (0, _context59.t6)(_context59.t7, _context59.t8);
-                    _context59.next = 200;
-                    return _context59.t5.awrap.call(_context59.t5, _context59.t9);
-
-                  case 200:
-                    value = _context59.sent;
-
-                  case 201:
-                    if (!anchor["interface"]) {
-                      _context59.next = 220;
-                      break;
-                    }
-
-                    // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
-                    _interfaces = anchor["interface"];
-                    delete anchor["interface"];
-                    _context59.next = 206;
-                    return _regenerator["default"].awrap(Promise.mapSeries(_interfaces, function _callee28(_interface) {
-                      return _regenerator["default"].async(function _callee28$(_context57) {
-                        while (1) {
-                          switch (_context57.prev = _context57.next) {
-                            case 0:
-                              if (!value.contract) {
-                                _context57.next = 6;
-                                break;
-                              }
-
-                              if (!(_interface[1].contract !== value.contract)) {
-                                _context57.next = 4;
-                                break;
-                              }
-
-                              if (!(_interface[1].contract[1].impl.id != value.contract[1].impl.id)) {
-                                _context57.next = 4;
-                                break;
-                              }
-
-                              throw new Error('Contract mis-match!');
-
-                            case 4:
-                              _context57.next = 7;
-                              break;
-
-                            case 6:
-                              value.contract = _interface[1].contract || null;
-
-                            case 7:
-                              _context57.t0 = _regenerator["default"];
-                              _context57.next = 10;
-                              return _regenerator["default"].awrap(_interface[1].$instance);
-
-                            case 10:
-                              _context57.t1 = _context57.sent;
-                              _context57.t2 = value;
-                              _context57.t3 = anchor.pointer;
-                              _context57.t4 = (0, _context57.t1)(_context57.t2, _context57.t3);
-                              _context57.next = 16;
-                              return _context57.t0.awrap.call(_context57.t0, _context57.t4);
-
-                            case 16:
-                              value = _context57.sent;
-
-                              if (!(typeof value === "undefined")) {
-                                _context57.next = 19;
-                                break;
-                              }
-
-                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
-
-                            case 19:
-                            case "end":
-                              return _context57.stop();
-                          }
-                        }
-                      });
-                    }));
-
-                  case 206:
-                    if (!value.contract) {
-                      _context59.next = 218;
-                      break;
-                    }
-
-                    // Verify output of interface via contract
-                    log("Verify local interface output from '".concat(_interfaces.map(function (_interface) {
-                      return _interface[0];
-                    }), "' using contract '").concat(value.contract[1].alias, "'"));
-                    _context59.t10 = _regenerator["default"];
-                    _context59.next = 211;
-                    return _regenerator["default"].awrap(value.contract[1].$instance);
-
-                  case 211:
-                    _context59.t11 = _context59.sent;
-                    _context59.t12 = value;
-                    _context59.t13 = anchor.pointer;
-                    _context59.t14 = (0, _context59.t11)(_context59.t12, _context59.t13);
-                    _context59.next = 217;
-                    return _context59.t10.awrap.call(_context59.t10, _context59.t14);
-
-                  case 217:
-                    value = _context59.sent;
-
-                  case 218:
-                    _context59.next = 232;
-                    break;
-
-                  case 220:
-                    if (!anchor.contract) {
-                      _context59.next = 232;
-                      break;
-                    }
-
-                    // Verify value via contract
-                    log("Verify value using contract '".concat(anchor.contract[1].alias, "'"));
-                    _context59.t15 = _regenerator["default"];
-                    _context59.next = 225;
-                    return _regenerator["default"].awrap(anchor.contract[1].$instance);
-
-                  case 225:
-                    _context59.t16 = _context59.sent;
-                    _context59.t17 = value;
-                    _context59.t18 = anchor.pointer;
-                    _context59.t19 = (0, _context59.t16)(_context59.t17, _context59.t18);
-                    _context59.next = 231;
-                    return _context59.t15.awrap.call(_context59.t15, _context59.t19);
-
-                  case 231:
-                    value = _context59.sent;
-
-                  case 232:
-                    if (anchor.contract) {
-                      value.contract = anchor.contract || null;
-                    }
-
-                    _context59.next = 236;
-                    break;
-
-                  case 235:
-                    if (anchor["interface"]) {
-                      anchor["interface"].forEach(function (_interface) {
-                        if (value.contract) {
-                          if (_interface[1].contract !== value.contract) {
-                            throw new Error('Contract mis-match!');
-                          }
-                        } else {
-                          value.contract = _interface[1].contract || null;
-                        }
-                      });
-                    }
-
-                  case 236:
-                    if (!(anchor.type === 'component')) {
-                      _context59.next = 267;
-                      break;
-                    }
-
-                    getResolvedAlias = function getResolvedAlias(alias) {
-                      if (!self.namespace.anchorPrefixStack.length) {
-                        return alias;
+          value: function () {
+            var _processInstruction = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee58(anchor, value, meta) {
+              var self, nsPointerAnchor, anchorNamespaceAlias, anchorNamespacePrefix, alias, m, valueAlias, valuePointer, _m, _alias, pointer, valueM, _valueAlias, _valuePointer, uris, key, interfaceComponent, interfaces, _interfaces, getResolvedAlias, _component3, response, apiKey, plugins;
+
+              return _regenerator["default"].wrap(function _callee58$(_context58) {
+                while (1) {
+                  switch (_context58.prev = _context58.next) {
+                    case 0:
+                      self = this;
+                      log("");
+                      log(" ", anchor, ":", value); // Detect comment
+
+                      if (!(anchor === '//')) {
+                        _context58.next = 5;
+                        break;
                       }
 
-                      var resolved = null; //console.log("MAKE FROM STACK", self.namespace.anchorPrefixStack);
+                      return _context58.abrupt("return");
 
-                      for (var i = self.namespace.anchorPrefixStack.length - 1; i >= 0; i--) {
-                        if (!resolved) {
-                          resolved = self.namespace.anchorPrefixStack[i];
-                        } else {
-                          resolved = resolved.prepend(self.namespace.anchorPrefixStack[i]);
-                        }
+                    case 5:
+                      nsPointerAnchor = null; // Handle namespaces
+
+                      anchorNamespaceAlias = null;
+                      anchorNamespacePrefix = null;
+
+                      if (!/^[^@]+?\s*@$/.test(anchor)) {
+                        _context58.next = 29;
+                        break;
                       }
 
-                      return resolved.toSegmentedString() + '|' + alias;
-                    };
+                      // Namespace mapping
+                      alias = anchor.replace(/^([^@]+?)\s*@$/, "$1");
+                      _context58.next = 12;
+                      return self.namespace.replaceVariablesInString(alias);
 
-                    _context59.next = 240;
-                    return _regenerator["default"].awrap(self.namespace.getComponentForAlias(anchor.alias));
+                    case 12:
+                      alias = _context58.sent;
+                      _context58.next = 15;
+                      return self.namespace.replaceVariablesInString(value);
 
-                  case 240:
-                    _component3 = _context59.sent;
-                    log("Invoke component '".concat(_component3.path, "' for alias '").concat(anchor.alias, "'"));
+                    case 15:
+                      value = _context58.sent;
+                      m = value.match(/^([^@]+?)\s*@\s*(.+?)$/);
 
-                    if (!(anchor.contract && anchor.contract[1].impl.invokeWrapper)) {
-                      _context59.next = 252;
+                      if (!m) {
+                        _context58.next = 25;
+                        break;
+                      }
+
+                      valueAlias = m[1];
+                      valuePointer = m[2];
+
+                      if (!(typeof self.namespace.mappedNamespaceAliases[valueAlias] === "undefined")) {
+                        _context58.next = 23;
+                        break;
+                      }
+
+                      console.error("self.namespace", self.namespace);
+                      throw new Error("Namespace alias '".concat(valueAlias, "' is not mapped!"));
+
+                    case 23:
+                      log("Replace namespace alias '".concat(valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[valueAlias]);
+                      value = [self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""), valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, "");
+
+                    case 25:
+                      log("Map namespace alias '".concat(alias, "' to:"), value);
+                      self.namespace.mappedNamespaceAliases[alias] = value;
+
+                      if (self.namespace.anchorPrefix && self.namespace.referringNamespace) {
+                        // const parentAnchorPrefix = PATH.join(
+                        //     self.namespace.anchorPrefix.toString(),
+                        //     alias
+                        // );
+                        //self.namespace.referringNamespace.mappedNamespaceAliases[parentAnchorPrefix] = value;
+                        self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                        self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+                          if (anchorPrefix) {
+                            var parentAnchorPrefix = PATH.join(anchorPrefix.toString(), alias);
+                            return [parentAnchorPrefix, value];
+                          }
+
+                          return [alias, value];
+                        }); //console.error("ANCHOR PREFIX", parentAnchorPrefix,  value);                
+                      }
+
+                      return _context58.abrupt("return");
+
+                    case 29:
+                      if (!/<\s*[^@]+?\s*@\s*[\S]+\s*>/.test(anchor)) {
+                        _context58.next = 40;
+                        break;
+                      }
+
+                      // Namespace usage for contracts
+                      _m = anchor.match(/^.*?<\s*([^@]+?)\s*@\s*([\S]+)\s*>.*?$/);
+                      _alias = _m[1];
+                      pointer = _m[2];
+
+                      if (!(typeof self.namespace.mappedNamespaceAliases[_alias] === "undefined")) {
+                        _context58.next = 36;
+                        break;
+                      }
+
+                      console.error("self.namespace", self.namespace);
+                      throw new Error("Namespace alias '".concat(_alias, "' is not mapped!"));
+
+                    case 36:
+                      log("Replace namespace alias '".concat(_alias, "' with:"), self.namespace.mappedNamespaceAliases[_alias]);
+                      anchorNamespaceAlias = _alias;
+                      anchorNamespacePrefix = self.namespace.mappedNamespaceAliases[_alias].replace(/\/$/, "");
+                      anchor = anchor.replace(/^(.*?<\s*)[^@]+?\s*@\s*[\S]+(\s*>.*?)$/, "$1".concat([anchorNamespacePrefix, pointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$2"));
+
+                    case 40:
+                      if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(anchor)) {
+                        _context58.next = 49;
+                        break;
+                      }
+
+                      _context58.next = 43;
+                      return self.namespace.replaceVariablesInString(anchor);
+
+                    case 43:
+                      anchor = _context58.sent;
+                      anchor = self.namespace.makeNamespacePointerForString(null, anchor); // TODO: just keep and use 'anchor' NamespacePointer' object instead of these extra vars.
+
+                      anchorNamespaceAlias = anchor.getFirstSegment().alias;
+                      anchorNamespacePrefix = anchor.getFirstSegment().resolved; //.replace(/\/$/, "");
+
+                      log("Replace namespace alias '".concat(anchorNamespaceAlias, "' with:"), anchorNamespacePrefix);
+                      nsPointerAnchor = anchor;
+
+                    case 49:
+                      if (!/^[^@]+?\s*@\s*[^#]+\s*#/.test(value)) {
+                        _context58.next = 61;
+                        break;
+                      }
+
+                      // Namespace usage for value
+                      valueM = value.match(/^([^@]+?)\s*@\s*([^#]*?)\s*#/);
+                      _valueAlias = valueM[1];
+                      _context58.next = 54;
+                      return self.namespace.replaceVariablesInString(_valueAlias);
+
+                    case 54:
+                      _valueAlias = _context58.sent;
+                      _valuePointer = valueM[2];
+
+                      if (!(typeof self.namespace.mappedNamespaceAliases[_valueAlias] === "undefined")) {
+                        _context58.next = 59;
+                        break;
+                      }
+
+                      console.error("self.namespace", self.namespace);
+                      throw new Error("Namespace alias '".concat(_valueAlias, "' is not mapped!"));
+
+                    case 59:
+                      log("Replace namespace alias '".concat(_valueAlias, "' with:"), self.namespace.mappedNamespaceAliases[_valueAlias]);
+                      value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, "".concat([self.namespace.mappedNamespaceAliases[_valueAlias].replace(/\/$/, ""), _valuePointer.replace(/^\//, "")].join("/").replace(/\/$/, ""), "$1"));
+
+                    case 61:
+                      meta.file = self.namespace.pathStack[self.namespace.pathStack.length - 1]; // Wrap anchor and value node to provide a uniform interface to simple and complex objects.
+
+                      anchor = Node.WrapInstructionNode(self.namespace, anchor);
+                      anchor.meta = meta;
+                      anchor.value = anchor.value.replace(/\s*\+([^\+]+)$/, '');
+
+                      if (anchor.pointer && typeof anchor.pointer === 'string') {
+                        anchor.pointer = anchor.pointer.replace(/\s*\+([^\+]+)$/, '');
+                      }
+
+                      value = Node.WrapInstructionNode(self.namespace, value);
+                      value.meta = meta;
+
+                      if (anchorNamespacePrefix) {
+                        anchor.anchorNamespaceAlias = anchorNamespaceAlias;
+                        anchor.namespacePrefix = anchorNamespacePrefix; //            value.anchorNamespacePrefix = anchor.namespacePrefix;
+                      }
+
+                      if (!(!anchor instanceof ReferenceNode)) {
+                        _context58.next = 72;
+                        break;
+                      }
+
+                      CONSOLE.error("anchor", anchor);
+                      throw new Error("'anchor' is not a ReferenceNode! It must follow the '[<Alias> ]#[ <Pointer>]' format.");
+
+                    case 72:
+                      log("anchor.type:", anchor.type); // Run various codeblocks if applicable.
+
+                      if (!(value instanceof CodeblockNode)) {
+                        _context58.next = 96;
+                        break;
+                      }
+
+                      if (!(value.getFormat() === 'run.bash')) {
+                        _context58.next = 80;
+                        break;
+                      }
+
+                      _context58.next = 77;
+                      return runCodeblock(self.namespace, value.value);
+
+                    case 77:
+                      value.value = _context58.sent;
+                      _context58.next = 96;
                       break;
-                    }
 
-                    if (_component3.$wrappedInvoke) {
-                      _context59.next = 247;
+                    case 80:
+                      if (!(value.getFormat() === 'run.bash.progress')) {
+                        _context58.next = 86;
+                        break;
+                      }
+
+                      _context58.next = 83;
+                      return runCodeblock(self.namespace, value.value);
+
+                    case 83:
+                      value.value = _context58.sent;
+                      _context58.next = 96;
                       break;
-                    }
 
-                    _context59.next = 246;
-                    return _regenerator["default"].awrap(anchor.contract[1].impl.invokeWrapper(_component3).call(null, anchor.contract[0]));
+                    case 86:
+                      if (!(value.getFormat() === 'run.javascript')) {
+                        _context58.next = 92;
+                        break;
+                      }
 
-                  case 246:
-                    _component3.$wrappedInvoke = _context59.sent;
+                      _context58.next = 89;
+                      return runCodeblock(self.namespace, value.value);
 
-                  case 247:
-                    _context59.next = 249;
-                    return _regenerator["default"].awrap(_component3.$wrappedInvoke(anchor.pointer, value));
-
-                  case 249:
-                    response = _context59.sent;
-                    _context59.next = 255;
-                    break;
-
-                  case 252:
-                    if (!anchor["interface"]) {
-                      _context59.next = 255;
+                    case 89:
+                      value.value = _context58.sent;
+                      _context58.next = 96;
                       break;
-                    }
 
-                    _context59.next = 255;
-                    return _regenerator["default"].awrap(Promise.mapSeries(anchor["interface"], function _callee29(_interface, i) {
-                      return _regenerator["default"].async(function _callee29$(_context58) {
-                        while (1) {
-                          switch (_context58.prev = _context58.next) {
-                            case 0:
-                              _component3.$wrappedInvoke = _component3.$wrappedInvoke || [];
+                    case 92:
+                      if (!(value.getFormat() === 'run.javascript.progress')) {
+                        _context58.next = 96;
+                        break;
+                      }
 
-                              if (!(_interface[1].contract && _interface[1].contract[1].impl.invokeWrapper)) {
-                                _context58.next = 9;
-                                break;
+                      _context58.next = 95;
+                      return runCodeblock(self.namespace, value.value);
+
+                    case 95:
+                      value.value = _context58.sent;
+
+                    case 96:
+                      if (!(anchor.value === "#")) {
+                        _context58.next = 103;
+                        break;
+                      }
+
+                      uris = [];
+
+                      if (typeof value.value === "string") {
+                        uris = [{
+                          reference: value.value
+                        }];
+                      } else if (Array.isArray(value.value)) {
+                        uris = value.value.map(function (reference) {
+                          return {
+                            reference: reference
+                          };
+                        });
+                      } else if ((0, _typeof2["default"])(value.value) === "object") {
+                        uris = Object.keys(value.value).map(function (alias) {
+                          return {
+                            alias: alias,
+                            reference: value.value[alias]
+                          };
+                        });
+                      }
+
+                      _context58.next = 101;
+                      return Promise.mapSeries(uris, /*#__PURE__*/function () {
+                        var _ref26 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee50(uri) {
+                          var alias, reference, paths;
+                          return _regenerator["default"].wrap(function _callee50$(_context50) {
+                            while (1) {
+                              switch (_context50.prev = _context50.next) {
+                                case 0:
+                                  alias = uri.alias, reference = uri.reference;
+                                  _context50.next = 3;
+                                  return self.namespace.replaceVariablesInString(reference);
+
+                                case 3:
+                                  reference = _context50.sent;
+                                  log('processInstruction() alias, reference', alias, reference);
+                                  _context50.next = 7;
+                                  return self.namespace.resolveInfUri(reference);
+
+                                case 7:
+                                  paths = _context50.sent;
+                                  log("Load inf.json file into '".concat(alias, "' from paths:"), paths);
+
+                                  if (!alias) {
+                                    _context50.next = 14;
+                                    break;
+                                  }
+
+                                  _context50.next = 12;
+                                  return self.namespace.replaceVariablesInString(alias);
+
+                                case 12:
+                                  alias = _context50.sent;
+                                  alias = self.namespace.makeNamespacePointerForString(null, alias);
+
+                                case 14:
+                                  log('processInstruction() paths', paths);
+
+                                  if (!paths) {
+                                    _context50.next = 18;
+                                    break;
+                                  }
+
+                                  _context50.next = 18;
+                                  return Promise.mapSeries(paths, /*#__PURE__*/function () {
+                                    var _ref27 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee49(path) {
+                                      var inf, _inf2;
+
+                                      return _regenerator["default"].wrap(function _callee49$(_context49) {
+                                        while (1) {
+                                          switch (_context49.prev = _context49.next) {
+                                            case 0:
+                                              log('processInstruction() path', path);
+
+                                              if (!(!self.namespace.isInheritingFrom(path) && self.namespace.pathStack.indexOf(path) === -1)) {
+                                                _context49.next = 15;
+                                                break;
+                                              }
+
+                                              log("Inherit from inf file:", path);
+
+                                              if (alias) {
+                                                self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString(); // NOTE: Each namespace layer needs to export its own data so that
+                                                //       aliased data can be applied to multiple namespaces.
+                                              }
+
+                                              inf = new INF(PATH.dirname(path), self.namespace, LODASH_MERGE({}, self.namespace.options, {
+                                                anchorPrefix: alias || self.namespace.anchorPrefix || null,
+                                                mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
+                                                skipAddToAnchorPrefixStack: !!alias
+                                              }));
+                                              self.namespace.childInfByPath[path] = inf;
+                                              _context49.next = 8;
+                                              return inf.runInstructionsFile(PATH.basename(path));
+
+                                            case 8:
+                                              if (!alias) {
+                                                if (inf.namespace.forParent.allPaths) {
+                                                  self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];
+                                                  inf.namespace.forParent.allPaths.forEach(function (path) {
+                                                    self.namespace.forParent.allPaths.push(path);
+                                                  });
+                                                }
+
+                                                if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                                  self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+                                                  self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases.concat(inf.namespace.forParent.mappedNamespaceAliases);
+                                                }
+
+                                                if (inf.namespace.forParent.aliases) {
+                                                  self.namespace.forParent.aliases = self.namespace.forParent.aliases || {};
+                                                  Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                                    self.namespace.forParent.aliases[name] = inf.namespace.forParent.aliases[name];
+                                                  });
+                                                }
+
+                                                if (inf.namespace.forParent.mappedAliases) {
+                                                  self.namespace.forParent.mappedAliases = self.namespace.forParent.mappedAliases || {};
+                                                  Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                                    self.namespace.forParent.mappedAliases[name] = inf.namespace.forParent.mappedAliases[name];
+                                                  });
+                                                }
+                                              }
+
+                                              if (inf.namespace.forParent.allPaths) {
+                                                inf.namespace.forParent.allPaths.forEach(function (path) {
+                                                  self.namespace.allPaths.push(path);
+                                                });
+                                              }
+
+                                              if (inf.namespace.forParent.mappedNamespaceAliases) {
+                                                inf.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                                  var val = getter(alias);
+                                                  self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                                });
+                                              }
+
+                                              if (inf.namespace.forParent.aliases) {
+                                                Object.keys(inf.namespace.forParent.aliases).forEach(function (name) {
+                                                  self.namespace.aliases[name] = inf.namespace.forParent.aliases[name];
+                                                });
+                                              }
+
+                                              if (alias) {
+                                                if (inf.namespace.forParent.mappedAliases) {
+                                                  Object.keys(inf.namespace.forParent.mappedAliases).forEach(function (name) {
+                                                    self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [inf.namespace.forParent.mappedAliases[name], name];
+                                                  });
+                                                }
+                                              }
+
+                                              _context49.next = 16;
+                                              break;
+
+                                            case 15:
+                                              // 'inf.json' file is already loaded so we need to map it to the new alias if applicable.
+                                              if (alias) {
+                                                log("Mounting already inherited file '".concat(path, "' for alias '").concat(alias, "'."));
+                                                self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
+                                                _inf2 = self.namespace.childInfByPath[path];
+
+                                                if (_inf2.namespace.forParent.allPaths) {
+                                                  _inf2.namespace.forParent.allPaths.forEach(function (path) {
+                                                    self.namespace.allPaths.push(path);
+                                                  });
+                                                }
+
+                                                if (_inf2.namespace.forParent.mappedNamespaceAliases) {
+                                                  _inf2.namespace.forParent.mappedNamespaceAliases.forEach(function (getter) {
+                                                    var val = getter(alias);
+                                                    self.namespace.mappedNamespaceAliases[val[0]] = val[1];
+                                                  });
+                                                }
+
+                                                if (_inf2.namespace.forParent.aliases) {
+                                                  Object.keys(_inf2.namespace.forParent.aliases).forEach(function (name) {
+                                                    self.namespace.aliases[name] = _inf2.namespace.forParent.aliases[name];
+                                                  });
+                                                }
+
+                                                if (_inf2.namespace.forParent.mappedAliases) {
+                                                  Object.keys(_inf2.namespace.forParent.mappedAliases).forEach(function (name) {
+                                                    self.namespace.mappedAliases[PATH.join(alias.toString(), name)] = [_inf2.namespace.forParent.mappedAliases[name], name];
+                                                  });
+                                                }
+                                              }
+
+                                            case 16:
+                                            case "end":
+                                              return _context49.stop();
+                                          }
+                                        }
+                                      }, _callee49);
+                                    }));
+
+                                    return function (_x78) {
+                                      return _ref27.apply(this, arguments);
+                                    };
+                                  }());
+
+                                case 18:
+                                case "end":
+                                  return _context50.stop();
                               }
+                            }
+                          }, _callee50);
+                        }));
 
-                              if (_component3.$wrappedInvoke[i]) {
-                                _context58.next = 6;
-                                break;
+                        return function (_x77) {
+                          return _ref26.apply(this, arguments);
+                        };
+                      }());
+
+                    case 101:
+                      _context58.next = 262;
+                      break;
+
+                    case 103:
+                      if (!(anchor.pointer === '')) {
+                        _context58.next = 160;
+                        break;
+                      }
+
+                      if (!(anchor.type === 'component')) {
+                        _context58.next = 112;
+                        break;
+                      }
+
+                      _context58.next = 107;
+                      return self.namespace.replaceVariablesInString(value.value);
+
+                    case 107:
+                      value.value = _context58.sent;
+                      _context58.next = 110;
+                      return self.namespace.mapComponent(anchor, value.value);
+
+                    case 110:
+                      _context58.next = 158;
+                      break;
+
+                    case 112:
+                      if (!(anchor.type === 'interface')) {
+                        _context58.next = 139;
+                        break;
+                      }
+
+                      _context58.next = 115;
+                      return self.namespace.replaceVariablesInString(value.value);
+
+                    case 115:
+                      value.value = _context58.sent;
+                      value.value = self.namespace.makeNamespacePointerForString(null, value.value);
+
+                      if (!(value.value.getSegments().length > 1)) {
+                        _context58.next = 132;
+                        break;
+                      }
+
+                      key = value.value.toString();
+
+                      if (!self.namespace.mappedAliases[key]) {
+                        _context58.next = 123;
+                        break;
+                      }
+
+                      value.value = key;
+                      _context58.next = 130;
+                      break;
+
+                    case 123:
+                      if (!(typeof self.namespace.mappedNamespaceAliases[key] !== "undefined")) {
+                        _context58.next = 127;
+                        break;
+                      }
+
+                      value.value = self.namespace.mappedNamespaceAliases[key];
+                      _context58.next = 130;
+                      break;
+
+                    case 127:
+                      console.error("self.namespace.mappedAliases", self.namespace.mappedAliases);
+                      console.error("self.namespace.mappedNamespaceAliases", self.namespace.mappedNamespaceAliases);
+                      throw new Error("Alias '".concat(key, "' is not mapped in 'self.namespace.mappedAliases' nor 'self.namespace.mappedNamespaceAliases'!"));
+
+                    case 130:
+                      _context58.next = 133;
+                      break;
+
+                    case 132:
+                      value.value = value.value.toString();
+
+                    case 133:
+                      _context58.next = 135;
+                      return self.namespace.mapInterface(anchor.alias, value.value);
+
+                    case 135:
+                      interfaceComponent = _context58.sent;
+
+                      if (anchor.contract) {
+                        interfaceComponent.contract = [anchor.contract, self.namespace.getContractForAlias(anchor.contract)];
+                      }
+
+                      _context58.next = 158;
+                      break;
+
+                    case 139:
+                      if (!(anchor.type === 'contract')) {
+                        _context58.next = 144;
+                        break;
+                      }
+
+                      _context58.next = 142;
+                      return self.namespace.mapContract(anchor, value.value);
+
+                    case 142:
+                      _context58.next = 158;
+                      break;
+
+                    case 144:
+                      if (!(anchor.type === 'plugin')) {
+                        _context58.next = 149;
+                        break;
+                      }
+
+                      _context58.next = 147;
+                      return self.namespace.mapPlugin(anchor.alias, value.value);
+
+                    case 147:
+                      _context58.next = 158;
+                      break;
+
+                    case 149:
+                      if (!(anchor.type === 'variables')) {
+                        _context58.next = 157;
+                        break;
+                      }
+
+                      _context58.next = 152;
+                      return self.namespace.replaceVariablesInString(anchor.alias);
+
+                    case 152:
+                      anchor.alias = _context58.sent;
+                      _context58.next = 155;
+                      return self.namespace.mapVariables(anchor.alias, self.closureForValueIfReference(value));
+
+                    case 155:
+                      _context58.next = 158;
+                      break;
+
+                    case 157:
+                      throw new Error("Anchor of type '".concat(anchor.type, "' not supported!"));
+
+                    case 158:
+                      _context58.next = 262;
+                      break;
+
+                    case 160:
+                      if (!(anchor.pointer != '')) {
+                        _context58.next = 258;
+                        break;
+                      }
+
+                      _context58.next = 163;
+                      return self.namespace.replaceVariablesInString(anchor.pointer);
+
+                    case 163:
+                      anchor.pointer = _context58.sent;
+                      _context58.next = 166;
+                      return self.namespace.replaceVariablesInString(value.value);
+
+                    case 166:
+                      value.value = _context58.sent;
+                      _context58.next = 169;
+                      return self.closureForValueIfReference(value, /*#__PURE__*/function () {
+                        var _ref28 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee54(value, _value) {
+                          return _regenerator["default"].wrap(function _callee54$(_context54) {
+                            while (1) {
+                              switch (_context54.prev = _context54.next) {
+                                case 0:
+                                  if (!value["interface"]) {
+                                    _context54.next = 13;
+                                    break;
+                                  }
+
+                                  _context54.next = 3;
+                                  return Promise.mapSeries(value["interface"], /*#__PURE__*/function () {
+                                    var _ref29 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee51(_interface) {
+                                      return _regenerator["default"].wrap(function _callee51$(_context51) {
+                                        while (1) {
+                                          switch (_context51.prev = _context51.next) {
+                                            case 0:
+                                              if (!_value.contract) {
+                                                _context51.next = 5;
+                                                break;
+                                              }
+
+                                              if (!(_interface[1].contract !== _value.contract)) {
+                                                _context51.next = 3;
+                                                break;
+                                              }
+
+                                              throw new Error('Contract mis-match!');
+
+                                            case 3:
+                                              _context51.next = 6;
+                                              break;
+
+                                            case 5:
+                                              _value.contract = _interface[1].contract || null;
+
+                                            case 6:
+                                              _context51.next = 8;
+                                              return _interface[1].$instance;
+
+                                            case 8:
+                                              _context51.t0 = _context51.sent;
+                                              _context51.next = 11;
+                                              return (0, _context51.t0)(_value, anchor.pointer, value.propertyPathMount);
+
+                                            case 11:
+                                              _value = _context51.sent;
+
+                                              if (!(typeof _value === "undefined")) {
+                                                _context51.next = 14;
+                                                break;
+                                              }
+
+                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                            case 14:
+                                            case "end":
+                                              return _context51.stop();
+                                          }
+                                        }
+                                      }, _callee51);
+                                    }));
+
+                                    return function (_x81) {
+                                      return _ref29.apply(this, arguments);
+                                    };
+                                  }());
+
+                                case 3:
+                                  if (!_value.contract) {
+                                    _context54.next = 11;
+                                    break;
+                                  }
+
+                                  // Verify output of interface via contract
+                                  log("Verify local interface output from '".concat(value["interface"].map(function (_interface) {
+                                    return _interface[0];
+                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                                  _context54.next = 7;
+                                  return _value.contract[1].$instance;
+
+                                case 7:
+                                  _context54.t0 = _context54.sent;
+                                  _context54.next = 10;
+                                  return (0, _context54.t0)(_value, anchor.pointer, value.propertyPathMount);
+
+                                case 10:
+                                  _value = _context54.sent;
+
+                                case 11:
+                                  _context54.next = 24;
+                                  break;
+
+                                case 13:
+                                  if (!_value["interface"]) {
+                                    _context54.next = 24;
+                                    break;
+                                  }
+
+                                  _context54.next = 16;
+                                  return Promise.mapSeries(_value["interface"], /*#__PURE__*/function () {
+                                    var _ref30 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee52(_interface) {
+                                      return _regenerator["default"].wrap(function _callee52$(_context52) {
+                                        while (1) {
+                                          switch (_context52.prev = _context52.next) {
+                                            case 0:
+                                              if (!_value.contract) {
+                                                _context52.next = 5;
+                                                break;
+                                              }
+
+                                              if (!(_interface[1].contract !== _value.contract)) {
+                                                _context52.next = 3;
+                                                break;
+                                              }
+
+                                              throw new Error('Contract mis-match!');
+
+                                            case 3:
+                                              _context52.next = 6;
+                                              break;
+
+                                            case 5:
+                                              _value.contract = _interface[1].contract || null;
+
+                                            case 6:
+                                              _context52.next = 8;
+                                              return _interface[1].$instance;
+
+                                            case 8:
+                                              _context52.t0 = _context52.sent;
+                                              _context52.next = 11;
+                                              return (0, _context52.t0)(_value, anchor.pointer, value.propertyPathMount);
+
+                                            case 11:
+                                              _value = _context52.sent;
+
+                                              if (!(typeof _value === "undefined")) {
+                                                _context52.next = 14;
+                                                break;
+                                              }
+
+                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                            case 14:
+                                            case "end":
+                                              return _context52.stop();
+                                          }
+                                        }
+                                      }, _callee52);
+                                    }));
+
+                                    return function (_x82) {
+                                      return _ref30.apply(this, arguments);
+                                    };
+                                  }());
+
+                                case 16:
+                                  if (!_value.contract) {
+                                    _context54.next = 24;
+                                    break;
+                                  }
+
+                                  // Verify output of interface via contract
+                                  log("Verify local interface output from '".concat(_value["interface"].map(function (_interface) {
+                                    return _interface[0];
+                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                                  _context54.next = 20;
+                                  return _value.contract[1].$instance;
+
+                                case 20:
+                                  _context54.t1 = _context54.sent;
+                                  _context54.next = 23;
+                                  return (0, _context54.t1)(_value, anchor.pointer, value.propertyPathMount);
+
+                                case 23:
+                                  _value = _context54.sent;
+
+                                case 24:
+                                  if (!anchor["interface"]) {
+                                    _context54.next = 35;
+                                    break;
+                                  }
+
+                                  _context54.next = 27;
+                                  return Promise.mapSeries(anchor["interface"], /*#__PURE__*/function () {
+                                    var _ref31 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee53(_interface) {
+                                      return _regenerator["default"].wrap(function _callee53$(_context53) {
+                                        while (1) {
+                                          switch (_context53.prev = _context53.next) {
+                                            case 0:
+                                              if (!_value.contract) {
+                                                _context53.next = 5;
+                                                break;
+                                              }
+
+                                              if (!(_interface[1].contract !== _value.contract)) {
+                                                _context53.next = 3;
+                                                break;
+                                              }
+
+                                              throw new Error('Contract mis-match!');
+
+                                            case 3:
+                                              _context53.next = 6;
+                                              break;
+
+                                            case 5:
+                                              _value.contract = _interface[1].contract || null;
+
+                                            case 6:
+                                              _context53.next = 8;
+                                              return _interface[1].$instance;
+
+                                            case 8:
+                                              _context53.t0 = _context53.sent;
+                                              _context53.next = 11;
+                                              return (0, _context53.t0)(_value, anchor.pointer, value.propertyPathMount);
+
+                                            case 11:
+                                              _value = _context53.sent;
+
+                                              if (!(typeof _value === "undefined")) {
+                                                _context53.next = 14;
+                                                break;
+                                              }
+
+                                              throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                            case 14:
+                                            case "end":
+                                              return _context53.stop();
+                                          }
+                                        }
+                                      }, _callee53);
+                                    }));
+
+                                    return function (_x83) {
+                                      return _ref31.apply(this, arguments);
+                                    };
+                                  }());
+
+                                case 27:
+                                  if (!_value.contract) {
+                                    _context54.next = 35;
+                                    break;
+                                  }
+
+                                  // Verify output of interface via contract
+                                  log("Verify local interface output from '".concat(anchor["interface"].map(function (_interface) {
+                                    return _interface[0];
+                                  }), "' using contract '").concat(_value.contract[1].alias, "'"));
+                                  _context54.next = 31;
+                                  return _value.contract[1].$instance;
+
+                                case 31:
+                                  _context54.t2 = _context54.sent;
+                                  _context54.next = 34;
+                                  return (0, _context54.t2)(_value, anchor.pointer, value.propertyPathMount);
+
+                                case 34:
+                                  _value = _context54.sent;
+
+                                case 35:
+                                  return _context54.abrupt("return", _value);
+
+                                case 36:
+                                case "end":
+                                  return _context54.stop();
                               }
+                            }
+                          }, _callee54);
+                        }));
 
-                              _context58.next = 5;
-                              return _regenerator["default"].awrap(_interface[1].contract[1].impl.invokeWrapper(_component3).call(null, _interface[1].contract[0]));
+                        return function (_x79, _x80) {
+                          return _ref28.apply(this, arguments);
+                        };
+                      }());
 
-                            case 5:
-                              _component3.$wrappedInvoke[i] = _context58.sent;
+                    case 169:
+                      value = _context58.sent;
 
-                            case 6:
-                              _context58.next = 8;
-                              return _regenerator["default"].awrap(_component3.$wrappedInvoke[i](anchor.pointer, response || value));
+                      if (value.wrapped) {
+                        _context58.next = 220;
+                        break;
+                      }
 
-                            case 8:
-                              response = _context58.sent;
+                      if (!value["interface"]) {
+                        _context58.next = 186;
+                        break;
+                      }
 
-                            case 9:
-                            case "end":
-                              return _context58.stop();
+                      interfaces = value["interface"];
+                      delete value["interface"];
+                      _context58.next = 176;
+                      return Promise.mapSeries(interfaces, /*#__PURE__*/function () {
+                        var _ref32 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee55(_interface) {
+                          return _regenerator["default"].wrap(function _callee55$(_context55) {
+                            while (1) {
+                              switch (_context55.prev = _context55.next) {
+                                case 0:
+                                  if (!value.contract) {
+                                    _context55.next = 5;
+                                    break;
+                                  }
+
+                                  if (!(_interface[1].contract !== value.contract)) {
+                                    _context55.next = 3;
+                                    break;
+                                  }
+
+                                  throw new Error('Contract mis-match!');
+
+                                case 3:
+                                  _context55.next = 6;
+                                  break;
+
+                                case 5:
+                                  value.contract = _interface[1].contract || null;
+
+                                case 6:
+                                  _context55.next = 8;
+                                  return _interface[1].$instance;
+
+                                case 8:
+                                  _context55.t0 = _context55.sent;
+                                  _context55.next = 11;
+                                  return (0, _context55.t0)(value, anchor.pointer);
+
+                                case 11:
+                                  value = _context55.sent;
+
+                                  if (!(typeof value === "undefined")) {
+                                    _context55.next = 14;
+                                    break;
+                                  }
+
+                                  throw new Error("Value is undefined after processing by remote interface '".concat(_interface[0], "'!"));
+
+                                case 14:
+                                case "end":
+                                  return _context55.stop();
+                              }
+                            }
+                          }, _callee55);
+                        }));
+
+                        return function (_x84) {
+                          return _ref32.apply(this, arguments);
+                        };
+                      }());
+
+                    case 176:
+                      if (!value.contract) {
+                        _context58.next = 184;
+                        break;
+                      }
+
+                      // Verify output of interface via contract
+                      log("Verify remote interface output from '".concat(interfaces.map(function (_interface) {
+                        return _interface[0];
+                      }), "' using contract '").concat(value.contract[1].alias, "'"));
+                      _context58.next = 180;
+                      return value.contract[1].$instance;
+
+                    case 180:
+                      _context58.t0 = _context58.sent;
+                      _context58.next = 183;
+                      return (0, _context58.t0)(value, anchor.pointer);
+
+                    case 183:
+                      value = _context58.sent;
+
+                    case 184:
+                      _context58.next = 194;
+                      break;
+
+                    case 186:
+                      if (!value.contract) {
+                        _context58.next = 194;
+                        break;
+                      }
+
+                      log("Verify inline value using contract '".concat(value.contract[1].alias, "'"));
+                      _context58.next = 190;
+                      return value.contract[1].$instance;
+
+                    case 190:
+                      _context58.t1 = _context58.sent;
+                      _context58.next = 193;
+                      return (0, _context58.t1)(value, anchor.pointer);
+
+                    case 193:
+                      value = _context58.sent;
+
+                    case 194:
+                      if (!anchor["interface"]) {
+                        _context58.next = 209;
+                        break;
+                      }
+
+                      // TODO: Ensure anchor contract is the same as or inherits from the same value contract.
+                      _interfaces = anchor["interface"];
+                      delete anchor["interface"];
+                      _context58.next = 199;
+                      return Promise.mapSeries(_interfaces, /*#__PURE__*/function () {
+                        var _ref33 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee56(_interface) {
+                          return _regenerator["default"].wrap(function _callee56$(_context56) {
+                            while (1) {
+                              switch (_context56.prev = _context56.next) {
+                                case 0:
+                                  if (!value.contract) {
+                                    _context56.next = 6;
+                                    break;
+                                  }
+
+                                  if (!(_interface[1].contract !== value.contract)) {
+                                    _context56.next = 4;
+                                    break;
+                                  }
+
+                                  if (!(_interface[1].contract[1].impl.id != value.contract[1].impl.id)) {
+                                    _context56.next = 4;
+                                    break;
+                                  }
+
+                                  throw new Error('Contract mis-match!');
+
+                                case 4:
+                                  _context56.next = 7;
+                                  break;
+
+                                case 6:
+                                  value.contract = _interface[1].contract || null;
+
+                                case 7:
+                                  _context56.next = 9;
+                                  return _interface[1].$instance;
+
+                                case 9:
+                                  _context56.t0 = _context56.sent;
+                                  _context56.next = 12;
+                                  return (0, _context56.t0)(value, anchor.pointer);
+
+                                case 12:
+                                  value = _context56.sent;
+
+                                  if (!(typeof value === "undefined")) {
+                                    _context56.next = 15;
+                                    break;
+                                  }
+
+                                  throw new Error("Value is undefined after processing by local interface '".concat(_interface[0], "'!"));
+
+                                case 15:
+                                case "end":
+                                  return _context56.stop();
+                              }
+                            }
+                          }, _callee56);
+                        }));
+
+                        return function (_x85) {
+                          return _ref33.apply(this, arguments);
+                        };
+                      }());
+
+                    case 199:
+                      if (!value.contract) {
+                        _context58.next = 207;
+                        break;
+                      }
+
+                      // Verify output of interface via contract
+                      log("Verify local interface output from '".concat(_interfaces.map(function (_interface) {
+                        return _interface[0];
+                      }), "' using contract '").concat(value.contract[1].alias, "'"));
+                      _context58.next = 203;
+                      return value.contract[1].$instance;
+
+                    case 203:
+                      _context58.t2 = _context58.sent;
+                      _context58.next = 206;
+                      return (0, _context58.t2)(value, anchor.pointer);
+
+                    case 206:
+                      value = _context58.sent;
+
+                    case 207:
+                      _context58.next = 217;
+                      break;
+
+                    case 209:
+                      if (!anchor.contract) {
+                        _context58.next = 217;
+                        break;
+                      }
+
+                      // Verify value via contract
+                      log("Verify value using contract '".concat(anchor.contract[1].alias, "'"));
+                      _context58.next = 213;
+                      return anchor.contract[1].$instance;
+
+                    case 213:
+                      _context58.t3 = _context58.sent;
+                      _context58.next = 216;
+                      return (0, _context58.t3)(value, anchor.pointer);
+
+                    case 216:
+                      value = _context58.sent;
+
+                    case 217:
+                      if (anchor.contract) {
+                        value.contract = anchor.contract || null;
+                      }
+
+                      _context58.next = 221;
+                      break;
+
+                    case 220:
+                      if (anchor["interface"]) {
+                        anchor["interface"].forEach(function (_interface) {
+                          if (value.contract) {
+                            if (_interface[1].contract !== value.contract) {
+                              throw new Error('Contract mis-match!');
+                            }
+                          } else {
+                            value.contract = _interface[1].contract || null;
+                          }
+                        });
+                      }
+
+                    case 221:
+                      if (!(anchor.type === 'component')) {
+                        _context58.next = 252;
+                        break;
+                      }
+
+                      getResolvedAlias = function getResolvedAlias(alias) {
+                        if (!self.namespace.anchorPrefixStack.length) {
+                          return alias;
+                        }
+
+                        var resolved = null; //console.log("MAKE FROM STACK", self.namespace.anchorPrefixStack);
+
+                        for (var i = self.namespace.anchorPrefixStack.length - 1; i >= 0; i--) {
+                          if (!resolved) {
+                            resolved = self.namespace.anchorPrefixStack[i];
+                          } else {
+                            resolved = resolved.prepend(self.namespace.anchorPrefixStack[i]);
                           }
                         }
+
+                        return resolved.toSegmentedString() + '|' + alias;
+                      };
+
+                      _context58.next = 225;
+                      return self.namespace.getComponentForAlias(anchor.alias);
+
+                    case 225:
+                      _component3 = _context58.sent;
+                      log("Invoke component '".concat(_component3.path, "' for alias '").concat(anchor.alias, "'"));
+
+                      if (!(anchor.contract && anchor.contract[1].impl.invokeWrapper)) {
+                        _context58.next = 237;
+                        break;
+                      }
+
+                      if (_component3.$wrappedInvoke) {
+                        _context58.next = 232;
+                        break;
+                      }
+
+                      _context58.next = 231;
+                      return anchor.contract[1].impl.invokeWrapper(_component3).call(null, anchor.contract[0]);
+
+                    case 231:
+                      _component3.$wrappedInvoke = _context58.sent;
+
+                    case 232:
+                      _context58.next = 234;
+                      return _component3.$wrappedInvoke(anchor.pointer, value);
+
+                    case 234:
+                      response = _context58.sent;
+                      _context58.next = 240;
+                      break;
+
+                    case 237:
+                      if (!anchor["interface"]) {
+                        _context58.next = 240;
+                        break;
+                      }
+
+                      _context58.next = 240;
+                      return Promise.mapSeries(anchor["interface"], /*#__PURE__*/function () {
+                        var _ref34 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee57(_interface, i) {
+                          return _regenerator["default"].wrap(function _callee57$(_context57) {
+                            while (1) {
+                              switch (_context57.prev = _context57.next) {
+                                case 0:
+                                  _component3.$wrappedInvoke = _component3.$wrappedInvoke || [];
+
+                                  if (!(_interface[1].contract && _interface[1].contract[1].impl.invokeWrapper)) {
+                                    _context57.next = 9;
+                                    break;
+                                  }
+
+                                  if (_component3.$wrappedInvoke[i]) {
+                                    _context57.next = 6;
+                                    break;
+                                  }
+
+                                  _context57.next = 5;
+                                  return _interface[1].contract[1].impl.invokeWrapper(_component3).call(null, _interface[1].contract[0]);
+
+                                case 5:
+                                  _component3.$wrappedInvoke[i] = _context57.sent;
+
+                                case 6:
+                                  _context57.next = 8;
+                                  return _component3.$wrappedInvoke[i](anchor.pointer, response || value);
+
+                                case 8:
+                                  response = _context57.sent;
+
+                                case 9:
+                                case "end":
+                                  return _context57.stop();
+                              }
+                            }
+                          }, _callee57);
+                        }));
+
+                        return function (_x86, _x87) {
+                          return _ref34.apply(this, arguments);
+                        };
+                      }());
+
+                    case 240:
+                      if (!(typeof response === "undefined")) {
+                        _context58.next = 248;
+                        break;
+                      }
+
+                      if (_component3.invoke) {
+                        _context58.next = 245;
+                        break;
+                      }
+
+                      console.error("anchor", anchor);
+                      console.error("component", _component3);
+                      throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
+
+                    case 245:
+                      _context58.next = 247;
+                      return _component3.invoke(anchor.pointer, value, {
+                        callerNamespace: self.namespace
                       });
-                    }));
 
-                  case 255:
-                    if (!(typeof response === "undefined")) {
-                      _context59.next = 263;
-                      break;
-                    }
+                    case 247:
+                      response = _context58.sent;
 
-                    if (_component3.invoke) {
-                      _context59.next = 260;
-                      break;
-                    }
+                    case 248:
+                      if (typeof response !== "undefined") {
+                        apiKey = getResolvedAlias(anchor.alias);
+                        self.namespace.apis[apiKey] = self.namespace.apis[apiKey] || [];
+                        self.namespace.apis[apiKey].push({
+                          anchor: self.namespace.anchorPrefixStack.slice().concat(nsPointerAnchor).filter(function (layer) {
+                            return !!layer;
+                          }).map(function (layer) {
+                            return layer.getSegments();
+                          }),
+                          "implements": _component3.resolvedNamespace && _component3.resolvedNamespace.getSegments() || [],
+                          api: response
+                        });
+                      }
 
-                    console.error("anchor", anchor);
-                    console.error("component", _component3);
-                    throw new Error("Interface and contract invoke responses (if applicable) are undefined and component does not implement 'invoke()'!");
+                      return _context58.abrupt("return", response);
 
-                  case 260:
-                    _context59.next = 262;
-                    return _regenerator["default"].awrap(_component3.invoke(anchor.pointer, value, {
-                      callerNamespace: self.namespace
-                    }));
+                    case 252:
+                      if (!(anchor.type === 'plugin')) {
+                        _context58.next = 256;
+                        break;
+                      }
 
-                  case 262:
-                    response = _context59.sent;
-
-                  case 263:
-                    if (typeof response !== "undefined") {
-                      apiKey = getResolvedAlias(anchor.alias);
-                      self.namespace.apis[apiKey] = self.namespace.apis[apiKey] || [];
-                      self.namespace.apis[apiKey].push({
-                        anchor: self.namespace.anchorPrefixStack.slice().concat(nsPointerAnchor).filter(function (layer) {
-                          return !!layer;
-                        }).map(function (layer) {
-                          return layer.getSegments();
-                        }),
-                        "implements": _component3.resolvedNamespace && _component3.resolvedNamespace.getSegments() || [],
-                        api: response
+                      plugins = self.namespace.getPluginsForMatch(anchor.alias);
+                      _context58.next = 256;
+                      return Promise.mapSeries(plugins, function (plugin) {
+                        return plugin.invoke(anchor.pointer, value);
                       });
-                    }
 
-                    return _context59.abrupt("return", response);
-
-                  case 267:
-                    if (!(anchor.type === 'plugin')) {
-                      _context59.next = 271;
+                    case 256:
+                      _context58.next = 262;
                       break;
-                    }
 
-                    plugins = self.namespace.getPluginsForMatch(anchor.alias);
-                    _context59.next = 271;
-                    return _regenerator["default"].awrap(Promise.mapSeries(plugins, function (plugin) {
-                      return plugin.invoke(anchor.pointer, value);
-                    }));
+                    case 258:
+                      CONSOLE.error("instruction:", anchor, ":", value);
+                      CONSOLE.error("anchor.alias:", anchor.alias);
+                      CONSOLE.error("anchor.pointer:", anchor.pointer);
+                      throw new Error("Unknown instruction!");
 
-                  case 271:
-                    _context59.next = 277;
-                    break;
-
-                  case 273:
-                    CONSOLE.error("instruction:", anchor, ":", value);
-                    CONSOLE.error("anchor.alias:", anchor.alias);
-                    CONSOLE.error("anchor.pointer:", anchor.pointer);
-                    throw new Error("Unknown instruction!");
-
-                  case 277:
-                  case "end":
-                    return _context59.stop();
+                    case 262:
+                    case "end":
+                      return _context58.stop();
+                  }
                 }
-              }
-            }, null, this);
-          }
+              }, _callee58, this);
+            }));
+
+            function processInstruction(_x74, _x75, _x76) {
+              return _processInstruction.apply(this, arguments);
+            }
+
+            return processInstruction;
+          }()
         }]);
         return Processor;
       }();
@@ -31119,535 +31388,299 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     }).call(this, require("path").join(__dirname, "inf.js"), require("path").join(__dirname, "."));
   }, {
     "assert": undefined,
-    "bluebird": 148,
+    "bluebird": 164,
     "child_process": undefined,
-    "clarinet": 182,
-    "codeblock": 126,
-    "colors/safe": 193,
+    "clarinet": 198,
+    "codeblock": 142,
+    "colors/safe": 209,
     "crypto": undefined,
-    "escape-regexp": 195,
+    "escape-regexp": 211,
     "events": undefined,
-    "fs-extra": 208,
-    "glob": 231,
-    "json-stable-stringify": 240,
+    "fs-extra": 224,
+    "glob": 247,
+    "json-stable-stringify": 256,
     "lib.json": 37,
-    "lodash": 352,
-    "lodash/get": 336,
-    "lodash/merge": 354,
-    "lodash/toPath": 356,
-    "lodash/values": 359,
-    "memorystream": 360,
-    "minimist": 362,
+    "lodash": 368,
+    "lodash/get": 352,
+    "lodash/merge": 370,
+    "lodash/toPath": 372,
+    "lodash/values": 375,
+    "memorystream": 376,
+    "minimist": 378,
     "path": undefined,
-    "resolve": 366,
-    "runbash": 378,
+    "resolve": 382,
+    "runbash": 394,
     "stream": undefined,
-    "traverse": 375,
+    "traverse": 391,
     "util": undefined
   }],
-  144: [function (require, module, exports) {
-    'use strict';
-
-    module.exports = balanced;
-
-    function balanced(a, b, str) {
-      if (a instanceof RegExp) a = maybeMatch(a, str);
-      if (b instanceof RegExp) b = maybeMatch(b, str);
-      var r = range(a, b, str);
-      return r && {
-        start: r[0],
-        end: r[1],
-        pre: str.slice(0, r[0]),
-        body: str.slice(r[0] + a.length, r[1]),
-        post: str.slice(r[1] + b.length)
-      };
-    }
-
-    function maybeMatch(reg, str) {
-      var m = str.match(reg);
-      return m ? m[0] : null;
-    }
-
-    balanced.range = range;
-
-    function range(a, b, str) {
-      var begs, beg, left, right, result;
-      var ai = str.indexOf(a);
-      var bi = str.indexOf(b, ai + 1);
-      var i = ai;
-
-      if (ai >= 0 && bi > 0) {
-        begs = [];
-        left = str.length;
-
-        while (i >= 0 && !result) {
-          if (i == ai) {
-            begs.push(i);
-            ai = str.indexOf(a, i + 1);
-          } else if (begs.length == 1) {
-            result = [begs.pop(), bi];
-          } else {
-            beg = begs.pop();
-
-            if (beg < left) {
-              left = beg;
-              right = bi;
-            }
-
-            bi = str.indexOf(b, i + 1);
-          }
-
-          i = ai < bi && ai >= 0 ? ai : bi;
-        }
-
-        if (begs.length) {
-          result = [left, right];
-        }
-      }
-
-      return result;
-    }
-  }, {}],
-  145: [function (require, module, exports) {
+  160: [function (require, module, exports) {
+    arguments[4][38][0].apply(exports, arguments);
+  }, {
+    "dup": 38
+  }],
+  161: [function (require, module, exports) {
     arguments[4][1][0].apply(exports, arguments);
   }, {
     "dup": 1
   }],
-  146: [function (require, module, exports) {
-    arguments[4][39][0].apply(exports, arguments);
+  162: [function (require, module, exports) {
+    arguments[4][2][0].apply(exports, arguments);
   }, {
-    "./queue": 170,
-    "./schedule": 173,
-    "dup": 39
+    "./queue": 186,
+    "./schedule": 189,
+    "dup": 2
   }],
-  147: [function (require, module, exports) {
+  163: [function (require, module, exports) {
     arguments[4][3][0].apply(exports, arguments);
   }, {
     "dup": 3
   }],
-  148: [function (require, module, exports) {
+  164: [function (require, module, exports) {
     arguments[4][4][0].apply(exports, arguments);
   }, {
-    "./promise": 166,
+    "./promise": 182,
     "dup": 4
   }],
-  149: [function (require, module, exports) {
+  165: [function (require, module, exports) {
     arguments[4][5][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 5
   }],
-  150: [function (require, module, exports) {
+  166: [function (require, module, exports) {
     arguments[4][6][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 6
   }],
-  151: [function (require, module, exports) {
+  167: [function (require, module, exports) {
     arguments[4][7][0].apply(exports, arguments);
   }, {
-    "./es5": 157,
-    "./util": 180,
+    "./es5": 173,
+    "./util": 196,
     "dup": 7
   }],
-  152: [function (require, module, exports) {
+  168: [function (require, module, exports) {
     arguments[4][8][0].apply(exports, arguments);
   }, {
     "dup": 8
   }],
-  153: [function (require, module, exports) {
-    arguments[4][46][0].apply(exports, arguments);
+  169: [function (require, module, exports) {
+    arguments[4][9][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./es5": 157,
-    "./util": 180,
-    "dup": 46
+    "./errors": 172,
+    "./es5": 173,
+    "./util": 196,
+    "dup": 9
   }],
-  154: [function (require, module, exports) {
+  170: [function (require, module, exports) {
     arguments[4][10][0].apply(exports, arguments);
   }, {
     "dup": 10
   }],
-  155: [function (require, module, exports) {
+  171: [function (require, module, exports) {
     arguments[4][11][0].apply(exports, arguments);
   }, {
     "dup": 11
   }],
-  156: [function (require, module, exports) {
+  172: [function (require, module, exports) {
     arguments[4][12][0].apply(exports, arguments);
   }, {
-    "./es5": 157,
-    "./util": 180,
+    "./es5": 173,
+    "./util": 196,
     "dup": 12
   }],
-  157: [function (require, module, exports) {
+  173: [function (require, module, exports) {
     arguments[4][13][0].apply(exports, arguments);
   }, {
     "dup": 13
   }],
-  158: [function (require, module, exports) {
+  174: [function (require, module, exports) {
     arguments[4][14][0].apply(exports, arguments);
   }, {
     "dup": 14
   }],
-  159: [function (require, module, exports) {
+  175: [function (require, module, exports) {
     arguments[4][15][0].apply(exports, arguments);
   }, {
-    "./catch_filter": 151,
-    "./util": 180,
+    "./catch_filter": 167,
+    "./util": 196,
     "dup": 15
   }],
-  160: [function (require, module, exports) {
+  176: [function (require, module, exports) {
     arguments[4][16][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./util": 180,
+    "./errors": 172,
+    "./util": 196,
     "dup": 16
   }],
-  161: [function (require, module, exports) {
-    arguments[4][54][0].apply(exports, arguments);
+  177: [function (require, module, exports) {
+    arguments[4][17][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 54
+    "./util": 196,
+    "dup": 17
   }],
-  162: [function (require, module, exports) {
-    arguments[4][55][0].apply(exports, arguments);
+  178: [function (require, module, exports) {
+    arguments[4][18][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 55
+    "./util": 196,
+    "dup": 18
   }],
-  163: [function (require, module, exports) {
+  179: [function (require, module, exports) {
     arguments[4][19][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 19
   }],
-  164: [function (require, module, exports) {
+  180: [function (require, module, exports) {
     arguments[4][20][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./es5": 157,
-    "./util": 180,
+    "./errors": 172,
+    "./es5": 173,
+    "./util": 196,
     "dup": 20
   }],
-  165: [function (require, module, exports) {
+  181: [function (require, module, exports) {
     arguments[4][21][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 21
   }],
-  166: [function (require, module, exports) {
-    arguments[4][59][0].apply(exports, arguments);
+  182: [function (require, module, exports) {
+    arguments[4][22][0].apply(exports, arguments);
   }, {
-    "./any.js": 145,
-    "./async": 146,
-    "./bind": 147,
-    "./call_get.js": 149,
-    "./cancel": 150,
-    "./catch_filter": 151,
-    "./context": 152,
-    "./debuggability": 153,
-    "./direct_resolve": 154,
-    "./each.js": 155,
-    "./errors": 156,
-    "./es5": 157,
-    "./filter.js": 158,
-    "./finally": 159,
-    "./generators.js": 160,
-    "./join": 161,
-    "./map.js": 162,
-    "./method": 163,
-    "./nodeback": 164,
-    "./nodeify.js": 165,
-    "./promise_array": 167,
-    "./promisify.js": 168,
-    "./props.js": 169,
-    "./race.js": 171,
-    "./reduce.js": 172,
-    "./settle.js": 174,
-    "./some.js": 175,
-    "./synchronous_inspection": 176,
-    "./thenables": 177,
-    "./timers.js": 178,
-    "./using.js": 179,
-    "./util": 180,
+    "./any.js": 161,
+    "./async": 162,
+    "./bind": 163,
+    "./call_get.js": 165,
+    "./cancel": 166,
+    "./catch_filter": 167,
+    "./context": 168,
+    "./debuggability": 169,
+    "./direct_resolve": 170,
+    "./each.js": 171,
+    "./errors": 172,
+    "./es5": 173,
+    "./filter.js": 174,
+    "./finally": 175,
+    "./generators.js": 176,
+    "./join": 177,
+    "./map.js": 178,
+    "./method": 179,
+    "./nodeback": 180,
+    "./nodeify.js": 181,
+    "./promise_array": 183,
+    "./promisify.js": 184,
+    "./props.js": 185,
+    "./race.js": 187,
+    "./reduce.js": 188,
+    "./settle.js": 190,
+    "./some.js": 191,
+    "./synchronous_inspection": 192,
+    "./thenables": 193,
+    "./timers.js": 194,
+    "./using.js": 195,
+    "./util": 196,
     "async_hooks": undefined,
-    "dup": 59
+    "dup": 22
   }],
-  167: [function (require, module, exports) {
-    arguments[4][60][0].apply(exports, arguments);
+  183: [function (require, module, exports) {
+    arguments[4][23][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 60
+    "./util": 196,
+    "dup": 23
   }],
-  168: [function (require, module, exports) {
+  184: [function (require, module, exports) {
     arguments[4][24][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./nodeback": 164,
-    "./util": 180,
+    "./errors": 172,
+    "./nodeback": 180,
+    "./util": 196,
     "dup": 24
   }],
-  169: [function (require, module, exports) {
+  185: [function (require, module, exports) {
     arguments[4][25][0].apply(exports, arguments);
   }, {
-    "./es5": 157,
-    "./util": 180,
+    "./es5": 173,
+    "./util": 196,
     "dup": 25
   }],
-  170: [function (require, module, exports) {
+  186: [function (require, module, exports) {
     arguments[4][26][0].apply(exports, arguments);
   }, {
     "dup": 26
   }],
-  171: [function (require, module, exports) {
+  187: [function (require, module, exports) {
     arguments[4][27][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 27
   }],
-  172: [function (require, module, exports) {
-    arguments[4][65][0].apply(exports, arguments);
+  188: [function (require, module, exports) {
+    arguments[4][28][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 65
+    "./util": 196,
+    "dup": 28
   }],
-  173: [function (require, module, exports) {
-    arguments[4][66][0].apply(exports, arguments);
+  189: [function (require, module, exports) {
+    arguments[4][29][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 66
+    "./util": 196,
+    "dup": 29
   }],
-  174: [function (require, module, exports) {
-    arguments[4][67][0].apply(exports, arguments);
+  190: [function (require, module, exports) {
+    arguments[4][30][0].apply(exports, arguments);
   }, {
-    "./util": 180,
-    "dup": 67
+    "./util": 196,
+    "dup": 30
   }],
-  175: [function (require, module, exports) {
+  191: [function (require, module, exports) {
     arguments[4][31][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./util": 180,
+    "./errors": 172,
+    "./util": 196,
     "dup": 31
   }],
-  176: [function (require, module, exports) {
+  192: [function (require, module, exports) {
     arguments[4][32][0].apply(exports, arguments);
   }, {
     "dup": 32
   }],
-  177: [function (require, module, exports) {
+  193: [function (require, module, exports) {
     arguments[4][33][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 33
   }],
-  178: [function (require, module, exports) {
+  194: [function (require, module, exports) {
     arguments[4][34][0].apply(exports, arguments);
   }, {
-    "./util": 180,
+    "./util": 196,
     "dup": 34
   }],
-  179: [function (require, module, exports) {
+  195: [function (require, module, exports) {
     arguments[4][35][0].apply(exports, arguments);
   }, {
-    "./errors": 156,
-    "./util": 180,
+    "./errors": 172,
+    "./util": 196,
     "dup": 35
   }],
-  180: [function (require, module, exports) {
-    arguments[4][73][0].apply(exports, arguments);
+  196: [function (require, module, exports) {
+    arguments[4][36][0].apply(exports, arguments);
   }, {
-    "./es5": 157,
+    "./es5": 173,
     "async_hooks": undefined,
-    "dup": 73
+    "dup": 36
   }],
-  181: [function (require, module, exports) {
-    var concatMap = require('concat-map');
-
-    var balanced = require('balanced-match');
-
-    module.exports = expandTop;
-    var escSlash = '\0SLASH' + Math.random() + '\0';
-    var escOpen = '\0OPEN' + Math.random() + '\0';
-    var escClose = '\0CLOSE' + Math.random() + '\0';
-    var escComma = '\0COMMA' + Math.random() + '\0';
-    var escPeriod = '\0PERIOD' + Math.random() + '\0';
-
-    function numeric(str) {
-      return parseInt(str, 10) == str ? parseInt(str, 10) : str.charCodeAt(0);
-    }
-
-    function escapeBraces(str) {
-      return str.split('\\\\').join(escSlash).split('\\{').join(escOpen).split('\\}').join(escClose).split('\\,').join(escComma).split('\\.').join(escPeriod);
-    }
-
-    function unescapeBraces(str) {
-      return str.split(escSlash).join('\\').split(escOpen).join('{').split(escClose).join('}').split(escComma).join(',').split(escPeriod).join('.');
-    } // Basically just str.split(","), but handling cases
-    // where we have nested braced sections, which should be
-    // treated as individual members, like {a,{b,c},d}
-
-
-    function parseCommaParts(str) {
-      if (!str) return [''];
-      var parts = [];
-      var m = balanced('{', '}', str);
-      if (!m) return str.split(',');
-      var pre = m.pre;
-      var body = m.body;
-      var post = m.post;
-      var p = pre.split(',');
-      p[p.length - 1] += '{' + body + '}';
-      var postParts = parseCommaParts(post);
-
-      if (post.length) {
-        p[p.length - 1] += postParts.shift();
-        p.push.apply(p, postParts);
-      }
-
-      parts.push.apply(parts, p);
-      return parts;
-    }
-
-    function expandTop(str) {
-      if (!str) return []; // I don't know why Bash 4.3 does this, but it does.
-      // Anything starting with {} will have the first two bytes preserved
-      // but *only* at the top level, so {},a}b will not expand to anything,
-      // but a{},b}c will be expanded to [a}c,abc].
-      // One could argue that this is a bug in Bash, but since the goal of
-      // this module is to match Bash's rules, we escape a leading {}
-
-      if (str.substr(0, 2) === '{}') {
-        str = '\\{\\}' + str.substr(2);
-      }
-
-      return expand(escapeBraces(str), true).map(unescapeBraces);
-    }
-
-    function identity(e) {
-      return e;
-    }
-
-    function embrace(str) {
-      return '{' + str + '}';
-    }
-
-    function isPadded(el) {
-      return /^-?0\d/.test(el);
-    }
-
-    function lte(i, y) {
-      return i <= y;
-    }
-
-    function gte(i, y) {
-      return i >= y;
-    }
-
-    function expand(str, isTop) {
-      var expansions = [];
-      var m = balanced('{', '}', str);
-      if (!m || /\$$/.test(m.pre)) return [str];
-      var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
-      var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
-      var isSequence = isNumericSequence || isAlphaSequence;
-      var isOptions = m.body.indexOf(',') >= 0;
-
-      if (!isSequence && !isOptions) {
-        // {a},b}
-        if (m.post.match(/,.*\}/)) {
-          str = m.pre + '{' + m.body + escClose + m.post;
-          return expand(str);
-        }
-
-        return [str];
-      }
-
-      var n;
-
-      if (isSequence) {
-        n = m.body.split(/\.\./);
-      } else {
-        n = parseCommaParts(m.body);
-
-        if (n.length === 1) {
-          // x{{a,b}}y ==> x{a}y x{b}y
-          n = expand(n[0], false).map(embrace);
-
-          if (n.length === 1) {
-            var post = m.post.length ? expand(m.post, false) : [''];
-            return post.map(function (p) {
-              return m.pre + n[0] + p;
-            });
-          }
-        }
-      } // at this point, n is the parts, and we know it's not a comma set
-      // with a single entry.
-      // no need to expand pre, since it is guaranteed to be free of brace-sets
-
-
-      var pre = m.pre;
-      var post = m.post.length ? expand(m.post, false) : [''];
-      var N;
-
-      if (isSequence) {
-        var x = numeric(n[0]);
-        var y = numeric(n[1]);
-        var width = Math.max(n[0].length, n[1].length);
-        var incr = n.length == 3 ? Math.abs(numeric(n[2])) : 1;
-        var test = lte;
-        var reverse = y < x;
-
-        if (reverse) {
-          incr *= -1;
-          test = gte;
-        }
-
-        var pad = n.some(isPadded);
-        N = [];
-
-        for (var i = x; test(i, y); i += incr) {
-          var c;
-
-          if (isAlphaSequence) {
-            c = String.fromCharCode(i);
-            if (c === '\\') c = '';
-          } else {
-            c = String(i);
-
-            if (pad) {
-              var need = width - c.length;
-
-              if (need > 0) {
-                var z = new Array(need + 1).join('0');
-                if (i < 0) c = '-' + z + c.slice(1);else c = z + c;
-              }
-            }
-          }
-
-          N.push(c);
-        }
-      } else {
-        N = concatMap(n, function (el) {
-          return expand(el, false);
-        });
-      }
-
-      for (var j = 0; j < N.length; j++) {
-        for (var k = 0; k < post.length; k++) {
-          var expansion = pre + N[j] + post[k];
-          if (!isTop || isSequence || expansion) expansions.push(expansion);
-        }
-      }
-
-      return expansions;
-    }
+  197: [function (require, module, exports) {
+    arguments[4][75][0].apply(exports, arguments);
   }, {
-    "balanced-match": 144,
-    "concat-map": 194
+    "balanced-match": 160,
+    "concat-map": 210,
+    "dup": 75
   }],
-  182: [function (require, module, exports) {
+  198: [function (require, module, exports) {
     ;
 
     (function (clarinet) {
@@ -32403,7 +32436,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
   }, {
     "stream": undefined
   }],
-  183: [function (require, module, exports) {
+  199: [function (require, module, exports) {
     /*
     
     The MIT License (MIT)
@@ -32612,37 +32645,37 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     defineProps(colors, init());
   }, {
-    "./custom/trap": 184,
-    "./custom/zalgo": 185,
-    "./maps/america": 186,
-    "./maps/rainbow": 187,
-    "./maps/random": 188,
-    "./maps/zebra": 189,
-    "./styles": 190,
-    "./system/supports-colors": 192,
+    "./custom/trap": 200,
+    "./custom/zalgo": 201,
+    "./maps/america": 202,
+    "./maps/rainbow": 203,
+    "./maps/random": 204,
+    "./maps/zebra": 205,
+    "./styles": 206,
+    "./system/supports-colors": 208,
     "util": undefined
   }],
-  184: [function (require, module, exports) {
-    arguments[4][128][0].apply(exports, arguments);
+  200: [function (require, module, exports) {
+    arguments[4][144][0].apply(exports, arguments);
   }, {
-    "dup": 128
+    "dup": 144
   }],
-  185: [function (require, module, exports) {
-    arguments[4][129][0].apply(exports, arguments);
+  201: [function (require, module, exports) {
+    arguments[4][145][0].apply(exports, arguments);
   }, {
-    "dup": 129
+    "dup": 145
   }],
-  186: [function (require, module, exports) {
-    arguments[4][132][0].apply(exports, arguments);
+  202: [function (require, module, exports) {
+    arguments[4][148][0].apply(exports, arguments);
   }, {
-    "dup": 132
+    "dup": 148
   }],
-  187: [function (require, module, exports) {
-    arguments[4][133][0].apply(exports, arguments);
+  203: [function (require, module, exports) {
+    arguments[4][149][0].apply(exports, arguments);
   }, {
-    "dup": 133
+    "dup": 149
   }],
-  188: [function (require, module, exports) {
+  204: [function (require, module, exports) {
     module['exports'] = function (colors) {
       var available = ['underline', 'inverse', 'grey', 'yellow', 'red', 'green', 'blue', 'white', 'cyan', 'magenta', 'brightYellow', 'brightRed', 'brightGreen', 'brightBlue', 'brightWhite', 'brightCyan', 'brightMagenta'];
       return function (letter, i, exploded) {
@@ -32650,12 +32683,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     };
   }, {}],
-  189: [function (require, module, exports) {
-    arguments[4][135][0].apply(exports, arguments);
+  205: [function (require, module, exports) {
+    arguments[4][151][0].apply(exports, arguments);
   }, {
-    "dup": 135
+    "dup": 151
   }],
-  190: [function (require, module, exports) {
+  206: [function (require, module, exports) {
     /*
     The MIT License (MIT)
     
@@ -32742,19 +32775,19 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       style.close = "\x1B[" + val[1] + 'm';
     });
   }, {}],
-  191: [function (require, module, exports) {
-    arguments[4][137][0].apply(exports, arguments);
+  207: [function (require, module, exports) {
+    arguments[4][153][0].apply(exports, arguments);
   }, {
-    "dup": 137
+    "dup": 153
   }],
-  192: [function (require, module, exports) {
-    arguments[4][138][0].apply(exports, arguments);
+  208: [function (require, module, exports) {
+    arguments[4][154][0].apply(exports, arguments);
   }, {
-    "./has-flag.js": 191,
-    "dup": 138,
+    "./has-flag.js": 207,
+    "dup": 154,
     "os": undefined
   }],
-  193: [function (require, module, exports) {
+  209: [function (require, module, exports) {
     //
     // Remark: Requiring this file will use the "safe" colors API,
     // which will not touch String.prototype.
@@ -32767,25 +32800,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module['exports'] = colors;
   }, {
-    "./lib/colors": 183
+    "./lib/colors": 199
   }],
-  194: [function (require, module, exports) {
-    module.exports = function (xs, fn) {
-      var res = [];
-
-      for (var i = 0; i < xs.length; i++) {
-        var x = fn(xs[i], i);
-        if (isArray(x)) res.push.apply(res, x);else res.push(x);
-      }
-
-      return res;
-    };
-
-    var isArray = Array.isArray || function (xs) {
-      return Object.prototype.toString.call(xs) === '[object Array]';
-    };
-  }, {}],
-  195: [function (require, module, exports) {
+  210: [function (require, module, exports) {
+    arguments[4][76][0].apply(exports, arguments);
+  }, {
+    "dup": 76
+  }],
+  211: [function (require, module, exports) {
     /**
      * Escape regexp special characters in `str`.
      *
@@ -32797,2118 +32819,372 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return String(str).replace(/([.*+?=^!:${}()|[\]\/\\])/g, '\\$1');
     };
   }, {}],
-  196: [function (require, module, exports) {
-    arguments[4][74][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../util/buffer": 225,
-    "../util/stat": 226,
-    "../util/utimes.js": 227,
-    "dup": 74,
-    "graceful-fs": 234,
-    "path": undefined
-  }],
-  197: [function (require, module, exports) {
-    arguments[4][75][0].apply(exports, arguments);
-  }, {
-    "./copy-sync": 196,
-    "dup": 75
-  }],
-  198: [function (require, module, exports) {
-    arguments[4][76][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "../util/stat": 226,
-    "../util/utimes": 227,
-    "dup": 76,
-    "graceful-fs": 234,
-    "path": undefined
-  }],
-  199: [function (require, module, exports) {
+  212: [function (require, module, exports) {
     arguments[4][77][0].apply(exports, arguments);
   }, {
-    "./copy": 198,
+    "../mkdirs": 229,
+    "../util/buffer": 241,
+    "../util/stat": 242,
+    "../util/utimes.js": 243,
     "dup": 77,
-    "universalify": 376
-  }],
-  200: [function (require, module, exports) {
-    arguments[4][78][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../remove": 223,
-    "dup": 78,
-    "graceful-fs": 234,
-    "path": undefined,
-    "universalify": 376
-  }],
-  201: [function (require, module, exports) {
-    arguments[4][79][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "dup": 79,
-    "graceful-fs": 234,
-    "path": undefined,
-    "universalify": 376
-  }],
-  202: [function (require, module, exports) {
-    arguments[4][80][0].apply(exports, arguments);
-  }, {
-    "./file": 201,
-    "./link": 203,
-    "./symlink": 206,
-    "dup": 80
-  }],
-  203: [function (require, module, exports) {
-    arguments[4][81][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "dup": 81,
-    "graceful-fs": 234,
-    "path": undefined,
-    "universalify": 376
-  }],
-  204: [function (require, module, exports) {
-    arguments[4][82][0].apply(exports, arguments);
-  }, {
-    "../path-exists": 222,
-    "dup": 82,
-    "graceful-fs": 234,
-    "path": undefined
-  }],
-  205: [function (require, module, exports) {
-    arguments[4][83][0].apply(exports, arguments);
-  }, {
-    "dup": 83,
-    "graceful-fs": 234
-  }],
-  206: [function (require, module, exports) {
-    arguments[4][84][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "./symlink-paths": 204,
-    "./symlink-type": 205,
-    "dup": 84,
-    "graceful-fs": 234,
-    "path": undefined,
-    "universalify": 376
-  }],
-  207: [function (require, module, exports) {
-    arguments[4][85][0].apply(exports, arguments);
-  }, {
-    "dup": 85,
-    "graceful-fs": 234,
-    "universalify": 376
-  }],
-  208: [function (require, module, exports) {
-    arguments[4][86][0].apply(exports, arguments);
-  }, {
-    "./copy": 199,
-    "./copy-sync": 197,
-    "./empty": 200,
-    "./ensure": 202,
-    "./fs": 207,
-    "./json": 209,
-    "./mkdirs": 213,
-    "./move": 219,
-    "./move-sync": 217,
-    "./output": 221,
-    "./path-exists": 222,
-    "./remove": 223,
-    "dup": 86,
-    "fs": undefined
-  }],
-  209: [function (require, module, exports) {
-    arguments[4][87][0].apply(exports, arguments);
-  }, {
-    "./jsonfile": 210,
-    "./output-json": 212,
-    "./output-json-sync": 211,
-    "dup": 87,
-    "universalify": 376
-  }],
-  210: [function (require, module, exports) {
-    arguments[4][88][0].apply(exports, arguments);
-  }, {
-    "dup": 88,
-    "jsonfile": 241,
-    "universalify": 376
-  }],
-  211: [function (require, module, exports) {
-    arguments[4][89][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "./jsonfile": 210,
-    "dup": 89,
-    "graceful-fs": 234,
-    "path": undefined
-  }],
-  212: [function (require, module, exports) {
-    arguments[4][90][0].apply(exports, arguments);
-  }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "./jsonfile": 210,
-    "dup": 90,
+    "graceful-fs": 250,
     "path": undefined
   }],
   213: [function (require, module, exports) {
-    arguments[4][91][0].apply(exports, arguments);
+    arguments[4][78][0].apply(exports, arguments);
   }, {
-    "./mkdirs": 215,
-    "./mkdirs-sync": 214,
-    "dup": 91,
-    "universalify": 376
+    "./copy-sync": 212,
+    "dup": 78
   }],
   214: [function (require, module, exports) {
-    arguments[4][92][0].apply(exports, arguments);
+    arguments[4][79][0].apply(exports, arguments);
   }, {
-    "./win32": 216,
-    "dup": 92,
-    "graceful-fs": 234,
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "../util/stat": 242,
+    "../util/utimes": 243,
+    "dup": 79,
+    "graceful-fs": 250,
     "path": undefined
   }],
   215: [function (require, module, exports) {
-    arguments[4][93][0].apply(exports, arguments);
+    arguments[4][80][0].apply(exports, arguments);
   }, {
-    "./win32": 216,
-    "dup": 93,
-    "graceful-fs": 234,
-    "path": undefined
+    "./copy": 214,
+    "dup": 80,
+    "universalify": 392
   }],
   216: [function (require, module, exports) {
-    arguments[4][94][0].apply(exports, arguments);
+    arguments[4][81][0].apply(exports, arguments);
   }, {
-    "dup": 94,
-    "path": undefined
+    "../mkdirs": 229,
+    "../remove": 239,
+    "dup": 81,
+    "graceful-fs": 250,
+    "path": undefined,
+    "universalify": 392
   }],
   217: [function (require, module, exports) {
-    arguments[4][95][0].apply(exports, arguments);
+    arguments[4][82][0].apply(exports, arguments);
   }, {
-    "./move-sync": 218,
-    "dup": 95
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "dup": 82,
+    "graceful-fs": 250,
+    "path": undefined,
+    "universalify": 392
   }],
   218: [function (require, module, exports) {
-    arguments[4][96][0].apply(exports, arguments);
+    arguments[4][83][0].apply(exports, arguments);
   }, {
-    "../copy-sync": 197,
-    "../mkdirs": 213,
-    "../remove": 223,
-    "../util/stat": 226,
-    "dup": 96,
-    "graceful-fs": 234,
-    "path": undefined
+    "./file": 217,
+    "./link": 219,
+    "./symlink": 222,
+    "dup": 83
   }],
   219: [function (require, module, exports) {
-    arguments[4][97][0].apply(exports, arguments);
+    arguments[4][84][0].apply(exports, arguments);
   }, {
-    "./move": 220,
-    "dup": 97,
-    "universalify": 376
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "dup": 84,
+    "graceful-fs": 250,
+    "path": undefined,
+    "universalify": 392
   }],
   220: [function (require, module, exports) {
-    arguments[4][98][0].apply(exports, arguments);
+    arguments[4][85][0].apply(exports, arguments);
   }, {
-    "../copy": 199,
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "../remove": 223,
-    "../util/stat": 226,
-    "dup": 98,
-    "graceful-fs": 234,
+    "../path-exists": 238,
+    "dup": 85,
+    "graceful-fs": 250,
     "path": undefined
   }],
   221: [function (require, module, exports) {
-    arguments[4][99][0].apply(exports, arguments);
+    arguments[4][86][0].apply(exports, arguments);
   }, {
-    "../mkdirs": 213,
-    "../path-exists": 222,
-    "dup": 99,
-    "graceful-fs": 234,
-    "path": undefined,
-    "universalify": 376
+    "dup": 86,
+    "graceful-fs": 250
   }],
   222: [function (require, module, exports) {
-    arguments[4][100][0].apply(exports, arguments);
+    arguments[4][87][0].apply(exports, arguments);
   }, {
-    "../fs": 207,
-    "dup": 100,
-    "universalify": 376
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "./symlink-paths": 220,
+    "./symlink-type": 221,
+    "dup": 87,
+    "graceful-fs": 250,
+    "path": undefined,
+    "universalify": 392
   }],
   223: [function (require, module, exports) {
-    arguments[4][101][0].apply(exports, arguments);
+    arguments[4][88][0].apply(exports, arguments);
   }, {
-    "./rimraf": 224,
-    "dup": 101,
-    "universalify": 376
+    "dup": 88,
+    "graceful-fs": 250,
+    "universalify": 392
   }],
   224: [function (require, module, exports) {
-    arguments[4][102][0].apply(exports, arguments);
+    arguments[4][89][0].apply(exports, arguments);
   }, {
-    "assert": undefined,
-    "dup": 102,
-    "graceful-fs": 234,
-    "path": undefined
+    "./copy": 215,
+    "./copy-sync": 213,
+    "./empty": 216,
+    "./ensure": 218,
+    "./fs": 223,
+    "./json": 225,
+    "./mkdirs": 229,
+    "./move": 235,
+    "./move-sync": 233,
+    "./output": 237,
+    "./path-exists": 238,
+    "./remove": 239,
+    "dup": 89,
+    "fs": undefined
   }],
   225: [function (require, module, exports) {
-    arguments[4][103][0].apply(exports, arguments);
+    arguments[4][90][0].apply(exports, arguments);
   }, {
-    "dup": 103
+    "./jsonfile": 226,
+    "./output-json": 228,
+    "./output-json-sync": 227,
+    "dup": 90,
+    "universalify": 392
   }],
   226: [function (require, module, exports) {
-    arguments[4][104][0].apply(exports, arguments);
+    arguments[4][91][0].apply(exports, arguments);
   }, {
-    "dup": 104,
-    "graceful-fs": 234,
-    "path": undefined
+    "dup": 91,
+    "jsonfile": 257,
+    "universalify": 392
   }],
   227: [function (require, module, exports) {
-    arguments[4][105][0].apply(exports, arguments);
+    arguments[4][92][0].apply(exports, arguments);
   }, {
-    "dup": 105,
-    "graceful-fs": 234,
-    "os": undefined,
+    "../mkdirs": 229,
+    "./jsonfile": 226,
+    "dup": 92,
+    "graceful-fs": 250,
     "path": undefined
   }],
   228: [function (require, module, exports) {
-    module.exports = realpath;
-    realpath.realpath = realpath;
-    realpath.sync = realpathSync;
-    realpath.realpathSync = realpathSync;
-    realpath.monkeypatch = monkeypatch;
-    realpath.unmonkeypatch = unmonkeypatch;
-
-    var fs = require('fs');
-
-    var origRealpath = fs.realpath;
-    var origRealpathSync = fs.realpathSync;
-    var version = process.version;
-    var ok = /^v[0-5]\./.test(version);
-
-    var old = require('./old.js');
-
-    function newError(er) {
-      return er && er.syscall === 'realpath' && (er.code === 'ELOOP' || er.code === 'ENOMEM' || er.code === 'ENAMETOOLONG');
-    }
-
-    function realpath(p, cache, cb) {
-      if (ok) {
-        return origRealpath(p, cache, cb);
-      }
-
-      if (typeof cache === 'function') {
-        cb = cache;
-        cache = null;
-      }
-
-      origRealpath(p, cache, function (er, result) {
-        if (newError(er)) {
-          old.realpath(p, cache, cb);
-        } else {
-          cb(er, result);
-        }
-      });
-    }
-
-    function realpathSync(p, cache) {
-      if (ok) {
-        return origRealpathSync(p, cache);
-      }
-
-      try {
-        return origRealpathSync(p, cache);
-      } catch (er) {
-        if (newError(er)) {
-          return old.realpathSync(p, cache);
-        } else {
-          throw er;
-        }
-      }
-    }
-
-    function monkeypatch() {
-      fs.realpath = realpath;
-      fs.realpathSync = realpathSync;
-    }
-
-    function unmonkeypatch() {
-      fs.realpath = origRealpath;
-      fs.realpathSync = origRealpathSync;
-    }
+    arguments[4][93][0].apply(exports, arguments);
   }, {
-    "./old.js": 229,
-    "fs": undefined
-  }],
-  229: [function (require, module, exports) {
-    // Copyright Joyent, Inc. and other Node contributors.
-    //
-    // Permission is hereby granted, free of charge, to any person obtaining a
-    // copy of this software and associated documentation files (the
-    // "Software"), to deal in the Software without restriction, including
-    // without limitation the rights to use, copy, modify, merge, publish,
-    // distribute, sublicense, and/or sell copies of the Software, and to permit
-    // persons to whom the Software is furnished to do so, subject to the
-    // following conditions:
-    //
-    // The above copyright notice and this permission notice shall be included
-    // in all copies or substantial portions of the Software.
-    //
-    // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-    // OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-    // NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-    // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-    // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-    // USE OR OTHER DEALINGS IN THE SOFTWARE.
-    var pathModule = require('path');
-
-    var isWindows = process.platform === 'win32';
-
-    var fs = require('fs'); // JavaScript implementation of realpath, ported from node pre-v6
-
-
-    var DEBUG = process.env.NODE_DEBUG && /fs/.test(process.env.NODE_DEBUG);
-
-    function rethrow() {
-      // Only enable in debug mode. A backtrace uses ~1000 bytes of heap space and
-      // is fairly slow to generate.
-      var callback;
-
-      if (DEBUG) {
-        var backtrace = new Error();
-        callback = debugCallback;
-      } else callback = missingCallback;
-
-      return callback;
-
-      function debugCallback(err) {
-        if (err) {
-          backtrace.message = err.message;
-          err = backtrace;
-          missingCallback(err);
-        }
-      }
-
-      function missingCallback(err) {
-        if (err) {
-          if (process.throwDeprecation) throw err; // Forgot a callback but don't know where? Use NODE_DEBUG=fs
-          else if (!process.noDeprecation) {
-              var msg = 'fs: missing callback ' + (err.stack || err.message);
-              if (process.traceDeprecation) console.trace(msg);else console.error(msg);
-            }
-        }
-      }
-    }
-
-    function maybeCallback(cb) {
-      return typeof cb === 'function' ? cb : rethrow();
-    }
-
-    var normalize = pathModule.normalize; // Regexp that finds the next partion of a (partial) path
-    // result is [base_with_slash, base], e.g. ['somedir/', 'somedir']
-
-    if (isWindows) {
-      var nextPartRe = /(.*?)(?:[\/\\]+|$)/g;
-    } else {
-      var nextPartRe = /(.*?)(?:[\/]+|$)/g;
-    } // Regex to find the device root, including trailing slash. E.g. 'c:\\'.
-
-
-    if (isWindows) {
-      var splitRootRe = /^(?:[a-zA-Z]:|[\\\/]{2}[^\\\/]+[\\\/][^\\\/]+)?[\\\/]*/;
-    } else {
-      var splitRootRe = /^[\/]*/;
-    }
-
-    exports.realpathSync = function realpathSync(p, cache) {
-      // make p is absolute
-      p = pathModule.resolve(p);
-
-      if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
-        return cache[p];
-      }
-
-      var original = p,
-          seenLinks = {},
-          knownHard = {}; // current character position in p
-
-      var pos; // the partial path so far, including a trailing slash if any
-
-      var current; // the partial path without a trailing slash (except when pointing at a root)
-
-      var base; // the partial path scanned in the previous round, with slash
-
-      var previous;
-      start();
-
-      function start() {
-        // Skip over roots
-        var m = splitRootRe.exec(p);
-        pos = m[0].length;
-        current = m[0];
-        base = m[0];
-        previous = ''; // On windows, check that the root exists. On unix there is no need.
-
-        if (isWindows && !knownHard[base]) {
-          fs.lstatSync(base);
-          knownHard[base] = true;
-        }
-      } // walk down the path, swapping out linked pathparts for their real
-      // values
-      // NB: p.length changes.
-
-
-      while (pos < p.length) {
-        // find the next part
-        nextPartRe.lastIndex = pos;
-        var result = nextPartRe.exec(p);
-        previous = current;
-        current += result[0];
-        base = previous + result[1];
-        pos = nextPartRe.lastIndex; // continue if not a symlink
-
-        if (knownHard[base] || cache && cache[base] === base) {
-          continue;
-        }
-
-        var resolvedLink;
-
-        if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
-          // some known symbolic link.  no need to stat again.
-          resolvedLink = cache[base];
-        } else {
-          var stat = fs.lstatSync(base);
-
-          if (!stat.isSymbolicLink()) {
-            knownHard[base] = true;
-            if (cache) cache[base] = base;
-            continue;
-          } // read the link if it wasn't read before
-          // dev/ino always return 0 on windows, so skip the check.
-
-
-          var linkTarget = null;
-
-          if (!isWindows) {
-            var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
-
-            if (seenLinks.hasOwnProperty(id)) {
-              linkTarget = seenLinks[id];
-            }
-          }
-
-          if (linkTarget === null) {
-            fs.statSync(base);
-            linkTarget = fs.readlinkSync(base);
-          }
-
-          resolvedLink = pathModule.resolve(previous, linkTarget); // track this, if given a cache.
-
-          if (cache) cache[base] = resolvedLink;
-          if (!isWindows) seenLinks[id] = linkTarget;
-        } // resolve the link, then start over
-
-
-        p = pathModule.resolve(resolvedLink, p.slice(pos));
-        start();
-      }
-
-      if (cache) cache[original] = p;
-      return p;
-    };
-
-    exports.realpath = function realpath(p, cache, cb) {
-      if (typeof cb !== 'function') {
-        cb = maybeCallback(cache);
-        cache = null;
-      } // make p is absolute
-
-
-      p = pathModule.resolve(p);
-
-      if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
-        return process.nextTick(cb.bind(null, null, cache[p]));
-      }
-
-      var original = p,
-          seenLinks = {},
-          knownHard = {}; // current character position in p
-
-      var pos; // the partial path so far, including a trailing slash if any
-
-      var current; // the partial path without a trailing slash (except when pointing at a root)
-
-      var base; // the partial path scanned in the previous round, with slash
-
-      var previous;
-      start();
-
-      function start() {
-        // Skip over roots
-        var m = splitRootRe.exec(p);
-        pos = m[0].length;
-        current = m[0];
-        base = m[0];
-        previous = ''; // On windows, check that the root exists. On unix there is no need.
-
-        if (isWindows && !knownHard[base]) {
-          fs.lstat(base, function (err) {
-            if (err) return cb(err);
-            knownHard[base] = true;
-            LOOP();
-          });
-        } else {
-          process.nextTick(LOOP);
-        }
-      } // walk down the path, swapping out linked pathparts for their real
-      // values
-
-
-      function LOOP() {
-        // stop if scanned past end of path
-        if (pos >= p.length) {
-          if (cache) cache[original] = p;
-          return cb(null, p);
-        } // find the next part
-
-
-        nextPartRe.lastIndex = pos;
-        var result = nextPartRe.exec(p);
-        previous = current;
-        current += result[0];
-        base = previous + result[1];
-        pos = nextPartRe.lastIndex; // continue if not a symlink
-
-        if (knownHard[base] || cache && cache[base] === base) {
-          return process.nextTick(LOOP);
-        }
-
-        if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
-          // known symbolic link.  no need to stat again.
-          return gotResolvedLink(cache[base]);
-        }
-
-        return fs.lstat(base, gotStat);
-      }
-
-      function gotStat(err, stat) {
-        if (err) return cb(err); // if not a symlink, skip to the next path part
-
-        if (!stat.isSymbolicLink()) {
-          knownHard[base] = true;
-          if (cache) cache[base] = base;
-          return process.nextTick(LOOP);
-        } // stat & read the link if not read before
-        // call gotTarget as soon as the link target is known
-        // dev/ino always return 0 on windows, so skip the check.
-
-
-        if (!isWindows) {
-          var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
-
-          if (seenLinks.hasOwnProperty(id)) {
-            return gotTarget(null, seenLinks[id], base);
-          }
-        }
-
-        fs.stat(base, function (err) {
-          if (err) return cb(err);
-          fs.readlink(base, function (err, target) {
-            if (!isWindows) seenLinks[id] = target;
-            gotTarget(err, target);
-          });
-        });
-      }
-
-      function gotTarget(err, target, base) {
-        if (err) return cb(err);
-        var resolvedLink = pathModule.resolve(previous, target);
-        if (cache) cache[base] = resolvedLink;
-        gotResolvedLink(resolvedLink);
-      }
-
-      function gotResolvedLink(resolvedLink) {
-        // resolve the link, then start over
-        p = pathModule.resolve(resolvedLink, p.slice(pos));
-        start();
-      }
-    };
-  }, {
-    "fs": undefined,
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "./jsonfile": 226,
+    "dup": 93,
     "path": undefined
   }],
-  230: [function (require, module, exports) {
-    exports.alphasort = alphasort;
-    exports.alphasorti = alphasorti;
-    exports.setopts = setopts;
-    exports.ownProp = ownProp;
-    exports.makeAbs = makeAbs;
-    exports.finish = finish;
-    exports.mark = mark;
-    exports.isIgnored = isIgnored;
-    exports.childrenIgnored = childrenIgnored;
-
-    function ownProp(obj, field) {
-      return Object.prototype.hasOwnProperty.call(obj, field);
-    }
-
-    var path = require("path");
-
-    var minimatch = require("minimatch");
-
-    var isAbsolute = require("path-is-absolute");
-
-    var Minimatch = minimatch.Minimatch;
-
-    function alphasorti(a, b) {
-      return a.toLowerCase().localeCompare(b.toLowerCase());
-    }
-
-    function alphasort(a, b) {
-      return a.localeCompare(b);
-    }
-
-    function setupIgnores(self, options) {
-      self.ignore = options.ignore || [];
-      if (!Array.isArray(self.ignore)) self.ignore = [self.ignore];
-
-      if (self.ignore.length) {
-        self.ignore = self.ignore.map(ignoreMap);
-      }
-    } // ignore patterns are always in dot:true mode.
-
-
-    function ignoreMap(pattern) {
-      var gmatcher = null;
-
-      if (pattern.slice(-3) === '/**') {
-        var gpattern = pattern.replace(/(\/\*\*)+$/, '');
-        gmatcher = new Minimatch(gpattern, {
-          dot: true
-        });
-      }
-
-      return {
-        matcher: new Minimatch(pattern, {
-          dot: true
-        }),
-        gmatcher: gmatcher
-      };
-    }
-
-    function setopts(self, pattern, options) {
-      if (!options) options = {}; // base-matching: just use globstar for that.
-
-      if (options.matchBase && -1 === pattern.indexOf("/")) {
-        if (options.noglobstar) {
-          throw new Error("base matching requires globstar");
-        }
-
-        pattern = "**/" + pattern;
-      }
-
-      self.silent = !!options.silent;
-      self.pattern = pattern;
-      self.strict = options.strict !== false;
-      self.realpath = !!options.realpath;
-      self.realpathCache = options.realpathCache || Object.create(null);
-      self.follow = !!options.follow;
-      self.dot = !!options.dot;
-      self.mark = !!options.mark;
-      self.nodir = !!options.nodir;
-      if (self.nodir) self.mark = true;
-      self.sync = !!options.sync;
-      self.nounique = !!options.nounique;
-      self.nonull = !!options.nonull;
-      self.nosort = !!options.nosort;
-      self.nocase = !!options.nocase;
-      self.stat = !!options.stat;
-      self.noprocess = !!options.noprocess;
-      self.absolute = !!options.absolute;
-      self.maxLength = options.maxLength || Infinity;
-      self.cache = options.cache || Object.create(null);
-      self.statCache = options.statCache || Object.create(null);
-      self.symlinks = options.symlinks || Object.create(null);
-      setupIgnores(self, options);
-      self.changedCwd = false;
-      var cwd = process.cwd();
-      if (!ownProp(options, "cwd")) self.cwd = cwd;else {
-        self.cwd = path.resolve(options.cwd);
-        self.changedCwd = self.cwd !== cwd;
-      }
-      self.root = options.root || path.resolve(self.cwd, "/");
-      self.root = path.resolve(self.root);
-      if (process.platform === "win32") self.root = self.root.replace(/\\/g, "/"); // TODO: is an absolute `cwd` supposed to be resolved against `root`?
-      // e.g. { cwd: '/test', root: __dirname } === path.join(__dirname, '/test')
-
-      self.cwdAbs = isAbsolute(self.cwd) ? self.cwd : makeAbs(self, self.cwd);
-      if (process.platform === "win32") self.cwdAbs = self.cwdAbs.replace(/\\/g, "/");
-      self.nomount = !!options.nomount; // disable comments and negation in Minimatch.
-      // Note that they are not supported in Glob itself anyway.
-
-      options.nonegate = true;
-      options.nocomment = true;
-      self.minimatch = new Minimatch(pattern, options);
-      self.options = self.minimatch.options;
-    }
-
-    function finish(self) {
-      var nou = self.nounique;
-      var all = nou ? [] : Object.create(null);
-
-      for (var i = 0, l = self.matches.length; i < l; i++) {
-        var matches = self.matches[i];
-
-        if (!matches || Object.keys(matches).length === 0) {
-          if (self.nonull) {
-            // do like the shell, and spit out the literal glob
-            var literal = self.minimatch.globSet[i];
-            if (nou) all.push(literal);else all[literal] = true;
-          }
-        } else {
-          // had matches
-          var m = Object.keys(matches);
-          if (nou) all.push.apply(all, m);else m.forEach(function (m) {
-            all[m] = true;
-          });
-        }
-      }
-
-      if (!nou) all = Object.keys(all);
-      if (!self.nosort) all = all.sort(self.nocase ? alphasorti : alphasort); // at *some* point we statted all of these
-
-      if (self.mark) {
-        for (var i = 0; i < all.length; i++) {
-          all[i] = self._mark(all[i]);
-        }
-
-        if (self.nodir) {
-          all = all.filter(function (e) {
-            var notDir = !/\/$/.test(e);
-            var c = self.cache[e] || self.cache[makeAbs(self, e)];
-            if (notDir && c) notDir = c !== 'DIR' && !Array.isArray(c);
-            return notDir;
-          });
-        }
-      }
-
-      if (self.ignore.length) all = all.filter(function (m) {
-        return !isIgnored(self, m);
-      });
-      self.found = all;
-    }
-
-    function mark(self, p) {
-      var abs = makeAbs(self, p);
-      var c = self.cache[abs];
-      var m = p;
-
-      if (c) {
-        var isDir = c === 'DIR' || Array.isArray(c);
-        var slash = p.slice(-1) === '/';
-        if (isDir && !slash) m += '/';else if (!isDir && slash) m = m.slice(0, -1);
-
-        if (m !== p) {
-          var mabs = makeAbs(self, m);
-          self.statCache[mabs] = self.statCache[abs];
-          self.cache[mabs] = self.cache[abs];
-        }
-      }
-
-      return m;
-    } // lotta situps...
-
-
-    function makeAbs(self, f) {
-      var abs = f;
-
-      if (f.charAt(0) === '/') {
-        abs = path.join(self.root, f);
-      } else if (isAbsolute(f) || f === '') {
-        abs = f;
-      } else if (self.changedCwd) {
-        abs = path.resolve(self.cwd, f);
-      } else {
-        abs = path.resolve(f);
-      }
-
-      if (process.platform === 'win32') abs = abs.replace(/\\/g, '/');
-      return abs;
-    } // Return true, if pattern ends with globstar '**', for the accompanying parent directory.
-    // Ex:- If node_modules/** is the pattern, add 'node_modules' to ignore list along with it's contents
-
-
-    function isIgnored(self, path) {
-      if (!self.ignore.length) return false;
-      return self.ignore.some(function (item) {
-        return item.matcher.match(path) || !!(item.gmatcher && item.gmatcher.match(path));
-      });
-    }
-
-    function childrenIgnored(self, path) {
-      if (!self.ignore.length) return false;
-      return self.ignore.some(function (item) {
-        return !!(item.gmatcher && item.gmatcher.match(path));
-      });
-    }
+  229: [function (require, module, exports) {
+    arguments[4][94][0].apply(exports, arguments);
   }, {
-    "minimatch": 361,
-    "path": undefined,
-    "path-is-absolute": 364
+    "./mkdirs": 231,
+    "./mkdirs-sync": 230,
+    "dup": 94,
+    "universalify": 392
+  }],
+  230: [function (require, module, exports) {
+    arguments[4][95][0].apply(exports, arguments);
+  }, {
+    "./win32": 232,
+    "dup": 95,
+    "graceful-fs": 250,
+    "path": undefined
   }],
   231: [function (require, module, exports) {
-    // Approach:
-    //
-    // 1. Get the minimatch set
-    // 2. For each pattern in the set, PROCESS(pattern, false)
-    // 3. Store matches per-set, then uniq them
-    //
-    // PROCESS(pattern, inGlobStar)
-    // Get the first [n] items from pattern that are all strings
-    // Join these together.  This is PREFIX.
-    //   If there is no more remaining, then stat(PREFIX) and
-    //   add to matches if it succeeds.  END.
-    //
-    // If inGlobStar and PREFIX is symlink and points to dir
-    //   set ENTRIES = []
-    // else readdir(PREFIX) as ENTRIES
-    //   If fail, END
-    //
-    // with ENTRIES
-    //   If pattern[n] is GLOBSTAR
-    //     // handle the case where the globstar match is empty
-    //     // by pruning it out, and testing the resulting pattern
-    //     PROCESS(pattern[0..n] + pattern[n+1 .. $], false)
-    //     // handle other cases.
-    //     for ENTRY in ENTRIES (not dotfiles)
-    //       // attach globstar + tail onto the entry
-    //       // Mark that this entry is a globstar match
-    //       PROCESS(pattern[0..n] + ENTRY + pattern[n .. $], true)
-    //
-    //   else // not globstar
-    //     for ENTRY in ENTRIES (not dotfiles, unless pattern[n] is dot)
-    //       Test ENTRY against pattern[n]
-    //       If fails, continue
-    //       If passes, PROCESS(pattern[0..n] + item + pattern[n+1 .. $])
-    //
-    // Caveat:
-    //   Cache all stats and readdirs results to minimize syscall.  Since all
-    //   we ever care about is existence and directory-ness, we can just keep
-    //   `true` for files, and [children,...] for directories, or `false` for
-    //   things that don't exist.
-    module.exports = glob;
-
-    var fs = require('fs');
-
-    var rp = require('fs.realpath');
-
-    var minimatch = require('minimatch');
-
-    var Minimatch = minimatch.Minimatch;
-
-    var inherits = require('inherits');
-
-    var EE = require('events').EventEmitter;
-
-    var path = require('path');
-
-    var assert = require('assert');
-
-    var isAbsolute = require('path-is-absolute');
-
-    var globSync = require('./sync.js');
-
-    var common = require('./common.js');
-
-    var alphasort = common.alphasort;
-    var alphasorti = common.alphasorti;
-    var setopts = common.setopts;
-    var ownProp = common.ownProp;
-
-    var inflight = require('inflight');
-
-    var util = require('util');
-
-    var childrenIgnored = common.childrenIgnored;
-    var isIgnored = common.isIgnored;
-
-    var once = require('once');
-
-    function glob(pattern, options, cb) {
-      if (typeof options === 'function') cb = options, options = {};
-      if (!options) options = {};
-
-      if (options.sync) {
-        if (cb) throw new TypeError('callback provided to sync glob');
-        return globSync(pattern, options);
-      }
-
-      return new Glob(pattern, options, cb);
-    }
-
-    glob.sync = globSync;
-    var GlobSync = glob.GlobSync = globSync.GlobSync; // old api surface
-
-    glob.glob = glob;
-
-    function extend(origin, add) {
-      if (add === null || (0, _typeof2["default"])(add) !== 'object') {
-        return origin;
-      }
-
-      var keys = Object.keys(add);
-      var i = keys.length;
-
-      while (i--) {
-        origin[keys[i]] = add[keys[i]];
-      }
-
-      return origin;
-    }
-
-    glob.hasMagic = function (pattern, options_) {
-      var options = extend({}, options_);
-      options.noprocess = true;
-      var g = new Glob(pattern, options);
-      var set = g.minimatch.set;
-      if (!pattern) return false;
-      if (set.length > 1) return true;
-
-      for (var j = 0; j < set[0].length; j++) {
-        if (typeof set[0][j] !== 'string') return true;
-      }
-
-      return false;
-    };
-
-    glob.Glob = Glob;
-    inherits(Glob, EE);
-
-    function Glob(pattern, options, cb) {
-      if (typeof options === 'function') {
-        cb = options;
-        options = null;
-      }
-
-      if (options && options.sync) {
-        if (cb) throw new TypeError('callback provided to sync glob');
-        return new GlobSync(pattern, options);
-      }
-
-      if (!(this instanceof Glob)) return new Glob(pattern, options, cb);
-      setopts(this, pattern, options);
-      this._didRealPath = false; // process each pattern in the minimatch set
-
-      var n = this.minimatch.set.length; // The matches are stored as {<filename>: true,...} so that
-      // duplicates are automagically pruned.
-      // Later, we do an Object.keys() on these.
-      // Keep them as a list so we can fill in when nonull is set.
-
-      this.matches = new Array(n);
-
-      if (typeof cb === 'function') {
-        cb = once(cb);
-        this.on('error', cb);
-        this.on('end', function (matches) {
-          cb(null, matches);
-        });
-      }
-
-      var self = this;
-      this._processing = 0;
-      this._emitQueue = [];
-      this._processQueue = [];
-      this.paused = false;
-      if (this.noprocess) return this;
-      if (n === 0) return done();
-      var sync = true;
-
-      for (var i = 0; i < n; i++) {
-        this._process(this.minimatch.set[i], i, false, done);
-      }
-
-      sync = false;
-
-      function done() {
-        --self._processing;
-
-        if (self._processing <= 0) {
-          if (sync) {
-            process.nextTick(function () {
-              self._finish();
-            });
-          } else {
-            self._finish();
-          }
-        }
-      }
-    }
-
-    Glob.prototype._finish = function () {
-      assert(this instanceof Glob);
-      if (this.aborted) return;
-      if (this.realpath && !this._didRealpath) return this._realpath();
-      common.finish(this);
-      this.emit('end', this.found);
-    };
-
-    Glob.prototype._realpath = function () {
-      if (this._didRealpath) return;
-      this._didRealpath = true;
-      var n = this.matches.length;
-      if (n === 0) return this._finish();
-      var self = this;
-
-      for (var i = 0; i < this.matches.length; i++) {
-        this._realpathSet(i, next);
-      }
-
-      function next() {
-        if (--n === 0) self._finish();
-      }
-    };
-
-    Glob.prototype._realpathSet = function (index, cb) {
-      var matchset = this.matches[index];
-      if (!matchset) return cb();
-      var found = Object.keys(matchset);
-      var self = this;
-      var n = found.length;
-      if (n === 0) return cb();
-      var set = this.matches[index] = Object.create(null);
-      found.forEach(function (p, i) {
-        // If there's a problem with the stat, then it means that
-        // one or more of the links in the realpath couldn't be
-        // resolved.  just return the abs value in that case.
-        p = self._makeAbs(p);
-        rp.realpath(p, self.realpathCache, function (er, real) {
-          if (!er) set[real] = true;else if (er.syscall === 'stat') set[p] = true;else self.emit('error', er); // srsly wtf right here
-
-          if (--n === 0) {
-            self.matches[index] = set;
-            cb();
-          }
-        });
-      });
-    };
-
-    Glob.prototype._mark = function (p) {
-      return common.mark(this, p);
-    };
-
-    Glob.prototype._makeAbs = function (f) {
-      return common.makeAbs(this, f);
-    };
-
-    Glob.prototype.abort = function () {
-      this.aborted = true;
-      this.emit('abort');
-    };
-
-    Glob.prototype.pause = function () {
-      if (!this.paused) {
-        this.paused = true;
-        this.emit('pause');
-      }
-    };
-
-    Glob.prototype.resume = function () {
-      if (this.paused) {
-        this.emit('resume');
-        this.paused = false;
-
-        if (this._emitQueue.length) {
-          var eq = this._emitQueue.slice(0);
-
-          this._emitQueue.length = 0;
-
-          for (var i = 0; i < eq.length; i++) {
-            var e = eq[i];
-
-            this._emitMatch(e[0], e[1]);
-          }
-        }
-
-        if (this._processQueue.length) {
-          var pq = this._processQueue.slice(0);
-
-          this._processQueue.length = 0;
-
-          for (var i = 0; i < pq.length; i++) {
-            var p = pq[i];
-            this._processing--;
-
-            this._process(p[0], p[1], p[2], p[3]);
-          }
-        }
-      }
-    };
-
-    Glob.prototype._process = function (pattern, index, inGlobStar, cb) {
-      assert(this instanceof Glob);
-      assert(typeof cb === 'function');
-      if (this.aborted) return;
-      this._processing++;
-
-      if (this.paused) {
-        this._processQueue.push([pattern, index, inGlobStar, cb]);
-
-        return;
-      } //console.error('PROCESS %d', this._processing, pattern)
-      // Get the first [n] parts of pattern that are all strings.
-
-
-      var n = 0;
-
-      while (typeof pattern[n] === 'string') {
-        n++;
-      } // now n is the index of the first one that is *not* a string.
-      // see if there's anything else
-
-
-      var prefix;
-
-      switch (n) {
-        // if not, then this is rather simple
-        case pattern.length:
-          this._processSimple(pattern.join('/'), index, cb);
-
-          return;
-
-        case 0:
-          // pattern *starts* with some non-trivial item.
-          // going to readdir(cwd), but not include the prefix in matches.
-          prefix = null;
-          break;
-
-        default:
-          // pattern has some string bits in the front.
-          // whatever it starts with, whether that's 'absolute' like /foo/bar,
-          // or 'relative' like '../baz'
-          prefix = pattern.slice(0, n).join('/');
-          break;
-      }
-
-      var remain = pattern.slice(n); // get the list of entries.
-
-      var read;
-      if (prefix === null) read = '.';else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
-        if (!prefix || !isAbsolute(prefix)) prefix = '/' + prefix;
-        read = prefix;
-      } else read = prefix;
-
-      var abs = this._makeAbs(read); //if ignored, skip _processing
-
-
-      if (childrenIgnored(this, read)) return cb();
-      var isGlobStar = remain[0] === minimatch.GLOBSTAR;
-      if (isGlobStar) this._processGlobStar(prefix, read, abs, remain, index, inGlobStar, cb);else this._processReaddir(prefix, read, abs, remain, index, inGlobStar, cb);
-    };
-
-    Glob.prototype._processReaddir = function (prefix, read, abs, remain, index, inGlobStar, cb) {
-      var self = this;
-
-      this._readdir(abs, inGlobStar, function (er, entries) {
-        return self._processReaddir2(prefix, read, abs, remain, index, inGlobStar, entries, cb);
-      });
-    };
-
-    Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, inGlobStar, entries, cb) {
-      // if the abs isn't a dir, then nothing can match!
-      if (!entries) return cb(); // It will only match dot entries if it starts with a dot, or if
-      // dot is set.  Stuff like @(.foo|.bar) isn't allowed.
-
-      var pn = remain[0];
-      var negate = !!this.minimatch.negate;
-      var rawGlob = pn._glob;
-      var dotOk = this.dot || rawGlob.charAt(0) === '.';
-      var matchedEntries = [];
-
-      for (var i = 0; i < entries.length; i++) {
-        var e = entries[i];
-
-        if (e.charAt(0) !== '.' || dotOk) {
-          var m;
-
-          if (negate && !prefix) {
-            m = !e.match(pn);
-          } else {
-            m = e.match(pn);
-          }
-
-          if (m) matchedEntries.push(e);
-        }
-      } //console.error('prd2', prefix, entries, remain[0]._glob, matchedEntries)
-
-
-      var len = matchedEntries.length; // If there are no matched entries, then nothing matches.
-
-      if (len === 0) return cb(); // if this is the last remaining pattern bit, then no need for
-      // an additional stat *unless* the user has specified mark or
-      // stat explicitly.  We know they exist, since readdir returned
-      // them.
-
-      if (remain.length === 1 && !this.mark && !this.stat) {
-        if (!this.matches[index]) this.matches[index] = Object.create(null);
-
-        for (var i = 0; i < len; i++) {
-          var e = matchedEntries[i];
-
-          if (prefix) {
-            if (prefix !== '/') e = prefix + '/' + e;else e = prefix + e;
-          }
-
-          if (e.charAt(0) === '/' && !this.nomount) {
-            e = path.join(this.root, e);
-          }
-
-          this._emitMatch(index, e);
-        } // This was the last one, and no stats were needed
-
-
-        return cb();
-      } // now test all matched entries as stand-ins for that part
-      // of the pattern.
-
-
-      remain.shift();
-
-      for (var i = 0; i < len; i++) {
-        var e = matchedEntries[i];
-        var newPattern;
-
-        if (prefix) {
-          if (prefix !== '/') e = prefix + '/' + e;else e = prefix + e;
-        }
-
-        this._process([e].concat(remain), index, inGlobStar, cb);
-      }
-
-      cb();
-    };
-
-    Glob.prototype._emitMatch = function (index, e) {
-      if (this.aborted) return;
-      if (isIgnored(this, e)) return;
-
-      if (this.paused) {
-        this._emitQueue.push([index, e]);
-
-        return;
-      }
-
-      var abs = isAbsolute(e) ? e : this._makeAbs(e);
-      if (this.mark) e = this._mark(e);
-      if (this.absolute) e = abs;
-      if (this.matches[index][e]) return;
-
-      if (this.nodir) {
-        var c = this.cache[abs];
-        if (c === 'DIR' || Array.isArray(c)) return;
-      }
-
-      this.matches[index][e] = true;
-      var st = this.statCache[abs];
-      if (st) this.emit('stat', e, st);
-      this.emit('match', e);
-    };
-
-    Glob.prototype._readdirInGlobStar = function (abs, cb) {
-      if (this.aborted) return; // follow all symlinked directories forever
-      // just proceed as if this is a non-globstar situation
-
-      if (this.follow) return this._readdir(abs, false, cb);
-      var lstatkey = 'lstat\0' + abs;
-      var self = this;
-      var lstatcb = inflight(lstatkey, lstatcb_);
-      if (lstatcb) fs.lstat(abs, lstatcb);
-
-      function lstatcb_(er, lstat) {
-        if (er && er.code === 'ENOENT') return cb();
-        var isSym = lstat && lstat.isSymbolicLink();
-        self.symlinks[abs] = isSym; // If it's not a symlink or a dir, then it's definitely a regular file.
-        // don't bother doing a readdir in that case.
-
-        if (!isSym && lstat && !lstat.isDirectory()) {
-          self.cache[abs] = 'FILE';
-          cb();
-        } else self._readdir(abs, false, cb);
-      }
-    };
-
-    Glob.prototype._readdir = function (abs, inGlobStar, cb) {
-      if (this.aborted) return;
-      cb = inflight('readdir\0' + abs + '\0' + inGlobStar, cb);
-      if (!cb) return; //console.error('RD %j %j', +inGlobStar, abs)
-
-      if (inGlobStar && !ownProp(this.symlinks, abs)) return this._readdirInGlobStar(abs, cb);
-
-      if (ownProp(this.cache, abs)) {
-        var c = this.cache[abs];
-        if (!c || c === 'FILE') return cb();
-        if (Array.isArray(c)) return cb(null, c);
-      }
-
-      var self = this;
-      fs.readdir(abs, readdirCb(this, abs, cb));
-    };
-
-    function readdirCb(self, abs, cb) {
-      return function (er, entries) {
-        if (er) self._readdirError(abs, er, cb);else self._readdirEntries(abs, entries, cb);
-      };
-    }
-
-    Glob.prototype._readdirEntries = function (abs, entries, cb) {
-      if (this.aborted) return; // if we haven't asked to stat everything, then just
-      // assume that everything in there exists, so we can avoid
-      // having to stat it a second time.
-
-      if (!this.mark && !this.stat) {
-        for (var i = 0; i < entries.length; i++) {
-          var e = entries[i];
-          if (abs === '/') e = abs + e;else e = abs + '/' + e;
-          this.cache[e] = true;
-        }
-      }
-
-      this.cache[abs] = entries;
-      return cb(null, entries);
-    };
-
-    Glob.prototype._readdirError = function (f, er, cb) {
-      if (this.aborted) return; // handle errors, and cache the information
-
-      switch (er.code) {
-        case 'ENOTSUP': // https://github.com/isaacs/node-glob/issues/205
-
-        case 'ENOTDIR':
-          // totally normal. means it *does* exist.
-          var abs = this._makeAbs(f);
-
-          this.cache[abs] = 'FILE';
-
-          if (abs === this.cwdAbs) {
-            var error = new Error(er.code + ' invalid cwd ' + this.cwd);
-            error.path = this.cwd;
-            error.code = er.code;
-            this.emit('error', error);
-            this.abort();
-          }
-
-          break;
-
-        case 'ENOENT': // not terribly unusual
-
-        case 'ELOOP':
-        case 'ENAMETOOLONG':
-        case 'UNKNOWN':
-          this.cache[this._makeAbs(f)] = false;
-          break;
-
-        default:
-          // some unusual error.  Treat as failure.
-          this.cache[this._makeAbs(f)] = false;
-
-          if (this.strict) {
-            this.emit('error', er); // If the error is handled, then we abort
-            // if not, we threw out of here
-
-            this.abort();
-          }
-
-          if (!this.silent) console.error('glob error', er);
-          break;
-      }
-
-      return cb();
-    };
-
-    Glob.prototype._processGlobStar = function (prefix, read, abs, remain, index, inGlobStar, cb) {
-      var self = this;
-
-      this._readdir(abs, inGlobStar, function (er, entries) {
-        self._processGlobStar2(prefix, read, abs, remain, index, inGlobStar, entries, cb);
-      });
-    };
-
-    Glob.prototype._processGlobStar2 = function (prefix, read, abs, remain, index, inGlobStar, entries, cb) {
-      //console.error('pgs2', prefix, remain[0], entries)
-      // no entries means not a dir, so it can never have matches
-      // foo.txt/** doesn't match foo.txt
-      if (!entries) return cb(); // test without the globstar, and with every child both below
-      // and replacing the globstar.
-
-      var remainWithoutGlobStar = remain.slice(1);
-      var gspref = prefix ? [prefix] : [];
-      var noGlobStar = gspref.concat(remainWithoutGlobStar); // the noGlobStar pattern exits the inGlobStar state
-
-      this._process(noGlobStar, index, false, cb);
-
-      var isSym = this.symlinks[abs];
-      var len = entries.length; // If it's a symlink, and we're in a globstar, then stop
-
-      if (isSym && inGlobStar) return cb();
-
-      for (var i = 0; i < len; i++) {
-        var e = entries[i];
-        if (e.charAt(0) === '.' && !this.dot) continue; // these two cases enter the inGlobStar state
-
-        var instead = gspref.concat(entries[i], remainWithoutGlobStar);
-
-        this._process(instead, index, true, cb);
-
-        var below = gspref.concat(entries[i], remain);
-
-        this._process(below, index, true, cb);
-      }
-
-      cb();
-    };
-
-    Glob.prototype._processSimple = function (prefix, index, cb) {
-      // XXX review this.  Shouldn't it be doing the mounting etc
-      // before doing stat?  kinda weird?
-      var self = this;
-
-      this._stat(prefix, function (er, exists) {
-        self._processSimple2(prefix, index, er, exists, cb);
-      });
-    };
-
-    Glob.prototype._processSimple2 = function (prefix, index, er, exists, cb) {
-      //console.error('ps2', prefix, exists)
-      if (!this.matches[index]) this.matches[index] = Object.create(null); // If it doesn't exist, then just mark the lack of results
-
-      if (!exists) return cb();
-
-      if (prefix && isAbsolute(prefix) && !this.nomount) {
-        var trail = /[\/\\]$/.test(prefix);
-
-        if (prefix.charAt(0) === '/') {
-          prefix = path.join(this.root, prefix);
-        } else {
-          prefix = path.resolve(this.root, prefix);
-          if (trail) prefix += '/';
-        }
-      }
-
-      if (process.platform === 'win32') prefix = prefix.replace(/\\/g, '/'); // Mark this as a match
-
-      this._emitMatch(index, prefix);
-
-      cb();
-    }; // Returns either 'DIR', 'FILE', or false
-
-
-    Glob.prototype._stat = function (f, cb) {
-      var abs = this._makeAbs(f);
-
-      var needDir = f.slice(-1) === '/';
-      if (f.length > this.maxLength) return cb();
-
-      if (!this.stat && ownProp(this.cache, abs)) {
-        var c = this.cache[abs];
-        if (Array.isArray(c)) c = 'DIR'; // It exists, but maybe not how we need it
-
-        if (!needDir || c === 'DIR') return cb(null, c);
-        if (needDir && c === 'FILE') return cb(); // otherwise we have to stat, because maybe c=true
-        // if we know it exists, but not what it is.
-      }
-
-      var exists;
-      var stat = this.statCache[abs];
-
-      if (stat !== undefined) {
-        if (stat === false) return cb(null, stat);else {
-          var type = stat.isDirectory() ? 'DIR' : 'FILE';
-          if (needDir && type === 'FILE') return cb();else return cb(null, type, stat);
-        }
-      }
-
-      var self = this;
-      var statcb = inflight('stat\0' + abs, lstatcb_);
-      if (statcb) fs.lstat(abs, statcb);
-
-      function lstatcb_(er, lstat) {
-        if (lstat && lstat.isSymbolicLink()) {
-          // If it's a symlink, then treat it as the target, unless
-          // the target does not exist, then treat it as a file.
-          return fs.stat(abs, function (er, stat) {
-            if (er) self._stat2(f, abs, null, lstat, cb);else self._stat2(f, abs, er, stat, cb);
-          });
-        } else {
-          self._stat2(f, abs, er, lstat, cb);
-        }
-      }
-    };
-
-    Glob.prototype._stat2 = function (f, abs, er, stat, cb) {
-      if (er && (er.code === 'ENOENT' || er.code === 'ENOTDIR')) {
-        this.statCache[abs] = false;
-        return cb();
-      }
-
-      var needDir = f.slice(-1) === '/';
-      this.statCache[abs] = stat;
-      if (abs.slice(-1) === '/' && stat && !stat.isDirectory()) return cb(null, false, stat);
-      var c = true;
-      if (stat) c = stat.isDirectory() ? 'DIR' : 'FILE';
-      this.cache[abs] = this.cache[abs] || c;
-      if (needDir && c === 'FILE') return cb();
-      return cb(null, c, stat);
-    };
+    arguments[4][96][0].apply(exports, arguments);
   }, {
-    "./common.js": 230,
-    "./sync.js": 232,
-    "assert": undefined,
-    "events": undefined,
-    "fs": undefined,
-    "fs.realpath": 228,
-    "inflight": 237,
-    "inherits": 238,
-    "minimatch": 361,
-    "once": 363,
-    "path": undefined,
-    "path-is-absolute": 364,
-    "util": undefined
+    "./win32": 232,
+    "dup": 96,
+    "graceful-fs": 250,
+    "path": undefined
   }],
   232: [function (require, module, exports) {
-    module.exports = globSync;
-    globSync.GlobSync = GlobSync;
-
-    var fs = require('fs');
-
-    var rp = require('fs.realpath');
-
-    var minimatch = require('minimatch');
-
-    var Minimatch = minimatch.Minimatch;
-
-    var Glob = require('./glob.js').Glob;
-
-    var util = require('util');
-
-    var path = require('path');
-
-    var assert = require('assert');
-
-    var isAbsolute = require('path-is-absolute');
-
-    var common = require('./common.js');
-
-    var alphasort = common.alphasort;
-    var alphasorti = common.alphasorti;
-    var setopts = common.setopts;
-    var ownProp = common.ownProp;
-    var childrenIgnored = common.childrenIgnored;
-    var isIgnored = common.isIgnored;
-
-    function globSync(pattern, options) {
-      if (typeof options === 'function' || arguments.length === 3) throw new TypeError('callback provided to sync glob\n' + 'See: https://github.com/isaacs/node-glob/issues/167');
-      return new GlobSync(pattern, options).found;
-    }
-
-    function GlobSync(pattern, options) {
-      if (!pattern) throw new Error('must provide pattern');
-      if (typeof options === 'function' || arguments.length === 3) throw new TypeError('callback provided to sync glob\n' + 'See: https://github.com/isaacs/node-glob/issues/167');
-      if (!(this instanceof GlobSync)) return new GlobSync(pattern, options);
-      setopts(this, pattern, options);
-      if (this.noprocess) return this;
-      var n = this.minimatch.set.length;
-      this.matches = new Array(n);
-
-      for (var i = 0; i < n; i++) {
-        this._process(this.minimatch.set[i], i, false);
-      }
-
-      this._finish();
-    }
-
-    GlobSync.prototype._finish = function () {
-      assert(this instanceof GlobSync);
-
-      if (this.realpath) {
-        var self = this;
-        this.matches.forEach(function (matchset, index) {
-          var set = self.matches[index] = Object.create(null);
-
-          for (var p in matchset) {
-            try {
-              p = self._makeAbs(p);
-              var real = rp.realpathSync(p, self.realpathCache);
-              set[real] = true;
-            } catch (er) {
-              if (er.syscall === 'stat') set[self._makeAbs(p)] = true;else throw er;
-            }
-          }
-        });
-      }
-
-      common.finish(this);
-    };
-
-    GlobSync.prototype._process = function (pattern, index, inGlobStar) {
-      assert(this instanceof GlobSync); // Get the first [n] parts of pattern that are all strings.
-
-      var n = 0;
-
-      while (typeof pattern[n] === 'string') {
-        n++;
-      } // now n is the index of the first one that is *not* a string.
-      // See if there's anything else
-
-
-      var prefix;
-
-      switch (n) {
-        // if not, then this is rather simple
-        case pattern.length:
-          this._processSimple(pattern.join('/'), index);
-
-          return;
-
-        case 0:
-          // pattern *starts* with some non-trivial item.
-          // going to readdir(cwd), but not include the prefix in matches.
-          prefix = null;
-          break;
-
-        default:
-          // pattern has some string bits in the front.
-          // whatever it starts with, whether that's 'absolute' like /foo/bar,
-          // or 'relative' like '../baz'
-          prefix = pattern.slice(0, n).join('/');
-          break;
-      }
-
-      var remain = pattern.slice(n); // get the list of entries.
-
-      var read;
-      if (prefix === null) read = '.';else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
-        if (!prefix || !isAbsolute(prefix)) prefix = '/' + prefix;
-        read = prefix;
-      } else read = prefix;
-
-      var abs = this._makeAbs(read); //if ignored, skip processing
-
-
-      if (childrenIgnored(this, read)) return;
-      var isGlobStar = remain[0] === minimatch.GLOBSTAR;
-      if (isGlobStar) this._processGlobStar(prefix, read, abs, remain, index, inGlobStar);else this._processReaddir(prefix, read, abs, remain, index, inGlobStar);
-    };
-
-    GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index, inGlobStar) {
-      var entries = this._readdir(abs, inGlobStar); // if the abs isn't a dir, then nothing can match!
-
-
-      if (!entries) return; // It will only match dot entries if it starts with a dot, or if
-      // dot is set.  Stuff like @(.foo|.bar) isn't allowed.
-
-      var pn = remain[0];
-      var negate = !!this.minimatch.negate;
-      var rawGlob = pn._glob;
-      var dotOk = this.dot || rawGlob.charAt(0) === '.';
-      var matchedEntries = [];
-
-      for (var i = 0; i < entries.length; i++) {
-        var e = entries[i];
-
-        if (e.charAt(0) !== '.' || dotOk) {
-          var m;
-
-          if (negate && !prefix) {
-            m = !e.match(pn);
-          } else {
-            m = e.match(pn);
-          }
-
-          if (m) matchedEntries.push(e);
-        }
-      }
-
-      var len = matchedEntries.length; // If there are no matched entries, then nothing matches.
-
-      if (len === 0) return; // if this is the last remaining pattern bit, then no need for
-      // an additional stat *unless* the user has specified mark or
-      // stat explicitly.  We know they exist, since readdir returned
-      // them.
-
-      if (remain.length === 1 && !this.mark && !this.stat) {
-        if (!this.matches[index]) this.matches[index] = Object.create(null);
-
-        for (var i = 0; i < len; i++) {
-          var e = matchedEntries[i];
-
-          if (prefix) {
-            if (prefix.slice(-1) !== '/') e = prefix + '/' + e;else e = prefix + e;
-          }
-
-          if (e.charAt(0) === '/' && !this.nomount) {
-            e = path.join(this.root, e);
-          }
-
-          this._emitMatch(index, e);
-        } // This was the last one, and no stats were needed
-
-
-        return;
-      } // now test all matched entries as stand-ins for that part
-      // of the pattern.
-
-
-      remain.shift();
-
-      for (var i = 0; i < len; i++) {
-        var e = matchedEntries[i];
-        var newPattern;
-        if (prefix) newPattern = [prefix, e];else newPattern = [e];
-
-        this._process(newPattern.concat(remain), index, inGlobStar);
-      }
-    };
-
-    GlobSync.prototype._emitMatch = function (index, e) {
-      if (isIgnored(this, e)) return;
-
-      var abs = this._makeAbs(e);
-
-      if (this.mark) e = this._mark(e);
-
-      if (this.absolute) {
-        e = abs;
-      }
-
-      if (this.matches[index][e]) return;
-
-      if (this.nodir) {
-        var c = this.cache[abs];
-        if (c === 'DIR' || Array.isArray(c)) return;
-      }
-
-      this.matches[index][e] = true;
-      if (this.stat) this._stat(e);
-    };
-
-    GlobSync.prototype._readdirInGlobStar = function (abs) {
-      // follow all symlinked directories forever
-      // just proceed as if this is a non-globstar situation
-      if (this.follow) return this._readdir(abs, false);
-      var entries;
-      var lstat;
-      var stat;
-
-      try {
-        lstat = fs.lstatSync(abs);
-      } catch (er) {
-        if (er.code === 'ENOENT') {
-          // lstat failed, doesn't exist
-          return null;
-        }
-      }
-
-      var isSym = lstat && lstat.isSymbolicLink();
-      this.symlinks[abs] = isSym; // If it's not a symlink or a dir, then it's definitely a regular file.
-      // don't bother doing a readdir in that case.
-
-      if (!isSym && lstat && !lstat.isDirectory()) this.cache[abs] = 'FILE';else entries = this._readdir(abs, false);
-      return entries;
-    };
-
-    GlobSync.prototype._readdir = function (abs, inGlobStar) {
-      var entries;
-      if (inGlobStar && !ownProp(this.symlinks, abs)) return this._readdirInGlobStar(abs);
-
-      if (ownProp(this.cache, abs)) {
-        var c = this.cache[abs];
-        if (!c || c === 'FILE') return null;
-        if (Array.isArray(c)) return c;
-      }
-
-      try {
-        return this._readdirEntries(abs, fs.readdirSync(abs));
-      } catch (er) {
-        this._readdirError(abs, er);
-
-        return null;
-      }
-    };
-
-    GlobSync.prototype._readdirEntries = function (abs, entries) {
-      // if we haven't asked to stat everything, then just
-      // assume that everything in there exists, so we can avoid
-      // having to stat it a second time.
-      if (!this.mark && !this.stat) {
-        for (var i = 0; i < entries.length; i++) {
-          var e = entries[i];
-          if (abs === '/') e = abs + e;else e = abs + '/' + e;
-          this.cache[e] = true;
-        }
-      }
-
-      this.cache[abs] = entries; // mark and cache dir-ness
-
-      return entries;
-    };
-
-    GlobSync.prototype._readdirError = function (f, er) {
-      // handle errors, and cache the information
-      switch (er.code) {
-        case 'ENOTSUP': // https://github.com/isaacs/node-glob/issues/205
-
-        case 'ENOTDIR':
-          // totally normal. means it *does* exist.
-          var abs = this._makeAbs(f);
-
-          this.cache[abs] = 'FILE';
-
-          if (abs === this.cwdAbs) {
-            var error = new Error(er.code + ' invalid cwd ' + this.cwd);
-            error.path = this.cwd;
-            error.code = er.code;
-            throw error;
-          }
-
-          break;
-
-        case 'ENOENT': // not terribly unusual
-
-        case 'ELOOP':
-        case 'ENAMETOOLONG':
-        case 'UNKNOWN':
-          this.cache[this._makeAbs(f)] = false;
-          break;
-
-        default:
-          // some unusual error.  Treat as failure.
-          this.cache[this._makeAbs(f)] = false;
-          if (this.strict) throw er;
-          if (!this.silent) console.error('glob error', er);
-          break;
-      }
-    };
-
-    GlobSync.prototype._processGlobStar = function (prefix, read, abs, remain, index, inGlobStar) {
-      var entries = this._readdir(abs, inGlobStar); // no entries means not a dir, so it can never have matches
-      // foo.txt/** doesn't match foo.txt
-
-
-      if (!entries) return; // test without the globstar, and with every child both below
-      // and replacing the globstar.
-
-      var remainWithoutGlobStar = remain.slice(1);
-      var gspref = prefix ? [prefix] : [];
-      var noGlobStar = gspref.concat(remainWithoutGlobStar); // the noGlobStar pattern exits the inGlobStar state
-
-      this._process(noGlobStar, index, false);
-
-      var len = entries.length;
-      var isSym = this.symlinks[abs]; // If it's a symlink, and we're in a globstar, then stop
-
-      if (isSym && inGlobStar) return;
-
-      for (var i = 0; i < len; i++) {
-        var e = entries[i];
-        if (e.charAt(0) === '.' && !this.dot) continue; // these two cases enter the inGlobStar state
-
-        var instead = gspref.concat(entries[i], remainWithoutGlobStar);
-
-        this._process(instead, index, true);
-
-        var below = gspref.concat(entries[i], remain);
-
-        this._process(below, index, true);
-      }
-    };
-
-    GlobSync.prototype._processSimple = function (prefix, index) {
-      // XXX review this.  Shouldn't it be doing the mounting etc
-      // before doing stat?  kinda weird?
-      var exists = this._stat(prefix);
-
-      if (!this.matches[index]) this.matches[index] = Object.create(null); // If it doesn't exist, then just mark the lack of results
-
-      if (!exists) return;
-
-      if (prefix && isAbsolute(prefix) && !this.nomount) {
-        var trail = /[\/\\]$/.test(prefix);
-
-        if (prefix.charAt(0) === '/') {
-          prefix = path.join(this.root, prefix);
-        } else {
-          prefix = path.resolve(this.root, prefix);
-          if (trail) prefix += '/';
-        }
-      }
-
-      if (process.platform === 'win32') prefix = prefix.replace(/\\/g, '/'); // Mark this as a match
-
-      this._emitMatch(index, prefix);
-    }; // Returns either 'DIR', 'FILE', or false
-
-
-    GlobSync.prototype._stat = function (f) {
-      var abs = this._makeAbs(f);
-
-      var needDir = f.slice(-1) === '/';
-      if (f.length > this.maxLength) return false;
-
-      if (!this.stat && ownProp(this.cache, abs)) {
-        var c = this.cache[abs];
-        if (Array.isArray(c)) c = 'DIR'; // It exists, but maybe not how we need it
-
-        if (!needDir || c === 'DIR') return c;
-        if (needDir && c === 'FILE') return false; // otherwise we have to stat, because maybe c=true
-        // if we know it exists, but not what it is.
-      }
-
-      var exists;
-      var stat = this.statCache[abs];
-
-      if (!stat) {
-        var lstat;
-
-        try {
-          lstat = fs.lstatSync(abs);
-        } catch (er) {
-          if (er && (er.code === 'ENOENT' || er.code === 'ENOTDIR')) {
-            this.statCache[abs] = false;
-            return false;
-          }
-        }
-
-        if (lstat && lstat.isSymbolicLink()) {
-          try {
-            stat = fs.statSync(abs);
-          } catch (er) {
-            stat = lstat;
-          }
-        } else {
-          stat = lstat;
-        }
-      }
-
-      this.statCache[abs] = stat;
-      var c = true;
-      if (stat) c = stat.isDirectory() ? 'DIR' : 'FILE';
-      this.cache[abs] = this.cache[abs] || c;
-      if (needDir && c === 'FILE') return false;
-      return c;
-    };
-
-    GlobSync.prototype._mark = function (p) {
-      return common.mark(this, p);
-    };
-
-    GlobSync.prototype._makeAbs = function (f) {
-      return common.makeAbs(this, f);
-    };
+    arguments[4][97][0].apply(exports, arguments);
   }, {
-    "./common.js": 230,
-    "./glob.js": 231,
-    "assert": undefined,
-    "fs": undefined,
-    "fs.realpath": 228,
-    "minimatch": 361,
-    "path": undefined,
-    "path-is-absolute": 364,
-    "util": undefined
+    "dup": 97,
+    "path": undefined
   }],
   233: [function (require, module, exports) {
+    arguments[4][98][0].apply(exports, arguments);
+  }, {
+    "./move-sync": 234,
+    "dup": 98
+  }],
+  234: [function (require, module, exports) {
+    arguments[4][99][0].apply(exports, arguments);
+  }, {
+    "../copy-sync": 213,
+    "../mkdirs": 229,
+    "../remove": 239,
+    "../util/stat": 242,
+    "dup": 99,
+    "graceful-fs": 250,
+    "path": undefined
+  }],
+  235: [function (require, module, exports) {
+    arguments[4][100][0].apply(exports, arguments);
+  }, {
+    "./move": 236,
+    "dup": 100,
+    "universalify": 392
+  }],
+  236: [function (require, module, exports) {
+    arguments[4][101][0].apply(exports, arguments);
+  }, {
+    "../copy": 215,
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "../remove": 239,
+    "../util/stat": 242,
+    "dup": 101,
+    "graceful-fs": 250,
+    "path": undefined
+  }],
+  237: [function (require, module, exports) {
+    arguments[4][102][0].apply(exports, arguments);
+  }, {
+    "../mkdirs": 229,
+    "../path-exists": 238,
+    "dup": 102,
+    "graceful-fs": 250,
+    "path": undefined,
+    "universalify": 392
+  }],
+  238: [function (require, module, exports) {
+    arguments[4][103][0].apply(exports, arguments);
+  }, {
+    "../fs": 223,
+    "dup": 103,
+    "universalify": 392
+  }],
+  239: [function (require, module, exports) {
+    arguments[4][104][0].apply(exports, arguments);
+  }, {
+    "./rimraf": 240,
+    "dup": 104,
+    "universalify": 392
+  }],
+  240: [function (require, module, exports) {
+    arguments[4][105][0].apply(exports, arguments);
+  }, {
+    "assert": undefined,
+    "dup": 105,
+    "graceful-fs": 250,
+    "path": undefined
+  }],
+  241: [function (require, module, exports) {
     arguments[4][106][0].apply(exports, arguments);
   }, {
     "dup": 106
   }],
-  234: [function (require, module, exports) {
+  242: [function (require, module, exports) {
     arguments[4][107][0].apply(exports, arguments);
   }, {
-    "./clone.js": 233,
-    "./legacy-streams.js": 235,
-    "./polyfills.js": 236,
-    "assert": undefined,
     "dup": 107,
-    "fs": undefined,
-    "util": undefined
+    "graceful-fs": 250,
+    "path": undefined
   }],
-  235: [function (require, module, exports) {
+  243: [function (require, module, exports) {
     arguments[4][108][0].apply(exports, arguments);
   }, {
     "dup": 108,
-    "stream": undefined
+    "graceful-fs": 250,
+    "os": undefined,
+    "path": undefined
   }],
-  236: [function (require, module, exports) {
+  244: [function (require, module, exports) {
+    arguments[4][113][0].apply(exports, arguments);
+  }, {
+    "./old.js": 245,
+    "dup": 113,
+    "fs": undefined
+  }],
+  245: [function (require, module, exports) {
+    arguments[4][114][0].apply(exports, arguments);
+  }, {
+    "dup": 114,
+    "fs": undefined,
+    "path": undefined
+  }],
+  246: [function (require, module, exports) {
+    arguments[4][115][0].apply(exports, arguments);
+  }, {
+    "dup": 115,
+    "minimatch": 377,
+    "path": undefined,
+    "path-is-absolute": 380
+  }],
+  247: [function (require, module, exports) {
+    arguments[4][116][0].apply(exports, arguments);
+  }, {
+    "./common.js": 246,
+    "./sync.js": 248,
+    "assert": undefined,
+    "dup": 116,
+    "events": undefined,
+    "fs": undefined,
+    "fs.realpath": 244,
+    "inflight": 253,
+    "inherits": 254,
+    "minimatch": 377,
+    "once": 379,
+    "path": undefined,
+    "path-is-absolute": 380,
+    "util": undefined
+  }],
+  248: [function (require, module, exports) {
+    arguments[4][117][0].apply(exports, arguments);
+  }, {
+    "./common.js": 246,
+    "./glob.js": 247,
+    "assert": undefined,
+    "dup": 117,
+    "fs": undefined,
+    "fs.realpath": 244,
+    "minimatch": 377,
+    "path": undefined,
+    "path-is-absolute": 380,
+    "util": undefined
+  }],
+  249: [function (require, module, exports) {
     arguments[4][109][0].apply(exports, arguments);
   }, {
-    "constants": undefined,
     "dup": 109
   }],
-  237: [function (require, module, exports) {
-    var wrappy = require('wrappy');
-
-    var reqs = Object.create(null);
-
-    var once = require('once');
-
-    module.exports = wrappy(inflight);
-
-    function inflight(key, cb) {
-      if (reqs[key]) {
-        reqs[key].push(cb);
-        return null;
-      } else {
-        reqs[key] = [cb];
-        return makeres(key);
-      }
-    }
-
-    function makeres(key) {
-      return once(function RES() {
-        var cbs = reqs[key];
-        var len = cbs.length;
-        var args = slice(arguments); // XXX It's somewhat ambiguous whether a new callback added in this
-        // pass should be queued for later execution if something in the
-        // list of callbacks throws, or if it should just be discarded.
-        // However, it's such an edge case that it hardly matters, and either
-        // choice is likely as surprising as the other.
-        // As it happens, we do go ahead and schedule it for later execution.
-
-        try {
-          for (var i = 0; i < len; i++) {
-            cbs[i].apply(null, args);
-          }
-        } finally {
-          if (cbs.length > len) {
-            // added more in the interim.
-            // de-zalgo, just in case, but don't call again.
-            cbs.splice(0, len);
-            process.nextTick(function () {
-              RES.apply(null, args);
-            });
-          } else {
-            delete reqs[key];
-          }
-        }
-      });
-    }
-
-    function slice(args) {
-      var length = args.length;
-      var array = [];
-
-      for (var i = 0; i < length; i++) {
-        array[i] = args[i];
-      }
-
-      return array;
-    }
+  250: [function (require, module, exports) {
+    arguments[4][110][0].apply(exports, arguments);
   }, {
-    "once": 363,
-    "wrappy": 377
+    "./clone.js": 249,
+    "./legacy-streams.js": 251,
+    "./polyfills.js": 252,
+    "assert": undefined,
+    "dup": 110,
+    "fs": undefined,
+    "util": undefined
   }],
-  238: [function (require, module, exports) {
+  251: [function (require, module, exports) {
+    arguments[4][111][0].apply(exports, arguments);
+  }, {
+    "dup": 111,
+    "stream": undefined
+  }],
+  252: [function (require, module, exports) {
+    arguments[4][112][0].apply(exports, arguments);
+  }, {
+    "constants": undefined,
+    "dup": 112
+  }],
+  253: [function (require, module, exports) {
+    arguments[4][122][0].apply(exports, arguments);
+  }, {
+    "dup": 122,
+    "once": 379,
+    "wrappy": 393
+  }],
+  254: [function (require, module, exports) {
     try {
       var util = require('util');
       /* istanbul ignore next */
@@ -34921,10 +33197,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       module.exports = require('./inherits_browser.js');
     }
   }, {
-    "./inherits_browser.js": 239,
+    "./inherits_browser.js": 255,
     "util": undefined
   }],
-  239: [function (require, module, exports) {
+  255: [function (require, module, exports) {
     if (typeof Object.create === 'function') {
       // implementation from standard node.js 'util' module
       module.exports = function inherits(ctor, superCtor) {
@@ -34955,7 +33231,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       };
     }
   }, {}],
-  240: [function (require, module, exports) {
+  256: [function (require, module, exports) {
     var json = typeof JSON !== 'undefined' ? JSON : require('jsonify');
 
     module.exports = function (obj, opts) {
@@ -35059,23 +33335,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return keys;
     };
   }, {
-    "jsonify": 242
+    "jsonify": 258
   }],
-  241: [function (require, module, exports) {
-    arguments[4][114][0].apply(exports, arguments);
+  257: [function (require, module, exports) {
+    arguments[4][125][0].apply(exports, arguments);
   }, {
-    "dup": 114,
+    "dup": 125,
     "fs": undefined,
-    "graceful-fs": 234
+    "graceful-fs": 250
   }],
-  242: [function (require, module, exports) {
+  258: [function (require, module, exports) {
     exports.parse = require('./lib/parse');
     exports.stringify = require('./lib/stringify');
   }, {
-    "./lib/parse": 243,
-    "./lib/stringify": 244
+    "./lib/parse": 259,
+    "./lib/stringify": 260
   }],
-  243: [function (require, module, exports) {
+  259: [function (require, module, exports) {
     var at,
         // The index of the current character
     ch,
@@ -35371,7 +33647,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }, '') : result;
     };
   }, {}],
-  244: [function (require, module, exports) {
+  260: [function (require, module, exports) {
     var cx = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
         escapable = /[\\\"\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
         gap,
@@ -35525,7 +33801,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       });
     };
   }, {}],
-  245: [function (require, module, exports) {
+  261: [function (require, module, exports) {
     var hashClear = require('./_hashClear'),
         hashDelete = require('./_hashDelete'),
         hashGet = require('./_hashGet'),
@@ -35559,13 +33835,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     Hash.prototype.set = hashSet;
     module.exports = Hash;
   }, {
-    "./_hashClear": 292,
-    "./_hashDelete": 293,
-    "./_hashGet": 294,
-    "./_hashHas": 295,
-    "./_hashSet": 296
+    "./_hashClear": 308,
+    "./_hashDelete": 309,
+    "./_hashGet": 310,
+    "./_hashHas": 311,
+    "./_hashSet": 312
   }],
-  246: [function (require, module, exports) {
+  262: [function (require, module, exports) {
     var listCacheClear = require('./_listCacheClear'),
         listCacheDelete = require('./_listCacheDelete'),
         listCacheGet = require('./_listCacheGet'),
@@ -35599,13 +33875,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     ListCache.prototype.set = listCacheSet;
     module.exports = ListCache;
   }, {
-    "./_listCacheClear": 304,
-    "./_listCacheDelete": 305,
-    "./_listCacheGet": 306,
-    "./_listCacheHas": 307,
-    "./_listCacheSet": 308
+    "./_listCacheClear": 320,
+    "./_listCacheDelete": 321,
+    "./_listCacheGet": 322,
+    "./_listCacheHas": 323,
+    "./_listCacheSet": 324
   }],
-  247: [function (require, module, exports) {
+  263: [function (require, module, exports) {
     var getNative = require('./_getNative'),
         root = require('./_root');
     /* Built-in method references that are verified to be native. */
@@ -35614,10 +33890,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var Map = getNative(root, 'Map');
     module.exports = Map;
   }, {
-    "./_getNative": 288,
-    "./_root": 322
+    "./_getNative": 304,
+    "./_root": 338
   }],
-  248: [function (require, module, exports) {
+  264: [function (require, module, exports) {
     var mapCacheClear = require('./_mapCacheClear'),
         mapCacheDelete = require('./_mapCacheDelete'),
         mapCacheGet = require('./_mapCacheGet'),
@@ -35651,13 +33927,13 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     MapCache.prototype.set = mapCacheSet;
     module.exports = MapCache;
   }, {
-    "./_mapCacheClear": 309,
-    "./_mapCacheDelete": 310,
-    "./_mapCacheGet": 311,
-    "./_mapCacheHas": 312,
-    "./_mapCacheSet": 313
+    "./_mapCacheClear": 325,
+    "./_mapCacheDelete": 326,
+    "./_mapCacheGet": 327,
+    "./_mapCacheHas": 328,
+    "./_mapCacheSet": 329
   }],
-  249: [function (require, module, exports) {
+  265: [function (require, module, exports) {
     var ListCache = require('./_ListCache'),
         stackClear = require('./_stackClear'),
         stackDelete = require('./_stackDelete'),
@@ -35686,14 +33962,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     Stack.prototype.set = stackSet;
     module.exports = Stack;
   }, {
-    "./_ListCache": 246,
-    "./_stackClear": 326,
-    "./_stackDelete": 327,
-    "./_stackGet": 328,
-    "./_stackHas": 329,
-    "./_stackSet": 330
+    "./_ListCache": 262,
+    "./_stackClear": 342,
+    "./_stackDelete": 343,
+    "./_stackGet": 344,
+    "./_stackHas": 345,
+    "./_stackSet": 346
   }],
-  250: [function (require, module, exports) {
+  266: [function (require, module, exports) {
     var root = require('./_root');
     /** Built-in value references. */
 
@@ -35701,9 +33977,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var _Symbol = root.Symbol;
     module.exports = _Symbol;
   }, {
-    "./_root": 322
+    "./_root": 338
   }],
-  251: [function (require, module, exports) {
+  267: [function (require, module, exports) {
     var root = require('./_root');
     /** Built-in value references. */
 
@@ -35711,9 +33987,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var Uint8Array = root.Uint8Array;
     module.exports = Uint8Array;
   }, {
-    "./_root": 322
+    "./_root": 338
   }],
-  252: [function (require, module, exports) {
+  268: [function (require, module, exports) {
     /**
      * A faster alternative to `Function#apply`, this function invokes `func`
      * with the `this` binding of `thisArg` and the arguments of `args`.
@@ -35744,7 +34020,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = apply;
   }, {}],
-  253: [function (require, module, exports) {
+  269: [function (require, module, exports) {
     var baseTimes = require('./_baseTimes'),
         isArguments = require('./isArguments'),
         isArray = require('./isArray'),
@@ -35791,14 +34067,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = arrayLikeKeys;
   }, {
-    "./_baseTimes": 272,
-    "./_isIndex": 298,
-    "./isArguments": 338,
-    "./isArray": 339,
-    "./isBuffer": 342,
-    "./isTypedArray": 349
+    "./_baseTimes": 288,
+    "./_isIndex": 314,
+    "./isArguments": 354,
+    "./isArray": 355,
+    "./isBuffer": 358,
+    "./isTypedArray": 365
   }],
-  254: [function (require, module, exports) {
+  270: [function (require, module, exports) {
     /**
      * A specialized version of `_.map` for arrays without support for iteratee
      * shorthands.
@@ -35822,7 +34098,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = arrayMap;
   }, {}],
-  255: [function (require, module, exports) {
+  271: [function (require, module, exports) {
     var baseAssignValue = require('./_baseAssignValue'),
         eq = require('./eq');
     /**
@@ -35844,10 +34120,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assignMergeValue;
   }, {
-    "./_baseAssignValue": 258,
-    "./eq": 335
+    "./_baseAssignValue": 274,
+    "./eq": 351
   }],
-  256: [function (require, module, exports) {
+  272: [function (require, module, exports) {
     var baseAssignValue = require('./_baseAssignValue'),
         eq = require('./eq');
     /** Used for built-in method references. */
@@ -35878,10 +34154,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assignValue;
   }, {
-    "./_baseAssignValue": 258,
-    "./eq": 335
+    "./_baseAssignValue": 274,
+    "./eq": 351
   }],
-  257: [function (require, module, exports) {
+  273: [function (require, module, exports) {
     var eq = require('./eq');
     /**
      * Gets the index at which the `key` is found in `array` of key-value pairs.
@@ -35907,9 +34183,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = assocIndexOf;
   }, {
-    "./eq": 335
+    "./eq": 351
   }],
-  258: [function (require, module, exports) {
+  274: [function (require, module, exports) {
     var defineProperty = require('./_defineProperty');
     /**
      * The base implementation of `assignValue` and `assignMergeValue` without
@@ -35937,9 +34213,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseAssignValue;
   }, {
-    "./_defineProperty": 285
+    "./_defineProperty": 301
   }],
-  259: [function (require, module, exports) {
+  275: [function (require, module, exports) {
     var isObject = require('./isObject');
     /** Built-in value references. */
 
@@ -35975,9 +34251,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseCreate;
   }, {
-    "./isObject": 345
+    "./isObject": 361
   }],
-  260: [function (require, module, exports) {
+  276: [function (require, module, exports) {
     var createBaseFor = require('./_createBaseFor');
     /**
      * The base implementation of `baseForOwn` which iterates over `object`
@@ -35995,9 +34271,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var baseFor = createBaseFor();
     module.exports = baseFor;
   }, {
-    "./_createBaseFor": 284
+    "./_createBaseFor": 300
   }],
-  261: [function (require, module, exports) {
+  277: [function (require, module, exports) {
     var castPath = require('./_castPath'),
         toKey = require('./_toKey');
     /**
@@ -36024,10 +34300,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseGet;
   }, {
-    "./_castPath": 276,
-    "./_toKey": 332
+    "./_castPath": 292,
+    "./_toKey": 348
   }],
-  262: [function (require, module, exports) {
+  278: [function (require, module, exports) {
     var _Symbol2 = require('./_Symbol'),
         getRawTag = require('./_getRawTag'),
         objectToString = require('./_objectToString');
@@ -36057,11 +34333,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseGetTag;
   }, {
-    "./_Symbol": 250,
-    "./_getRawTag": 290,
-    "./_objectToString": 319
+    "./_Symbol": 266,
+    "./_getRawTag": 306,
+    "./_objectToString": 335
   }],
-  263: [function (require, module, exports) {
+  279: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObjectLike = require('./isObjectLike');
     /** `Object#toString` result references. */
@@ -36082,10 +34358,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsArguments;
   }, {
-    "./_baseGetTag": 262,
-    "./isObjectLike": 346
+    "./_baseGetTag": 278,
+    "./isObjectLike": 362
   }],
-  264: [function (require, module, exports) {
+  280: [function (require, module, exports) {
     var isFunction = require('./isFunction'),
         isMasked = require('./_isMasked'),
         isObject = require('./isObject'),
@@ -36133,12 +34409,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsNative;
   }, {
-    "./_isMasked": 302,
-    "./_toSource": 333,
-    "./isFunction": 343,
-    "./isObject": 345
+    "./_isMasked": 318,
+    "./_toSource": 349,
+    "./isFunction": 359,
+    "./isObject": 361
   }],
-  265: [function (require, module, exports) {
+  281: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isLength = require('./isLength'),
         isObjectLike = require('./isObjectLike');
@@ -36188,11 +34464,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseIsTypedArray;
   }, {
-    "./_baseGetTag": 262,
-    "./isLength": 344,
-    "./isObjectLike": 346
+    "./_baseGetTag": 278,
+    "./isLength": 360,
+    "./isObjectLike": 362
   }],
-  266: [function (require, module, exports) {
+  282: [function (require, module, exports) {
     var isPrototype = require('./_isPrototype'),
         nativeKeys = require('./_nativeKeys');
     /** Used for built-in method references. */
@@ -36228,10 +34504,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseKeys;
   }, {
-    "./_isPrototype": 303,
-    "./_nativeKeys": 316
+    "./_isPrototype": 319,
+    "./_nativeKeys": 332
   }],
-  267: [function (require, module, exports) {
+  283: [function (require, module, exports) {
     var isObject = require('./isObject'),
         isPrototype = require('./_isPrototype'),
         nativeKeysIn = require('./_nativeKeysIn');
@@ -36269,11 +34545,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseKeysIn;
   }, {
-    "./_isPrototype": 303,
-    "./_nativeKeysIn": 317,
-    "./isObject": 345
+    "./_isPrototype": 319,
+    "./_nativeKeysIn": 333,
+    "./isObject": 361
   }],
-  268: [function (require, module, exports) {
+  284: [function (require, module, exports) {
     var Stack = require('./_Stack'),
         assignMergeValue = require('./_assignMergeValue'),
         baseFor = require('./_baseFor'),
@@ -36318,15 +34594,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseMerge;
   }, {
-    "./_Stack": 249,
-    "./_assignMergeValue": 255,
-    "./_baseFor": 260,
-    "./_baseMergeDeep": 269,
-    "./_safeGet": 323,
-    "./isObject": 345,
-    "./keysIn": 351
+    "./_Stack": 265,
+    "./_assignMergeValue": 271,
+    "./_baseFor": 276,
+    "./_baseMergeDeep": 285,
+    "./_safeGet": 339,
+    "./isObject": 361,
+    "./keysIn": 367
   }],
-  269: [function (require, module, exports) {
+  285: [function (require, module, exports) {
     var assignMergeValue = require('./_assignMergeValue'),
         cloneBuffer = require('./_cloneBuffer'),
         cloneTypedArray = require('./_cloneTypedArray'),
@@ -36417,23 +34693,23 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseMergeDeep;
   }, {
-    "./_assignMergeValue": 255,
-    "./_cloneBuffer": 278,
-    "./_cloneTypedArray": 279,
-    "./_copyArray": 280,
-    "./_initCloneObject": 297,
-    "./_safeGet": 323,
-    "./isArguments": 338,
-    "./isArray": 339,
-    "./isArrayLikeObject": 341,
-    "./isBuffer": 342,
-    "./isFunction": 343,
-    "./isObject": 345,
-    "./isPlainObject": 347,
-    "./isTypedArray": 349,
-    "./toPlainObject": 357
+    "./_assignMergeValue": 271,
+    "./_cloneBuffer": 294,
+    "./_cloneTypedArray": 295,
+    "./_copyArray": 296,
+    "./_initCloneObject": 313,
+    "./_safeGet": 339,
+    "./isArguments": 354,
+    "./isArray": 355,
+    "./isArrayLikeObject": 357,
+    "./isBuffer": 358,
+    "./isFunction": 359,
+    "./isObject": 361,
+    "./isPlainObject": 363,
+    "./isTypedArray": 365,
+    "./toPlainObject": 373
   }],
-  270: [function (require, module, exports) {
+  286: [function (require, module, exports) {
     var identity = require('./identity'),
         overRest = require('./_overRest'),
         setToString = require('./_setToString');
@@ -36453,11 +34729,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseRest;
   }, {
-    "./_overRest": 321,
-    "./_setToString": 324,
-    "./identity": 337
+    "./_overRest": 337,
+    "./_setToString": 340,
+    "./identity": 353
   }],
-  271: [function (require, module, exports) {
+  287: [function (require, module, exports) {
     var constant = require('./constant'),
         defineProperty = require('./_defineProperty'),
         identity = require('./identity');
@@ -36481,11 +34757,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
     module.exports = baseSetToString;
   }, {
-    "./_defineProperty": 285,
-    "./constant": 334,
-    "./identity": 337
+    "./_defineProperty": 301,
+    "./constant": 350,
+    "./identity": 353
   }],
-  272: [function (require, module, exports) {
+  288: [function (require, module, exports) {
     /**
      * The base implementation of `_.times` without support for iteratee shorthands
      * or max array length checks.
@@ -36508,7 +34784,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseTimes;
   }, {}],
-  273: [function (require, module, exports) {
+  289: [function (require, module, exports) {
     var _Symbol3 = require('./_Symbol'),
         arrayMap = require('./_arrayMap'),
         isArray = require('./isArray'),
@@ -36551,12 +34827,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseToString;
   }, {
-    "./_Symbol": 250,
-    "./_arrayMap": 254,
-    "./isArray": 339,
-    "./isSymbol": 348
+    "./_Symbol": 266,
+    "./_arrayMap": 270,
+    "./isArray": 355,
+    "./isSymbol": 364
   }],
-  274: [function (require, module, exports) {
+  290: [function (require, module, exports) {
     /**
      * The base implementation of `_.unary` without support for storing metadata.
      *
@@ -36572,7 +34848,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseUnary;
   }, {}],
-  275: [function (require, module, exports) {
+  291: [function (require, module, exports) {
     var arrayMap = require('./_arrayMap');
     /**
      * The base implementation of `_.values` and `_.valuesIn` which creates an
@@ -36594,9 +34870,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = baseValues;
   }, {
-    "./_arrayMap": 254
+    "./_arrayMap": 270
   }],
-  276: [function (require, module, exports) {
+  292: [function (require, module, exports) {
     var isArray = require('./isArray'),
         isKey = require('./_isKey'),
         stringToPath = require('./_stringToPath'),
@@ -36621,12 +34897,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = castPath;
   }, {
-    "./_isKey": 300,
-    "./_stringToPath": 331,
-    "./isArray": 339,
-    "./toString": 358
+    "./_isKey": 316,
+    "./_stringToPath": 347,
+    "./isArray": 355,
+    "./toString": 374
   }],
-  277: [function (require, module, exports) {
+  293: [function (require, module, exports) {
     var Uint8Array = require('./_Uint8Array');
     /**
      * Creates a clone of `arrayBuffer`.
@@ -36645,9 +34921,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneArrayBuffer;
   }, {
-    "./_Uint8Array": 251
+    "./_Uint8Array": 267
   }],
-  278: [function (require, module, exports) {
+  294: [function (require, module, exports) {
     var root = require('./_root');
     /** Detect free variable `exports`. */
 
@@ -36685,9 +34961,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneBuffer;
   }, {
-    "./_root": 322
+    "./_root": 338
   }],
-  279: [function (require, module, exports) {
+  295: [function (require, module, exports) {
     var cloneArrayBuffer = require('./_cloneArrayBuffer');
     /**
      * Creates a clone of `typedArray`.
@@ -36706,9 +34982,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = cloneTypedArray;
   }, {
-    "./_cloneArrayBuffer": 277
+    "./_cloneArrayBuffer": 293
   }],
-  280: [function (require, module, exports) {
+  296: [function (require, module, exports) {
     /**
      * Copies the values of `source` to `array`.
      *
@@ -36731,7 +35007,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copyArray;
   }, {}],
-  281: [function (require, module, exports) {
+  297: [function (require, module, exports) {
     var assignValue = require('./_assignValue'),
         baseAssignValue = require('./_baseAssignValue');
     /**
@@ -36772,10 +35048,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = copyObject;
   }, {
-    "./_assignValue": 256,
-    "./_baseAssignValue": 258
+    "./_assignValue": 272,
+    "./_baseAssignValue": 274
   }],
-  282: [function (require, module, exports) {
+  298: [function (require, module, exports) {
     var root = require('./_root');
     /** Used to detect overreaching core-js shims. */
 
@@ -36783,9 +35059,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var coreJsData = root['__core-js_shared__'];
     module.exports = coreJsData;
   }, {
-    "./_root": 322
+    "./_root": 338
   }],
-  283: [function (require, module, exports) {
+  299: [function (require, module, exports) {
     var baseRest = require('./_baseRest'),
         isIterateeCall = require('./_isIterateeCall');
     /**
@@ -36826,10 +35102,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = createAssigner;
   }, {
-    "./_baseRest": 270,
-    "./_isIterateeCall": 299
+    "./_baseRest": 286,
+    "./_isIterateeCall": 315
   }],
-  284: [function (require, module, exports) {
+  300: [function (require, module, exports) {
     /**
      * Creates a base function for methods like `_.forIn` and `_.forOwn`.
      *
@@ -36858,7 +35134,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = createBaseFor;
   }, {}],
-  285: [function (require, module, exports) {
+  301: [function (require, module, exports) {
     var getNative = require('./_getNative');
 
     var defineProperty = function () {
@@ -36871,14 +35147,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = defineProperty;
   }, {
-    "./_getNative": 288
+    "./_getNative": 304
   }],
-  286: [function (require, module, exports) {
+  302: [function (require, module, exports) {
     /** Detect free variable `global` from Node.js. */
     var freeGlobal = (typeof global === "undefined" ? "undefined" : (0, _typeof2["default"])(global)) == 'object' && global && global.Object === Object && global;
     module.exports = freeGlobal;
   }, {}],
-  287: [function (require, module, exports) {
+  303: [function (require, module, exports) {
     var isKeyable = require('./_isKeyable');
     /**
      * Gets the data for `map`.
@@ -36897,9 +35173,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getMapData;
   }, {
-    "./_isKeyable": 301
+    "./_isKeyable": 317
   }],
-  288: [function (require, module, exports) {
+  304: [function (require, module, exports) {
     var baseIsNative = require('./_baseIsNative'),
         getValue = require('./_getValue');
     /**
@@ -36919,10 +35195,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getNative;
   }, {
-    "./_baseIsNative": 264,
-    "./_getValue": 291
+    "./_baseIsNative": 280,
+    "./_getValue": 307
   }],
-  289: [function (require, module, exports) {
+  305: [function (require, module, exports) {
     var overArg = require('./_overArg');
     /** Built-in value references. */
 
@@ -36930,9 +35206,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var getPrototype = overArg(Object.getPrototypeOf, Object);
     module.exports = getPrototype;
   }, {
-    "./_overArg": 320
+    "./_overArg": 336
   }],
-  290: [function (require, module, exports) {
+  306: [function (require, module, exports) {
     var _Symbol4 = require('./_Symbol');
     /** Used for built-in method references. */
 
@@ -36983,9 +35259,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getRawTag;
   }, {
-    "./_Symbol": 250
+    "./_Symbol": 266
   }],
-  291: [function (require, module, exports) {
+  307: [function (require, module, exports) {
     /**
      * Gets the value at `key` of `object`.
      *
@@ -37000,7 +35276,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = getValue;
   }, {}],
-  292: [function (require, module, exports) {
+  308: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /**
      * Removes all key-value entries from the hash.
@@ -37018,9 +35294,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashClear;
   }, {
-    "./_nativeCreate": 315
+    "./_nativeCreate": 331
   }],
-  293: [function (require, module, exports) {
+  309: [function (require, module, exports) {
     /**
      * Removes `key` and its value from the hash.
      *
@@ -37039,7 +35315,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashDelete;
   }, {}],
-  294: [function (require, module, exports) {
+  310: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used to stand-in for `undefined` hash values. */
 
@@ -37074,9 +35350,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashGet;
   }, {
-    "./_nativeCreate": 315
+    "./_nativeCreate": 331
   }],
-  295: [function (require, module, exports) {
+  311: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used for built-in method references. */
 
@@ -37102,9 +35378,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashHas;
   }, {
-    "./_nativeCreate": 315
+    "./_nativeCreate": 331
   }],
-  296: [function (require, module, exports) {
+  312: [function (require, module, exports) {
     var nativeCreate = require('./_nativeCreate');
     /** Used to stand-in for `undefined` hash values. */
 
@@ -37130,9 +35406,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = hashSet;
   }, {
-    "./_nativeCreate": 315
+    "./_nativeCreate": 331
   }],
-  297: [function (require, module, exports) {
+  313: [function (require, module, exports) {
     var baseCreate = require('./_baseCreate'),
         getPrototype = require('./_getPrototype'),
         isPrototype = require('./_isPrototype');
@@ -37151,11 +35427,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = initCloneObject;
   }, {
-    "./_baseCreate": 259,
-    "./_getPrototype": 289,
-    "./_isPrototype": 303
+    "./_baseCreate": 275,
+    "./_getPrototype": 305,
+    "./_isPrototype": 319
   }],
-  298: [function (require, module, exports) {
+  314: [function (require, module, exports) {
     /** Used as references for various `Number` constants. */
     var MAX_SAFE_INTEGER = 9007199254740991;
     /** Used to detect unsigned integer values. */
@@ -37178,7 +35454,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isIndex;
   }, {}],
-  299: [function (require, module, exports) {
+  315: [function (require, module, exports) {
     var eq = require('./eq'),
         isArrayLike = require('./isArrayLike'),
         isIndex = require('./_isIndex'),
@@ -37211,12 +35487,12 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isIterateeCall;
   }, {
-    "./_isIndex": 298,
-    "./eq": 335,
-    "./isArrayLike": 340,
-    "./isObject": 345
+    "./_isIndex": 314,
+    "./eq": 351,
+    "./isArrayLike": 356,
+    "./isObject": 361
   }],
-  300: [function (require, module, exports) {
+  316: [function (require, module, exports) {
     var isArray = require('./isArray'),
         isSymbol = require('./isSymbol');
     /** Used to match property names within property paths. */
@@ -37249,10 +35525,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isKey;
   }, {
-    "./isArray": 339,
-    "./isSymbol": 348
+    "./isArray": 355,
+    "./isSymbol": 364
   }],
-  301: [function (require, module, exports) {
+  317: [function (require, module, exports) {
     /**
      * Checks if `value` is suitable for use as unique object key.
      *
@@ -37267,7 +35543,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isKeyable;
   }, {}],
-  302: [function (require, module, exports) {
+  318: [function (require, module, exports) {
     var coreJsData = require('./_coreJsData');
     /** Used to detect methods masquerading as native. */
 
@@ -37291,9 +35567,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isMasked;
   }, {
-    "./_coreJsData": 282
+    "./_coreJsData": 298
   }],
-  303: [function (require, module, exports) {
+  319: [function (require, module, exports) {
     /** Used for built-in method references. */
     var objectProto = Object.prototype;
     /**
@@ -37312,7 +35588,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isPrototype;
   }, {}],
-  304: [function (require, module, exports) {
+  320: [function (require, module, exports) {
     /**
      * Removes all key-value entries from the list cache.
      *
@@ -37327,7 +35603,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheClear;
   }, {}],
-  305: [function (require, module, exports) {
+  321: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /** Used for built-in method references. */
 
@@ -37368,9 +35644,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheDelete;
   }, {
-    "./_assocIndexOf": 257
+    "./_assocIndexOf": 273
   }],
-  306: [function (require, module, exports) {
+  322: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Gets the list cache value for `key`.
@@ -37391,9 +35667,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheGet;
   }, {
-    "./_assocIndexOf": 257
+    "./_assocIndexOf": 273
   }],
-  307: [function (require, module, exports) {
+  323: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Checks if a list cache value for `key` exists.
@@ -37412,9 +35688,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheHas;
   }, {
-    "./_assocIndexOf": 257
+    "./_assocIndexOf": 273
   }],
-  308: [function (require, module, exports) {
+  324: [function (require, module, exports) {
     var assocIndexOf = require('./_assocIndexOf');
     /**
      * Sets the list cache `key` to `value`.
@@ -37444,9 +35720,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = listCacheSet;
   }, {
-    "./_assocIndexOf": 257
+    "./_assocIndexOf": 273
   }],
-  309: [function (require, module, exports) {
+  325: [function (require, module, exports) {
     var Hash = require('./_Hash'),
         ListCache = require('./_ListCache'),
         Map = require('./_Map');
@@ -37470,11 +35746,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheClear;
   }, {
-    "./_Hash": 245,
-    "./_ListCache": 246,
-    "./_Map": 247
+    "./_Hash": 261,
+    "./_ListCache": 262,
+    "./_Map": 263
   }],
-  310: [function (require, module, exports) {
+  326: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Removes `key` and its value from the map.
@@ -37495,9 +35771,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheDelete;
   }, {
-    "./_getMapData": 287
+    "./_getMapData": 303
   }],
-  311: [function (require, module, exports) {
+  327: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Gets the map value for `key`.
@@ -37516,9 +35792,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheGet;
   }, {
-    "./_getMapData": 287
+    "./_getMapData": 303
   }],
-  312: [function (require, module, exports) {
+  328: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Checks if a map value for `key` exists.
@@ -37537,9 +35813,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheHas;
   }, {
-    "./_getMapData": 287
+    "./_getMapData": 303
   }],
-  313: [function (require, module, exports) {
+  329: [function (require, module, exports) {
     var getMapData = require('./_getMapData');
     /**
      * Sets the map `key` to `value`.
@@ -37563,9 +35839,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = mapCacheSet;
   }, {
-    "./_getMapData": 287
+    "./_getMapData": 303
   }],
-  314: [function (require, module, exports) {
+  330: [function (require, module, exports) {
     var memoize = require('./memoize');
     /** Used as the maximum memoize cache size. */
 
@@ -37594,9 +35870,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = memoizeCapped;
   }, {
-    "./memoize": 353
+    "./memoize": 369
   }],
-  315: [function (require, module, exports) {
+  331: [function (require, module, exports) {
     var getNative = require('./_getNative');
     /* Built-in method references that are verified to be native. */
 
@@ -37604,9 +35880,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var nativeCreate = getNative(Object, 'create');
     module.exports = nativeCreate;
   }, {
-    "./_getNative": 288
+    "./_getNative": 304
   }],
-  316: [function (require, module, exports) {
+  332: [function (require, module, exports) {
     var overArg = require('./_overArg');
     /* Built-in method references for those with the same name as other `lodash` methods. */
 
@@ -37614,9 +35890,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var nativeKeys = overArg(Object.keys, Object);
     module.exports = nativeKeys;
   }, {
-    "./_overArg": 320
+    "./_overArg": 336
   }],
-  317: [function (require, module, exports) {
+  333: [function (require, module, exports) {
     /**
      * This function is like
      * [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
@@ -37640,7 +35916,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = nativeKeysIn;
   }, {}],
-  318: [function (require, module, exports) {
+  334: [function (require, module, exports) {
     var freeGlobal = require('./_freeGlobal');
     /** Detect free variable `exports`. */
 
@@ -37673,9 +35949,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = nodeUtil;
   }, {
-    "./_freeGlobal": 286
+    "./_freeGlobal": 302
   }],
-  319: [function (require, module, exports) {
+  335: [function (require, module, exports) {
     /** Used for built-in method references. */
     var objectProto = Object.prototype;
     /**
@@ -37699,7 +35975,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = objectToString;
   }, {}],
-  320: [function (require, module, exports) {
+  336: [function (require, module, exports) {
     /**
      * Creates a unary function that invokes `func` with its argument transformed.
      *
@@ -37716,7 +35992,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = overArg;
   }, {}],
-  321: [function (require, module, exports) {
+  337: [function (require, module, exports) {
     var apply = require('./_apply');
     /* Built-in method references for those with the same name as other `lodash` methods. */
 
@@ -37758,9 +36034,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = overRest;
   }, {
-    "./_apply": 252
+    "./_apply": 268
   }],
-  322: [function (require, module, exports) {
+  338: [function (require, module, exports) {
     var freeGlobal = require('./_freeGlobal');
     /** Detect free variable `self`. */
 
@@ -37771,9 +36047,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var root = freeGlobal || freeSelf || Function('return this')();
     module.exports = root;
   }, {
-    "./_freeGlobal": 286
+    "./_freeGlobal": 302
   }],
-  323: [function (require, module, exports) {
+  339: [function (require, module, exports) {
     /**
      * Gets the value at `key`, unless `key` is "__proto__" or "constructor".
      *
@@ -37796,7 +36072,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = safeGet;
   }, {}],
-  324: [function (require, module, exports) {
+  340: [function (require, module, exports) {
     var baseSetToString = require('./_baseSetToString'),
         shortOut = require('./_shortOut');
     /**
@@ -37812,10 +36088,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var setToString = shortOut(baseSetToString);
     module.exports = setToString;
   }, {
-    "./_baseSetToString": 271,
-    "./_shortOut": 325
+    "./_baseSetToString": 287,
+    "./_shortOut": 341
   }],
-  325: [function (require, module, exports) {
+  341: [function (require, module, exports) {
     /** Used to detect hot functions by number of calls within a span of milliseconds. */
     var HOT_COUNT = 800,
         HOT_SPAN = 16;
@@ -37854,7 +36130,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = shortOut;
   }, {}],
-  326: [function (require, module, exports) {
+  342: [function (require, module, exports) {
     var ListCache = require('./_ListCache');
     /**
      * Removes all key-value entries from the stack.
@@ -37872,9 +36148,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackClear;
   }, {
-    "./_ListCache": 246
+    "./_ListCache": 262
   }],
-  327: [function (require, module, exports) {
+  343: [function (require, module, exports) {
     /**
      * Removes `key` and its value from the stack.
      *
@@ -37893,7 +36169,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackDelete;
   }, {}],
-  328: [function (require, module, exports) {
+  344: [function (require, module, exports) {
     /**
      * Gets the stack value for `key`.
      *
@@ -37909,7 +36185,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackGet;
   }, {}],
-  329: [function (require, module, exports) {
+  345: [function (require, module, exports) {
     /**
      * Checks if a stack value for `key` exists.
      *
@@ -37925,7 +36201,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackHas;
   }, {}],
-  330: [function (require, module, exports) {
+  346: [function (require, module, exports) {
     var ListCache = require('./_ListCache'),
         Map = require('./_Map'),
         MapCache = require('./_MapCache');
@@ -37966,11 +36242,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stackSet;
   }, {
-    "./_ListCache": 246,
-    "./_Map": 247,
-    "./_MapCache": 248
+    "./_ListCache": 262,
+    "./_Map": 263,
+    "./_MapCache": 264
   }],
-  331: [function (require, module, exports) {
+  347: [function (require, module, exports) {
     var memoizeCapped = require('./_memoizeCapped');
     /** Used to match property names within property paths. */
 
@@ -38003,9 +36279,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     });
     module.exports = stringToPath;
   }, {
-    "./_memoizeCapped": 314
+    "./_memoizeCapped": 330
   }],
-  332: [function (require, module, exports) {
+  348: [function (require, module, exports) {
     var isSymbol = require('./isSymbol');
     /** Used as references for various `Number` constants. */
 
@@ -38030,9 +36306,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toKey;
   }, {
-    "./isSymbol": 348
+    "./isSymbol": 364
   }],
-  333: [function (require, module, exports) {
+  349: [function (require, module, exports) {
     /** Used for built-in method references. */
     var funcProto = Function.prototype;
     /** Used to resolve the decompiled source of functions. */
@@ -38062,7 +36338,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toSource;
   }, {}],
-  334: [function (require, module, exports) {
+  350: [function (require, module, exports) {
     /**
      * Creates a function that returns `value`.
      *
@@ -38090,7 +36366,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = constant;
   }, {}],
-  335: [function (require, module, exports) {
+  351: [function (require, module, exports) {
     /**
      * Performs a
      * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
@@ -38129,7 +36405,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = eq;
   }, {}],
-  336: [function (require, module, exports) {
+  352: [function (require, module, exports) {
     var baseGet = require('./_baseGet');
     /**
      * Gets the value at `path` of `object`. If the resolved value is
@@ -38165,9 +36441,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = get;
   }, {
-    "./_baseGet": 261
+    "./_baseGet": 277
   }],
-  337: [function (require, module, exports) {
+  353: [function (require, module, exports) {
     /**
      * This method returns the first argument it receives.
      *
@@ -38190,7 +36466,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = identity;
   }, {}],
-  338: [function (require, module, exports) {
+  354: [function (require, module, exports) {
     var baseIsArguments = require('./_baseIsArguments'),
         isObjectLike = require('./isObjectLike');
     /** Used for built-in method references. */
@@ -38229,10 +36505,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
     module.exports = isArguments;
   }, {
-    "./_baseIsArguments": 263,
-    "./isObjectLike": 346
+    "./_baseIsArguments": 279,
+    "./isObjectLike": 362
   }],
-  339: [function (require, module, exports) {
+  355: [function (require, module, exports) {
     /**
      * Checks if `value` is classified as an `Array` object.
      *
@@ -38259,7 +36535,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isArray = Array.isArray;
     module.exports = isArray;
   }, {}],
-  340: [function (require, module, exports) {
+  356: [function (require, module, exports) {
     var isFunction = require('./isFunction'),
         isLength = require('./isLength');
     /**
@@ -38295,10 +36571,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isArrayLike;
   }, {
-    "./isFunction": 343,
-    "./isLength": 344
+    "./isFunction": 359,
+    "./isLength": 360
   }],
-  341: [function (require, module, exports) {
+  357: [function (require, module, exports) {
     var isArrayLike = require('./isArrayLike'),
         isObjectLike = require('./isObjectLike');
     /**
@@ -38334,10 +36610,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isArrayLikeObject;
   }, {
-    "./isArrayLike": 340,
-    "./isObjectLike": 346
+    "./isArrayLike": 356,
+    "./isObjectLike": 362
   }],
-  342: [function (require, module, exports) {
+  358: [function (require, module, exports) {
     var root = require('./_root'),
         stubFalse = require('./stubFalse');
     /** Detect free variable `exports`. */
@@ -38377,10 +36653,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isBuffer = nativeIsBuffer || stubFalse;
     module.exports = isBuffer;
   }, {
-    "./_root": 322,
-    "./stubFalse": 355
+    "./_root": 338,
+    "./stubFalse": 371
   }],
-  343: [function (require, module, exports) {
+  359: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObject = require('./isObject');
     /** `Object#toString` result references. */
@@ -38421,10 +36697,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isFunction;
   }, {
-    "./_baseGetTag": 262,
-    "./isObject": 345
+    "./_baseGetTag": 278,
+    "./isObject": 361
   }],
-  344: [function (require, module, exports) {
+  360: [function (require, module, exports) {
     /** Used as references for various `Number` constants. */
     var MAX_SAFE_INTEGER = 9007199254740991;
     /**
@@ -38460,7 +36736,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isLength;
   }, {}],
-  345: [function (require, module, exports) {
+  361: [function (require, module, exports) {
     /**
      * Checks if `value` is the
      * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
@@ -38493,7 +36769,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isObject;
   }, {}],
-  346: [function (require, module, exports) {
+  362: [function (require, module, exports) {
     /**
      * Checks if `value` is object-like. A value is object-like if it's not `null`
      * and has a `typeof` result of "object".
@@ -38524,7 +36800,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isObjectLike;
   }, {}],
-  347: [function (require, module, exports) {
+  363: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         getPrototype = require('./_getPrototype'),
         isObjectLike = require('./isObjectLike');
@@ -38591,11 +36867,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isPlainObject;
   }, {
-    "./_baseGetTag": 262,
-    "./_getPrototype": 289,
-    "./isObjectLike": 346
+    "./_baseGetTag": 278,
+    "./_getPrototype": 305,
+    "./isObjectLike": 362
   }],
-  348: [function (require, module, exports) {
+  364: [function (require, module, exports) {
     var baseGetTag = require('./_baseGetTag'),
         isObjectLike = require('./isObjectLike');
     /** `Object#toString` result references. */
@@ -38626,10 +36902,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = isSymbol;
   }, {
-    "./_baseGetTag": 262,
-    "./isObjectLike": 346
+    "./_baseGetTag": 278,
+    "./isObjectLike": 362
   }],
-  349: [function (require, module, exports) {
+  365: [function (require, module, exports) {
     var baseIsTypedArray = require('./_baseIsTypedArray'),
         baseUnary = require('./_baseUnary'),
         nodeUtil = require('./_nodeUtil');
@@ -38658,11 +36934,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
     module.exports = isTypedArray;
   }, {
-    "./_baseIsTypedArray": 265,
-    "./_baseUnary": 274,
-    "./_nodeUtil": 318
+    "./_baseIsTypedArray": 281,
+    "./_baseUnary": 290,
+    "./_nodeUtil": 334
   }],
-  350: [function (require, module, exports) {
+  366: [function (require, module, exports) {
     var arrayLikeKeys = require('./_arrayLikeKeys'),
         baseKeys = require('./_baseKeys'),
         isArrayLike = require('./isArrayLike');
@@ -38702,11 +36978,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = keys;
   }, {
-    "./_arrayLikeKeys": 253,
-    "./_baseKeys": 266,
-    "./isArrayLike": 340
+    "./_arrayLikeKeys": 269,
+    "./_baseKeys": 282,
+    "./isArrayLike": 356
   }],
-  351: [function (require, module, exports) {
+  367: [function (require, module, exports) {
     var arrayLikeKeys = require('./_arrayLikeKeys'),
         baseKeysIn = require('./_baseKeysIn'),
         isArrayLike = require('./isArrayLike');
@@ -38741,11 +37017,11 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = keysIn;
   }, {
-    "./_arrayLikeKeys": 253,
-    "./_baseKeysIn": 267,
-    "./isArrayLike": 340
+    "./_arrayLikeKeys": 269,
+    "./_baseKeysIn": 283,
+    "./isArrayLike": 356
   }],
-  352: [function (require, module, exports) {
+  368: [function (require, module, exports) {
     /**
      * @license
      * Lodash <https://lodash.com/>
@@ -56680,7 +54956,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         }
     }).call(this);
   }, {}],
-  353: [function (require, module, exports) {
+  369: [function (require, module, exports) {
     var MapCache = require('./_MapCache');
     /** Error message constants. */
 
@@ -56758,9 +55034,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     memoize.Cache = MapCache;
     module.exports = memoize;
   }, {
-    "./_MapCache": 248
+    "./_MapCache": 264
   }],
-  354: [function (require, module, exports) {
+  370: [function (require, module, exports) {
     var baseMerge = require('./_baseMerge'),
         createAssigner = require('./_createAssigner');
     /**
@@ -56801,10 +55077,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     });
     module.exports = merge;
   }, {
-    "./_baseMerge": 268,
-    "./_createAssigner": 283
+    "./_baseMerge": 284,
+    "./_createAssigner": 299
   }],
-  355: [function (require, module, exports) {
+  371: [function (require, module, exports) {
     /**
      * This method returns `false`.
      *
@@ -56824,7 +55100,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = stubFalse;
   }, {}],
-  356: [function (require, module, exports) {
+  372: [function (require, module, exports) {
     var arrayMap = require('./_arrayMap'),
         copyArray = require('./_copyArray'),
         isArray = require('./isArray'),
@@ -56861,15 +55137,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toPath;
   }, {
-    "./_arrayMap": 254,
-    "./_copyArray": 280,
-    "./_stringToPath": 331,
-    "./_toKey": 332,
-    "./isArray": 339,
-    "./isSymbol": 348,
-    "./toString": 358
+    "./_arrayMap": 270,
+    "./_copyArray": 296,
+    "./_stringToPath": 347,
+    "./_toKey": 348,
+    "./isArray": 355,
+    "./isSymbol": 364,
+    "./toString": 374
   }],
-  357: [function (require, module, exports) {
+  373: [function (require, module, exports) {
     var copyObject = require('./_copyObject'),
         keysIn = require('./keysIn');
     /**
@@ -56904,10 +55180,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toPlainObject;
   }, {
-    "./_copyObject": 281,
-    "./keysIn": 351
+    "./_copyObject": 297,
+    "./keysIn": 367
   }],
-  358: [function (require, module, exports) {
+  374: [function (require, module, exports) {
     var baseToString = require('./_baseToString');
     /**
      * Converts `value` to a string. An empty string is returned for `null`
@@ -56938,9 +55214,9 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = toString;
   }, {
-    "./_baseToString": 273
+    "./_baseToString": 289
   }],
-  359: [function (require, module, exports) {
+  375: [function (require, module, exports) {
     var baseValues = require('./_baseValues'),
         keys = require('./keys');
     /**
@@ -56977,10 +55253,10 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
     module.exports = values;
   }, {
-    "./_baseValues": 275,
-    "./keys": 350
+    "./_baseValues": 291,
+    "./keys": 366
   }],
-  360: [function (require, module, exports) {
+  376: [function (require, module, exports) {
     'use strict';
 
     var STREAM = require('stream'),
@@ -57168,1006 +55444,271 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "string_decoder": undefined,
     "util": undefined
   }],
-  361: [function (require, module, exports) {
-    module.exports = minimatch;
-    minimatch.Minimatch = Minimatch;
-    var path = {
-      sep: '/'
-    };
-
-    try {
-      path = require('path');
-    } catch (er) {}
-
-    var GLOBSTAR = minimatch.GLOBSTAR = Minimatch.GLOBSTAR = {};
-
-    var expand = require('brace-expansion');
-
-    var plTypes = {
-      '!': {
-        open: '(?:(?!(?:',
-        close: '))[^/]*?)'
-      },
-      '?': {
-        open: '(?:',
-        close: ')?'
-      },
-      '+': {
-        open: '(?:',
-        close: ')+'
-      },
-      '*': {
-        open: '(?:',
-        close: ')*'
-      },
-      '@': {
-        open: '(?:',
-        close: ')'
-      }
-    }; // any single thing other than /
-    // don't need to escape / when using new RegExp()
-
-    var qmark = '[^/]'; // * => any number of characters
-
-    var star = qmark + '*?'; // ** when dots are allowed.  Anything goes, except .. and .
-    // not (^ or / followed by one or two dots followed by $ or /),
-    // followed by anything, any number of times.
-
-    var twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?'; // not a ^ or / followed by a dot,
-    // followed by anything, any number of times.
-
-    var twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?'; // characters that need to be escaped in RegExp.
-
-    var reSpecials = charSet('().*{}+?[]^$\\!'); // "abc" -> { a:true, b:true, c:true }
-
-    function charSet(s) {
-      return s.split('').reduce(function (set, c) {
-        set[c] = true;
-        return set;
-      }, {});
-    } // normalizes slashes.
-
-
-    var slashSplit = /\/+/;
-    minimatch.filter = filter;
-
-    function filter(pattern, options) {
-      options = options || {};
-      return function (p, i, list) {
-        return minimatch(p, pattern, options);
-      };
-    }
-
-    function ext(a, b) {
-      a = a || {};
-      b = b || {};
-      var t = {};
-      Object.keys(b).forEach(function (k) {
-        t[k] = b[k];
-      });
-      Object.keys(a).forEach(function (k) {
-        t[k] = a[k];
-      });
-      return t;
-    }
-
-    minimatch.defaults = function (def) {
-      if (!def || !Object.keys(def).length) return minimatch;
-      var orig = minimatch;
-
-      var m = function minimatch(p, pattern, options) {
-        return orig.minimatch(p, pattern, ext(def, options));
-      };
-
-      m.Minimatch = function Minimatch(pattern, options) {
-        return new orig.Minimatch(pattern, ext(def, options));
-      };
-
-      return m;
-    };
-
-    Minimatch.defaults = function (def) {
-      if (!def || !Object.keys(def).length) return Minimatch;
-      return minimatch.defaults(def).Minimatch;
-    };
-
-    function minimatch(p, pattern, options) {
-      if (typeof pattern !== 'string') {
-        throw new TypeError('glob pattern string required');
-      }
-
-      if (!options) options = {}; // shortcut: comments match nothing.
-
-      if (!options.nocomment && pattern.charAt(0) === '#') {
-        return false;
-      } // "" only matches ""
-
-
-      if (pattern.trim() === '') return p === '';
-      return new Minimatch(pattern, options).match(p);
-    }
-
-    function Minimatch(pattern, options) {
-      if (!(this instanceof Minimatch)) {
-        return new Minimatch(pattern, options);
-      }
-
-      if (typeof pattern !== 'string') {
-        throw new TypeError('glob pattern string required');
-      }
-
-      if (!options) options = {};
-      pattern = pattern.trim(); // windows support: need to use /, not \
-
-      if (path.sep !== '/') {
-        pattern = pattern.split(path.sep).join('/');
-      }
-
-      this.options = options;
-      this.set = [];
-      this.pattern = pattern;
-      this.regexp = null;
-      this.negate = false;
-      this.comment = false;
-      this.empty = false; // make the set of regexps etc.
-
-      this.make();
-    }
-
-    Minimatch.prototype.debug = function () {};
-
-    Minimatch.prototype.make = make;
-
-    function make() {
-      // don't do it more than once.
-      if (this._made) return;
-      var pattern = this.pattern;
-      var options = this.options; // empty patterns and comments match nothing.
-
-      if (!options.nocomment && pattern.charAt(0) === '#') {
-        this.comment = true;
-        return;
-      }
-
-      if (!pattern) {
-        this.empty = true;
-        return;
-      } // step 1: figure out negation, etc.
-
-
-      this.parseNegate(); // step 2: expand braces
-
-      var set = this.globSet = this.braceExpand();
-      if (options.debug) this.debug = console.error;
-      this.debug(this.pattern, set); // step 3: now we have a set, so turn each one into a series of path-portion
-      // matching patterns.
-      // These will be regexps, except in the case of "**", which is
-      // set to the GLOBSTAR object for globstar behavior,
-      // and will not contain any / characters
-
-      set = this.globParts = set.map(function (s) {
-        return s.split(slashSplit);
-      });
-      this.debug(this.pattern, set); // glob --> regexps
-
-      set = set.map(function (s, si, set) {
-        return s.map(this.parse, this);
-      }, this);
-      this.debug(this.pattern, set); // filter out everything that didn't compile properly.
-
-      set = set.filter(function (s) {
-        return s.indexOf(false) === -1;
-      });
-      this.debug(this.pattern, set);
-      this.set = set;
-    }
-
-    Minimatch.prototype.parseNegate = parseNegate;
-
-    function parseNegate() {
-      var pattern = this.pattern;
-      var negate = false;
-      var options = this.options;
-      var negateOffset = 0;
-      if (options.nonegate) return;
-
-      for (var i = 0, l = pattern.length; i < l && pattern.charAt(i) === '!'; i++) {
-        negate = !negate;
-        negateOffset++;
-      }
-
-      if (negateOffset) this.pattern = pattern.substr(negateOffset);
-      this.negate = negate;
-    } // Brace expansion:
-    // a{b,c}d -> abd acd
-    // a{b,}c -> abc ac
-    // a{0..3}d -> a0d a1d a2d a3d
-    // a{b,c{d,e}f}g -> abg acdfg acefg
-    // a{b,c}d{e,f}g -> abdeg acdeg abdeg abdfg
-    //
-    // Invalid sets are not expanded.
-    // a{2..}b -> a{2..}b
-    // a{b}c -> a{b}c
-
-
-    minimatch.braceExpand = function (pattern, options) {
-      return braceExpand(pattern, options);
-    };
-
-    Minimatch.prototype.braceExpand = braceExpand;
-
-    function braceExpand(pattern, options) {
-      if (!options) {
-        if (this instanceof Minimatch) {
-          options = this.options;
-        } else {
-          options = {};
-        }
-      }
-
-      pattern = typeof pattern === 'undefined' ? this.pattern : pattern;
-
-      if (typeof pattern === 'undefined') {
-        throw new TypeError('undefined pattern');
-      }
-
-      if (options.nobrace || !pattern.match(/\{.*\}/)) {
-        // shortcut. no need to expand.
-        return [pattern];
-      }
-
-      return expand(pattern);
-    } // parse a component of the expanded set.
-    // At this point, no pattern may contain "/" in it
-    // so we're going to return a 2d array, where each entry is the full
-    // pattern, split on '/', and then turned into a regular expression.
-    // A regexp is made at the end which joins each array with an
-    // escaped /, and another full one which joins each regexp with |.
-    //
-    // Following the lead of Bash 4.1, note that "**" only has special meaning
-    // when it is the *only* thing in a path portion.  Otherwise, any series
-    // of * is equivalent to a single *.  Globstar behavior is enabled by
-    // default, and can be disabled by setting options.noglobstar.
-
-
-    Minimatch.prototype.parse = parse;
-    var SUBPARSE = {};
-
-    function parse(pattern, isSub) {
-      if (pattern.length > 1024 * 64) {
-        throw new TypeError('pattern is too long');
-      }
-
-      var options = this.options; // shortcuts
-
-      if (!options.noglobstar && pattern === '**') return GLOBSTAR;
-      if (pattern === '') return '';
-      var re = '';
-      var hasMagic = !!options.nocase;
-      var escaping = false; // ? => one single character
-
-      var patternListStack = [];
-      var negativeLists = [];
-      var stateChar;
-      var inClass = false;
-      var reClassStart = -1;
-      var classStart = -1; // . and .. never match anything that doesn't start with .,
-      // even when options.dot is set.
-
-      var patternStart = pattern.charAt(0) === '.' ? '' // anything
-      // not (start or / followed by . or .. followed by / or end)
-      : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))' : '(?!\\.)';
-      var self = this;
-
-      function clearStateChar() {
-        if (stateChar) {
-          // we had some state-tracking character
-          // that wasn't consumed by this pass.
-          switch (stateChar) {
-            case '*':
-              re += star;
-              hasMagic = true;
-              break;
-
-            case '?':
-              re += qmark;
-              hasMagic = true;
-              break;
-
-            default:
-              re += '\\' + stateChar;
-              break;
-          }
-
-          self.debug('clearStateChar %j %j', stateChar, re);
-          stateChar = false;
-        }
-      }
-
-      for (var i = 0, len = pattern.length, c; i < len && (c = pattern.charAt(i)); i++) {
-        this.debug('%s\t%s %s %j', pattern, i, re, c); // skip over any that are escaped.
-
-        if (escaping && reSpecials[c]) {
-          re += '\\' + c;
-          escaping = false;
-          continue;
-        }
-
-        switch (c) {
-          case '/':
-            // completely not allowed, even escaped.
-            // Should already be path-split by now.
-            return false;
-
-          case '\\':
-            clearStateChar();
-            escaping = true;
-            continue;
-          // the various stateChar values
-          // for the "extglob" stuff.
-
-          case '?':
-          case '*':
-          case '+':
-          case '@':
-          case '!':
-            this.debug('%s\t%s %s %j <-- stateChar', pattern, i, re, c); // all of those are literals inside a class, except that
-            // the glob [!a] means [^a] in regexp
-
-            if (inClass) {
-              this.debug('  in class');
-              if (c === '!' && i === classStart + 1) c = '^';
-              re += c;
-              continue;
-            } // if we already have a stateChar, then it means
-            // that there was something like ** or +? in there.
-            // Handle the stateChar, then proceed with this one.
-
-
-            self.debug('call clearStateChar %j', stateChar);
-            clearStateChar();
-            stateChar = c; // if extglob is disabled, then +(asdf|foo) isn't a thing.
-            // just clear the statechar *now*, rather than even diving into
-            // the patternList stuff.
-
-            if (options.noext) clearStateChar();
-            continue;
-
-          case '(':
-            if (inClass) {
-              re += '(';
-              continue;
-            }
-
-            if (!stateChar) {
-              re += '\\(';
-              continue;
-            }
-
-            patternListStack.push({
-              type: stateChar,
-              start: i - 1,
-              reStart: re.length,
-              open: plTypes[stateChar].open,
-              close: plTypes[stateChar].close
-            }); // negation is (?:(?!js)[^/]*)
-
-            re += stateChar === '!' ? '(?:(?!(?:' : '(?:';
-            this.debug('plType %j %j', stateChar, re);
-            stateChar = false;
-            continue;
-
-          case ')':
-            if (inClass || !patternListStack.length) {
-              re += '\\)';
-              continue;
-            }
-
-            clearStateChar();
-            hasMagic = true;
-            var pl = patternListStack.pop(); // negation is (?:(?!js)[^/]*)
-            // The others are (?:<pattern>)<type>
-
-            re += pl.close;
-
-            if (pl.type === '!') {
-              negativeLists.push(pl);
-            }
-
-            pl.reEnd = re.length;
-            continue;
-
-          case '|':
-            if (inClass || !patternListStack.length || escaping) {
-              re += '\\|';
-              escaping = false;
-              continue;
-            }
-
-            clearStateChar();
-            re += '|';
-            continue;
-          // these are mostly the same in regexp and glob
-
-          case '[':
-            // swallow any state-tracking char before the [
-            clearStateChar();
-
-            if (inClass) {
-              re += '\\' + c;
-              continue;
-            }
-
-            inClass = true;
-            classStart = i;
-            reClassStart = re.length;
-            re += c;
-            continue;
-
-          case ']':
-            //  a right bracket shall lose its special
-            //  meaning and represent itself in
-            //  a bracket expression if it occurs
-            //  first in the list.  -- POSIX.2 2.8.3.2
-            if (i === classStart + 1 || !inClass) {
-              re += '\\' + c;
-              escaping = false;
-              continue;
-            } // handle the case where we left a class open.
-            // "[z-a]" is valid, equivalent to "\[z-a\]"
-
-
-            if (inClass) {
-              // split where the last [ was, make sure we don't have
-              // an invalid re. if so, re-walk the contents of the
-              // would-be class to re-translate any characters that
-              // were passed through as-is
-              // TODO: It would probably be faster to determine this
-              // without a try/catch and a new RegExp, but it's tricky
-              // to do safely.  For now, this is safe and works.
-              var cs = pattern.substring(classStart + 1, i);
-
-              try {
-                RegExp('[' + cs + ']');
-              } catch (er) {
-                // not a valid class!
-                var sp = this.parse(cs, SUBPARSE);
-                re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]';
-                hasMagic = hasMagic || sp[1];
-                inClass = false;
-                continue;
-              }
-            } // finish up the class.
-
-
-            hasMagic = true;
-            inClass = false;
-            re += c;
-            continue;
-
-          default:
-            // swallow any state char that wasn't consumed
-            clearStateChar();
-
-            if (escaping) {
-              // no need
-              escaping = false;
-            } else if (reSpecials[c] && !(c === '^' && inClass)) {
-              re += '\\';
-            }
-
-            re += c;
-        } // switch
-
-      } // for
-      // handle the case where we left a class open.
-      // "[abc" is valid, equivalent to "\[abc"
-
-
-      if (inClass) {
-        // split where the last [ was, and escape it
-        // this is a huge pita.  We now have to re-walk
-        // the contents of the would-be class to re-translate
-        // any characters that were passed through as-is
-        cs = pattern.substr(classStart + 1);
-        sp = this.parse(cs, SUBPARSE);
-        re = re.substr(0, reClassStart) + '\\[' + sp[0];
-        hasMagic = hasMagic || sp[1];
-      } // handle the case where we had a +( thing at the *end*
-      // of the pattern.
-      // each pattern list stack adds 3 chars, and we need to go through
-      // and escape any | chars that were passed through as-is for the regexp.
-      // Go through and escape them, taking care not to double-escape any
-      // | chars that were already escaped.
-
-
-      for (pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
-        var tail = re.slice(pl.reStart + pl.open.length);
-        this.debug('setting tail', re, pl); // maybe some even number of \, then maybe 1 \, followed by a |
-
-        tail = tail.replace(/((?:\\{2}){0,64})(\\?)\|/g, function (_, $1, $2) {
-          if (!$2) {
-            // the | isn't already escaped, so escape it.
-            $2 = '\\';
-          } // need to escape all those slashes *again*, without escaping the
-          // one that we need for escaping the | character.  As it works out,
-          // escaping an even number of slashes can be done by simply repeating
-          // it exactly after itself.  That's why this trick works.
-          //
-          // I am sorry that you have to see this.
-
-
-          return $1 + $1 + $2 + '|';
-        });
-        this.debug('tail=%j\n   %s', tail, tail, pl, re);
-        var t = pl.type === '*' ? star : pl.type === '?' ? qmark : '\\' + pl.type;
-        hasMagic = true;
-        re = re.slice(0, pl.reStart) + t + '\\(' + tail;
-      } // handle trailing things that only matter at the very end.
-
-
-      clearStateChar();
-
-      if (escaping) {
-        // trailing \\
-        re += '\\\\';
-      } // only need to apply the nodot start if the re starts with
-      // something that could conceivably capture a dot
-
-
-      var addPatternStart = false;
-
-      switch (re.charAt(0)) {
-        case '.':
-        case '[':
-        case '(':
-          addPatternStart = true;
-      } // Hack to work around lack of negative lookbehind in JS
-      // A pattern like: *.!(x).!(y|z) needs to ensure that a name
-      // like 'a.xyz.yz' doesn't match.  So, the first negative
-      // lookahead, has to look ALL the way ahead, to the end of
-      // the pattern.
-
-
-      for (var n = negativeLists.length - 1; n > -1; n--) {
-        var nl = negativeLists[n];
-        var nlBefore = re.slice(0, nl.reStart);
-        var nlFirst = re.slice(nl.reStart, nl.reEnd - 8);
-        var nlLast = re.slice(nl.reEnd - 8, nl.reEnd);
-        var nlAfter = re.slice(nl.reEnd);
-        nlLast += nlAfter; // Handle nested stuff like *(*.js|!(*.json)), where open parens
-        // mean that we should *not* include the ) in the bit that is considered
-        // "after" the negated section.
-
-        var openParensBefore = nlBefore.split('(').length - 1;
-        var cleanAfter = nlAfter;
-
-        for (i = 0; i < openParensBefore; i++) {
-          cleanAfter = cleanAfter.replace(/\)[+*?]?/, '');
-        }
-
-        nlAfter = cleanAfter;
-        var dollar = '';
-
-        if (nlAfter === '' && isSub !== SUBPARSE) {
-          dollar = '$';
-        }
-
-        var newRe = nlBefore + nlFirst + nlAfter + dollar + nlLast;
-        re = newRe;
-      } // if the re is not "" at this point, then we need to make sure
-      // it doesn't match against an empty path part.
-      // Otherwise a/* will match a/, which it should not.
-
-
-      if (re !== '' && hasMagic) {
-        re = '(?=.)' + re;
-      }
-
-      if (addPatternStart) {
-        re = patternStart + re;
-      } // parsing just a piece of a larger pattern.
-
-
-      if (isSub === SUBPARSE) {
-        return [re, hasMagic];
-      } // skip the regexp for non-magical patterns
-      // unescape anything in it, though, so that it'll be
-      // an exact match against a file etc.
-
-
-      if (!hasMagic) {
-        return globUnescape(pattern);
-      }
-
-      var flags = options.nocase ? 'i' : '';
-
-      try {
-        var regExp = new RegExp('^' + re + '$', flags);
-      } catch (er) {
-        // If it was an invalid regular expression, then it can't match
-        // anything.  This trick looks for a character after the end of
-        // the string, which is of course impossible, except in multi-line
-        // mode, but it's not a /m regex.
-        return new RegExp('$.');
-      }
-
-      regExp._glob = pattern;
-      regExp._src = re;
-      return regExp;
-    }
-
-    minimatch.makeRe = function (pattern, options) {
-      return new Minimatch(pattern, options || {}).makeRe();
-    };
-
-    Minimatch.prototype.makeRe = makeRe;
-
-    function makeRe() {
-      if (this.regexp || this.regexp === false) return this.regexp; // at this point, this.set is a 2d array of partial
-      // pattern strings, or "**".
-      //
-      // It's better to use .match().  This function shouldn't
-      // be used, really, but it's pretty convenient sometimes,
-      // when you just want to work with a regex.
-
-      var set = this.set;
-
-      if (!set.length) {
-        this.regexp = false;
-        return this.regexp;
-      }
-
-      var options = this.options;
-      var twoStar = options.noglobstar ? star : options.dot ? twoStarDot : twoStarNoDot;
-      var flags = options.nocase ? 'i' : '';
-      var re = set.map(function (pattern) {
-        return pattern.map(function (p) {
-          return p === GLOBSTAR ? twoStar : typeof p === 'string' ? regExpEscape(p) : p._src;
-        }).join('\\\/');
-      }).join('|'); // must match entire pattern
-      // ending in a * or ** will make it less strict.
-
-      re = '^(?:' + re + ')$'; // can match anything, as long as it's not this.
-
-      if (this.negate) re = '^(?!' + re + ').*$';
-
-      try {
-        this.regexp = new RegExp(re, flags);
-      } catch (ex) {
-        this.regexp = false;
-      }
-
-      return this.regexp;
-    }
-
-    minimatch.match = function (list, pattern, options) {
-      options = options || {};
-      var mm = new Minimatch(pattern, options);
-      list = list.filter(function (f) {
-        return mm.match(f);
-      });
-
-      if (mm.options.nonull && !list.length) {
-        list.push(pattern);
-      }
-
-      return list;
-    };
-
-    Minimatch.prototype.match = match;
-
-    function match(f, partial) {
-      this.debug('match', f, this.pattern); // short-circuit in the case of busted things.
-      // comments, etc.
-
-      if (this.comment) return false;
-      if (this.empty) return f === '';
-      if (f === '/' && partial) return true;
-      var options = this.options; // windows: need to use /, not \
-
-      if (path.sep !== '/') {
-        f = f.split(path.sep).join('/');
-      } // treat the test path as a set of pathparts.
-
-
-      f = f.split(slashSplit);
-      this.debug(this.pattern, 'split', f); // just ONE of the pattern sets in this.set needs to match
-      // in order for it to be valid.  If negating, then just one
-      // match means that we have failed.
-      // Either way, return on the first hit.
-
-      var set = this.set;
-      this.debug(this.pattern, 'set', set); // Find the basename of the path by looking for the last non-empty segment
-
-      var filename;
-      var i;
-
-      for (i = f.length - 1; i >= 0; i--) {
-        filename = f[i];
-        if (filename) break;
-      }
-
-      for (i = 0; i < set.length; i++) {
-        var pattern = set[i];
-        var file = f;
-
-        if (options.matchBase && pattern.length === 1) {
-          file = [filename];
-        }
-
-        var hit = this.matchOne(file, pattern, partial);
-
-        if (hit) {
-          if (options.flipNegate) return true;
-          return !this.negate;
-        }
-      } // didn't get any hits.  this is success if it's a negative
-      // pattern, failure otherwise.
-
-
-      if (options.flipNegate) return false;
-      return this.negate;
-    } // set partial to true to test if, for example,
-    // "/a/b" matches the start of "/*/b/*/d"
-    // Partial means, if you run out of file before you run
-    // out of pattern, then that's fine, as long as all
-    // the parts match.
-
-
-    Minimatch.prototype.matchOne = function (file, pattern, partial) {
-      var options = this.options;
-      this.debug('matchOne', {
-        'this': this,
-        file: file,
-        pattern: pattern
-      });
-      this.debug('matchOne', file.length, pattern.length);
-
-      for (var fi = 0, pi = 0, fl = file.length, pl = pattern.length; fi < fl && pi < pl; fi++, pi++) {
-        this.debug('matchOne loop');
-        var p = pattern[pi];
-        var f = file[fi];
-        this.debug(pattern, p, f); // should be impossible.
-        // some invalid regexp stuff in the set.
-
-        if (p === false) return false;
-
-        if (p === GLOBSTAR) {
-          this.debug('GLOBSTAR', [pattern, p, f]); // "**"
-          // a/**/b/**/c would match the following:
-          // a/b/x/y/z/c
-          // a/x/y/z/b/c
-          // a/b/x/b/x/c
-          // a/b/c
-          // To do this, take the rest of the pattern after
-          // the **, and see if it would match the file remainder.
-          // If so, return success.
-          // If not, the ** "swallows" a segment, and try again.
-          // This is recursively awful.
-          //
-          // a/**/b/**/c matching a/b/x/y/z/c
-          // - a matches a
-          // - doublestar
-          //   - matchOne(b/x/y/z/c, b/**/c)
-          //     - b matches b
-          //     - doublestar
-          //       - matchOne(x/y/z/c, c) -> no
-          //       - matchOne(y/z/c, c) -> no
-          //       - matchOne(z/c, c) -> no
-          //       - matchOne(c, c) yes, hit
-
-          var fr = fi;
-          var pr = pi + 1;
-
-          if (pr === pl) {
-            this.debug('** at the end'); // a ** at the end will just swallow the rest.
-            // We have found a match.
-            // however, it will not swallow /.x, unless
-            // options.dot is set.
-            // . and .. are *never* matched by **, for explosively
-            // exponential reasons.
-
-            for (; fi < fl; fi++) {
-              if (file[fi] === '.' || file[fi] === '..' || !options.dot && file[fi].charAt(0) === '.') return false;
-            }
-
-            return true;
-          } // ok, let's see if we can swallow whatever we can.
-
-
-          while (fr < fl) {
-            var swallowee = file[fr];
-            this.debug('\nglobstar while', file, fr, pattern, pr, swallowee); // XXX remove this slice.  Just pass the start index.
-
-            if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
-              this.debug('globstar found match!', fr, fl, swallowee); // found a match.
-
-              return true;
-            } else {
-              // can't swallow "." or ".." ever.
-              // can only swallow ".foo" when explicitly asked.
-              if (swallowee === '.' || swallowee === '..' || !options.dot && swallowee.charAt(0) === '.') {
-                this.debug('dot detected!', file, fr, pattern, pr);
-                break;
-              } // ** swallows a segment, and continue.
-
-
-              this.debug('globstar swallow a segment, and continue');
-              fr++;
-            }
-          } // no match was found.
-          // However, in partial mode, we can't say this is necessarily over.
-          // If there's more *pattern* left, then
-
-
-          if (partial) {
-            // ran out of file
-            this.debug('\n>>> no match, partial?', file, fr, pattern, pr);
-            if (fr === fl) return true;
-          }
-
-          return false;
-        } // something other than **
-        // non-magic patterns just have to match exactly
-        // patterns with magic have been turned into regexps.
-
-
-        var hit;
-
-        if (typeof p === 'string') {
-          if (options.nocase) {
-            hit = f.toLowerCase() === p.toLowerCase();
-          } else {
-            hit = f === p;
-          }
-
-          this.debug('string match', p, f, hit);
-        } else {
-          hit = f.match(p);
-          this.debug('pattern match', p, f, hit);
-        }
-
-        if (!hit) return false;
-      } // Note: ending in / means that we'll get a final ""
-      // at the end of the pattern.  This can only match a
-      // corresponding "" at the end of the file.
-      // If the file ends in /, then it can only match a
-      // a pattern that ends in /, unless the pattern just
-      // doesn't have any more for it. But, a/b/ should *not*
-      // match "a/b/*", even though "" matches against the
-      // [^/]*? pattern, except in partial mode, where it might
-      // simply not be reached yet.
-      // However, a/b/ should still satisfy a/*
-      // now either we fell off the end of the pattern, or we're done.
-
-
-      if (fi === fl && pi === pl) {
-        // ran out of pattern and filename at the same time.
-        // an exact hit!
-        return true;
-      } else if (fi === fl) {
-        // ran out of file, but still had pattern left.
-        // this is ok if we're doing the match as part of
-        // a glob fs traversal.
-        return partial;
-      } else if (pi === pl) {
-        // ran out of pattern, still have file left.
-        // this is only acceptable if we're on the very last
-        // empty segment of a file with a trailing slash.
-        // a/* should match a/b/
-        var emptyFileEnd = fi === fl - 1 && file[fi] === '';
-        return emptyFileEnd;
-      } // should be unreachable.
-
-
-      throw new Error('wtf?');
-    }; // replace stuff like \* with *
-
-
-    function globUnescape(s) {
-      return s.replace(/\\(.)/g, '$1');
-    }
-
-    function regExpEscape(s) {
-      return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-    }
+  377: [function (require, module, exports) {
+    arguments[4][126][0].apply(exports, arguments);
   }, {
-    "brace-expansion": 181,
+    "brace-expansion": 197,
+    "dup": 126,
     "path": undefined
   }],
-  362: [function (require, module, exports) {
-    arguments[4][115][0].apply(exports, arguments);
-  }, {
-    "dup": 115
-  }],
-  363: [function (require, module, exports) {
-    var wrappy = require('wrappy');
-
-    module.exports = wrappy(once);
-    module.exports.strict = wrappy(onceStrict);
-    once.proto = once(function () {
-      Object.defineProperty(Function.prototype, 'once', {
-        value: function value() {
-          return once(this);
-        },
-        configurable: true
-      });
-      Object.defineProperty(Function.prototype, 'onceStrict', {
-        value: function value() {
-          return onceStrict(this);
-        },
-        configurable: true
-      });
-    });
-
-    function once(fn) {
-      var f = function f() {
-        if (f.called) return f.value;
-        f.called = true;
-        return f.value = fn.apply(this, arguments);
+  378: [function (require, module, exports) {
+    module.exports = function (args, opts) {
+      if (!opts) opts = {};
+      var flags = {
+        bools: {},
+        strings: {},
+        unknownFn: null
       };
 
-      f.called = false;
-      return f;
-    }
+      if (typeof opts['unknown'] === 'function') {
+        flags.unknownFn = opts['unknown'];
+      }
 
-    function onceStrict(fn) {
-      var f = function f() {
-        if (f.called) throw new Error(f.onceError);
-        f.called = true;
-        return f.value = fn.apply(this, arguments);
+      if (typeof opts['boolean'] === 'boolean' && opts['boolean']) {
+        flags.allBools = true;
+      } else {
+        [].concat(opts['boolean']).filter(Boolean).forEach(function (key) {
+          flags.bools[key] = true;
+        });
+      }
+
+      var aliases = {};
+      Object.keys(opts.alias || {}).forEach(function (key) {
+        aliases[key] = [].concat(opts.alias[key]);
+        aliases[key].forEach(function (x) {
+          aliases[x] = [key].concat(aliases[key].filter(function (y) {
+            return x !== y;
+          }));
+        });
+      });
+      [].concat(opts.string).filter(Boolean).forEach(function (key) {
+        flags.strings[key] = true;
+
+        if (aliases[key]) {
+          flags.strings[aliases[key]] = true;
+        }
+      });
+      var defaults = opts['default'] || {};
+      var argv = {
+        _: []
       };
+      Object.keys(flags.bools).forEach(function (key) {
+        setArg(key, defaults[key] === undefined ? false : defaults[key]);
+      });
+      var notFlags = [];
 
-      var name = fn.name || 'Function wrapped with `once`';
-      f.onceError = name + " shouldn't be called more than once";
-      f.called = false;
-      return f;
+      if (args.indexOf('--') !== -1) {
+        notFlags = args.slice(args.indexOf('--') + 1);
+        args = args.slice(0, args.indexOf('--'));
+      }
+
+      function argDefined(key, arg) {
+        return flags.allBools && /^--[^=]+$/.test(arg) || flags.strings[key] || flags.bools[key] || aliases[key];
+      }
+
+      function setArg(key, val, arg) {
+        if (arg && flags.unknownFn && !argDefined(key, arg)) {
+          if (flags.unknownFn(arg) === false) return;
+        }
+
+        var value = !flags.strings[key] && isNumber(val) ? Number(val) : val;
+        setKey(argv, key.split('.'), value);
+        (aliases[key] || []).forEach(function (x) {
+          setKey(argv, x.split('.'), value);
+        });
+      }
+
+      function setKey(obj, keys, value) {
+        var o = obj;
+
+        for (var i = 0; i < keys.length - 1; i++) {
+          var key = keys[i];
+          if (key === '__proto__') return;
+          if (o[key] === undefined) o[key] = {};
+          if (o[key] === Object.prototype || o[key] === Number.prototype || o[key] === String.prototype) o[key] = {};
+          if (o[key] === Array.prototype) o[key] = [];
+          o = o[key];
+        }
+
+        var key = keys[keys.length - 1];
+        if (key === '__proto__') return;
+        if (o === Object.prototype || o === Number.prototype || o === String.prototype) o = {};
+        if (o === Array.prototype) o = [];
+
+        if (o[key] === undefined || flags.bools[key] || typeof o[key] === 'boolean') {
+          o[key] = value;
+        } else if (Array.isArray(o[key])) {
+          o[key].push(value);
+        } else {
+          o[key] = [o[key], value];
+        }
+      }
+
+      function aliasIsBoolean(key) {
+        return aliases[key].some(function (x) {
+          return flags.bools[x];
+        });
+      }
+
+      for (var i = 0; i < args.length; i++) {
+        var arg = args[i];
+
+        if (/^--.+=/.test(arg)) {
+          // Using [\s\S] instead of . because js doesn't support the
+          // 'dotall' regex modifier. See:
+          // http://stackoverflow.com/a/1068308/13216
+          var m = arg.match(/^--([^=]+)=([\s\S]*)$/);
+          var key = m[1];
+          var value = m[2];
+
+          if (flags.bools[key]) {
+            value = value !== 'false';
+          }
+
+          setArg(key, value, arg);
+        } else if (/^--no-.+/.test(arg)) {
+          var key = arg.match(/^--no-(.+)/)[1];
+          setArg(key, false, arg);
+        } else if (/^--.+/.test(arg)) {
+          var key = arg.match(/^--(.+)/)[1];
+          var next = args[i + 1];
+
+          if (next !== undefined && !/^-/.test(next) && !flags.bools[key] && !flags.allBools && (aliases[key] ? !aliasIsBoolean(key) : true)) {
+            setArg(key, next, arg);
+            i++;
+          } else if (/^(true|false)$/.test(next)) {
+            setArg(key, next === 'true', arg);
+            i++;
+          } else {
+            setArg(key, flags.strings[key] ? '' : true, arg);
+          }
+        } else if (/^-[^-]+/.test(arg)) {
+          var letters = arg.slice(1, -1).split('');
+          var broken = false;
+
+          for (var j = 0; j < letters.length; j++) {
+            var next = arg.slice(j + 2);
+
+            if (next === '-') {
+              setArg(letters[j], next, arg);
+              continue;
+            }
+
+            if (/[A-Za-z]/.test(letters[j]) && /=/.test(next)) {
+              setArg(letters[j], next.split('=')[1], arg);
+              broken = true;
+              break;
+            }
+
+            if (/[A-Za-z]/.test(letters[j]) && /-?\d+(\.\d*)?(e-?\d+)?$/.test(next)) {
+              setArg(letters[j], next, arg);
+              broken = true;
+              break;
+            }
+
+            if (letters[j + 1] && letters[j + 1].match(/\W/)) {
+              setArg(letters[j], arg.slice(j + 2), arg);
+              broken = true;
+              break;
+            } else {
+              setArg(letters[j], flags.strings[letters[j]] ? '' : true, arg);
+            }
+          }
+
+          var key = arg.slice(-1)[0];
+
+          if (!broken && key !== '-') {
+            if (args[i + 1] && !/^(-|--)[^-]/.test(args[i + 1]) && !flags.bools[key] && (aliases[key] ? !aliasIsBoolean(key) : true)) {
+              setArg(key, args[i + 1], arg);
+              i++;
+            } else if (args[i + 1] && /^(true|false)$/.test(args[i + 1])) {
+              setArg(key, args[i + 1] === 'true', arg);
+              i++;
+            } else {
+              setArg(key, flags.strings[key] ? '' : true, arg);
+            }
+          }
+        } else {
+          if (!flags.unknownFn || flags.unknownFn(arg) !== false) {
+            argv._.push(flags.strings['_'] || !isNumber(arg) ? arg : Number(arg));
+          }
+
+          if (opts.stopEarly) {
+            argv._.push.apply(argv._, args.slice(i + 1));
+
+            break;
+          }
+        }
+      }
+
+      Object.keys(defaults).forEach(function (key) {
+        if (!hasKey(argv, key.split('.'))) {
+          setKey(argv, key.split('.'), defaults[key]);
+          (aliases[key] || []).forEach(function (x) {
+            setKey(argv, x.split('.'), defaults[key]);
+          });
+        }
+      });
+
+      if (opts['--']) {
+        argv['--'] = new Array();
+        notFlags.forEach(function (key) {
+          argv['--'].push(key);
+        });
+      } else {
+        notFlags.forEach(function (key) {
+          argv._.push(key);
+        });
+      }
+
+      return argv;
+    };
+
+    function hasKey(obj, keys) {
+      var o = obj;
+      keys.slice(0, -1).forEach(function (key) {
+        o = o[key] || {};
+      });
+      var key = keys[keys.length - 1];
+      return key in o;
     }
-  }, {
-    "wrappy": 377
-  }],
-  364: [function (require, module, exports) {
-    'use strict';
 
-    function posix(path) {
-      return path.charAt(0) === '/';
+    function isNumber(x) {
+      if (typeof x === 'number') return true;
+      if (/^0x[0-9a-f]+$/i.test(x)) return true;
+      return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(e[-+]?\d+)?$/.test(x);
     }
-
-    function win32(path) {
-      // https://github.com/nodejs/node/blob/b3fcc245fb25539909ef1d5eaa01dbf92e168633/lib/path.js#L56
-      var splitDeviceRe = /^([a-zA-Z]:|[\\\/]{2}[^\\\/]+[\\\/]+[^\\\/]+)?([\\\/])?([\s\S]*?)$/;
-      var result = splitDeviceRe.exec(path);
-      var device = result[1] || '';
-      var isUnc = Boolean(device && device.charAt(1) !== ':'); // UNC paths are always absolute
-
-      return Boolean(result[2] || isUnc);
-    }
-
-    module.exports = process.platform === 'win32' ? win32 : posix;
-    module.exports.posix = posix;
-    module.exports.win32 = win32;
   }, {}],
-  365: [function (require, module, exports) {
-    arguments[4][116][0].apply(exports, arguments);
+  379: [function (require, module, exports) {
+    arguments[4][128][0].apply(exports, arguments);
   }, {
-    "dup": 116
+    "dup": 128,
+    "wrappy": 393
   }],
-  366: [function (require, module, exports) {
+  380: [function (require, module, exports) {
+    arguments[4][129][0].apply(exports, arguments);
+  }, {
+    "dup": 129
+  }],
+  381: [function (require, module, exports) {
+    arguments[4][130][0].apply(exports, arguments);
+  }, {
+    "dup": 130
+  }],
+  382: [function (require, module, exports) {
     var async = require('./lib/async');
 
     async.core = require('./lib/core');
     async.isCore = require('./lib/is-core');
     async.sync = require('./lib/sync');
-    exports = async;
     module.exports = async;
   }, {
-    "./lib/async": 367,
-    "./lib/core": 370,
-    "./lib/is-core": 371,
-    "./lib/sync": 374
+    "./lib/async": 383,
+    "./lib/core": 386,
+    "./lib/is-core": 387,
+    "./lib/sync": 390
   }],
-  367: [function (require, module, exports) {
+  383: [function (require, module, exports) {
     var fs = require('fs');
 
     var path = require('path');
@@ -58212,6 +55753,16 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
     };
 
+    var getPackageCandidates = function getPackageCandidates(x, start, opts) {
+      var dirs = nodeModulesPaths(start, opts, x);
+
+      for (var i = 0; i < dirs.length; i++) {
+        dirs[i] = path.join(dirs[i], x);
+      }
+
+      return dirs;
+    };
+
     module.exports = function resolve(x, options, callback) {
       var cb = callback;
       var opts = options;
@@ -58232,6 +55783,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       var isFile = opts.isFile || defaultIsFile;
       var isDirectory = opts.isDirectory || defaultIsDir;
       var readFile = opts.readFile || fs.readFile;
+      var packageIterator = opts.packageIterator;
       var extensions = opts.extensions || ['.js'];
       var basedir = opts.basedir || path.dirname(caller());
       var parent = opts.filename || basedir;
@@ -58246,13 +55798,15 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       function init(basedir) {
         if (/^(?:\.\.?(?:\/|$)|\/|([A-Za-z]:)?[/\\])/.test(x)) {
           res = path.resolve(basedir, x);
-          if (x === '..' || x.slice(-1) === '/') res += '/';
+          if (x === '.' || x === '..' || x.slice(-1) === '/') res += '/';
 
           if (/\/$/.test(x) && res === basedir) {
             loadAsDirectory(res, opts["package"], onfile);
           } else loadAsFile(res, opts["package"], onfile);
+        } else if (isCore(x)) {
+          return cb(null, x);
         } else loadNodeModules(x, basedir, function (err, n, pkg) {
-          if (err) cb(err);else if (isCore(x)) return cb(null, x);else if (n) {
+          if (err) cb(err);else if (n) {
             return maybeUnwrapSymlink(n, opts, function (err, realN) {
               if (err) {
                 cb(err);
@@ -58417,19 +55971,18 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       function processDirs(cb, dirs) {
         if (dirs.length === 0) return cb(null, undefined);
         var dir = dirs[0];
-        isDirectory(dir, isdir);
+        isDirectory(path.dirname(dir), isdir);
 
         function isdir(err, isdir) {
           if (err) return cb(err);
           if (!isdir) return processDirs(cb, dirs.slice(1));
-          var file = path.join(dir, x);
-          loadAsFile(file, opts["package"], onfile);
+          loadAsFile(dir, opts["package"], onfile);
         }
 
         function onfile(err, m, pkg) {
           if (err) return cb(err);
           if (m) return cb(null, m, pkg);
-          loadAsDirectory(path.join(dir, x), opts["package"], ondir);
+          loadAsDirectory(dir, opts["package"], ondir);
         }
 
         function ondir(err, n, pkg) {
@@ -58440,23 +55993,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
 
       function loadNodeModules(x, start, cb) {
-        processDirs(cb, nodeModulesPaths(start, opts, x));
+        var thunk = function thunk() {
+          return getPackageCandidates(x, start, opts);
+        };
+
+        processDirs(cb, packageIterator ? packageIterator(x, start, thunk, opts) : thunk());
       }
     };
   }, {
-    "./caller.js": 368,
-    "./is-core": 371,
-    "./node-modules-paths.js": 372,
-    "./normalize-options.js": 373,
+    "./caller.js": 384,
+    "./is-core": 387,
+    "./node-modules-paths.js": 388,
+    "./normalize-options.js": 389,
     "fs": undefined,
     "path": undefined
   }],
-  368: [function (require, module, exports) {
-    arguments[4][119][0].apply(exports, arguments);
+  384: [function (require, module, exports) {
+    arguments[4][133][0].apply(exports, arguments);
   }, {
-    "dup": 119
+    "dup": 133
   }],
-  369: [function (require, module, exports) {
+  385: [function (require, module, exports) {
     module.exports = {
       "assert": true,
       "async_hooks": ">= 8",
@@ -58528,27 +56085,27 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       "v8/tools/splaytree": [">= 4.4.0 && < 5", ">= 5.2.0 && < 12"],
       "v8": ">= 1",
       "vm": true,
-      "wasi": ">= 13.4",
+      "wasi": ">= 13.4 && < 13.5",
       "worker_threads": ">= 11.7",
       "zlib": true
     };
   }, {}],
-  370: [function (require, module, exports) {
-    arguments[4][121][0].apply(exports, arguments);
+  386: [function (require, module, exports) {
+    arguments[4][135][0].apply(exports, arguments);
   }, {
-    "./core.json": 369,
-    "dup": 121
+    "./core.json": 385,
+    "dup": 135
   }],
-  371: [function (require, module, exports) {
+  387: [function (require, module, exports) {
     var core = require('./core');
 
     module.exports = function isCore(x) {
       return Object.prototype.hasOwnProperty.call(core, x);
     };
   }, {
-    "./core": 370
+    "./core": 386
   }],
-  372: [function (require, module, exports) {
+  388: [function (require, module, exports) {
     var path = require('path');
 
     var parse = path.parse || require('path-parse');
@@ -58591,14 +56148,14 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     };
   }, {
     "path": undefined,
-    "path-parse": 365
+    "path-parse": 381
   }],
-  373: [function (require, module, exports) {
-    arguments[4][123][0].apply(exports, arguments);
+  389: [function (require, module, exports) {
+    arguments[4][137][0].apply(exports, arguments);
   }, {
-    "dup": 123
+    "dup": 137
   }],
-  374: [function (require, module, exports) {
+  390: [function (require, module, exports) {
     var isCore = require('./is-core');
 
     var fs = require('fs');
@@ -58647,7 +56204,17 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       return x;
     };
 
-    module.exports = function (x, options) {
+    var getPackageCandidates = function getPackageCandidates(x, start, opts) {
+      var dirs = nodeModulesPaths(start, opts, x);
+
+      for (var i = 0; i < dirs.length; i++) {
+        dirs[i] = path.join(dirs[i], x);
+      }
+
+      return dirs;
+    };
+
+    module.exports = function resolveSync(x, options) {
       if (typeof x !== 'string') {
         throw new TypeError('Path must be a string.');
       }
@@ -58656,6 +56223,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       var isFile = opts.isFile || defaultIsFile;
       var readFileSync = opts.readFileSync || fs.readFileSync;
       var isDirectory = opts.isDirectory || defaultIsDir;
+      var packageIterator = opts.packageIterator;
       var extensions = opts.extensions || ['.js'];
       var basedir = opts.basedir || path.dirname(caller());
       var parent = opts.filename || basedir;
@@ -58665,7 +56233,7 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
 
       if (/^(?:\.\.?(?:\/|$)|\/|([A-Za-z]:)?[/\\])/.test(x)) {
         var res = path.resolve(absoluteStart, x);
-        if (x === '..' || x.slice(-1) === '/') res += '/';
+        if (x === '.' || x === '..' || x.slice(-1) === '/') res += '/';
         var m = loadAsFileSync(res) || loadAsDirectorySync(res);
         if (m) return maybeUnwrapSymlink(m, opts);
       } else if (isCore(x)) {
@@ -58675,7 +56243,6 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
         if (n) return maybeUnwrapSymlink(n, opts);
       }
 
-      if (isCore(x)) return x;
       var err = new Error("Cannot find module '" + x + "' from '" + parent + "'");
       err.code = 'MODULE_NOT_FOUND';
       throw err;
@@ -58778,75 +56345,48 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
       }
 
       function loadNodeModulesSync(x, start) {
-        var dirs = nodeModulesPaths(start, opts, x);
+        var thunk = function thunk() {
+          return getPackageCandidates(x, start, opts);
+        };
+
+        var dirs = packageIterator ? packageIterator(x, start, thunk, opts) : thunk();
 
         for (var i = 0; i < dirs.length; i++) {
           var dir = dirs[i];
 
-          if (isDirectory(dir)) {
-            var m = loadAsFileSync(path.join(dir, '/', x));
+          if (isDirectory(path.dirname(dir))) {
+            var m = loadAsFileSync(dir);
             if (m) return m;
-            var n = loadAsDirectorySync(path.join(dir, '/', x));
+            var n = loadAsDirectorySync(dir);
             if (n) return n;
           }
         }
       }
     };
   }, {
-    "./caller.js": 368,
-    "./is-core": 371,
-    "./node-modules-paths.js": 372,
-    "./normalize-options.js": 373,
+    "./caller.js": 384,
+    "./is-core": 387,
+    "./node-modules-paths.js": 388,
+    "./normalize-options.js": 389,
     "fs": undefined,
     "path": undefined
   }],
-  375: [function (require, module, exports) {
-    arguments[4][142][0].apply(exports, arguments);
+  391: [function (require, module, exports) {
+    arguments[4][158][0].apply(exports, arguments);
   }, {
-    "dup": 142
+    "dup": 158
   }],
-  376: [function (require, module, exports) {
-    arguments[4][125][0].apply(exports, arguments);
+  392: [function (require, module, exports) {
+    arguments[4][139][0].apply(exports, arguments);
   }, {
-    "dup": 125
+    "dup": 139
   }],
-  377: [function (require, module, exports) {
-    // Returns a wrapper function that returns a wrapped callback
-    // The wrapper function should do some stuff, and return a
-    // presumably different callback function.
-    // This makes sure that own properties are retained, so that
-    // decorations and such are not lost along the way.
-    module.exports = wrappy;
-
-    function wrappy(fn, cb) {
-      if (fn && cb) return wrappy(fn)(cb);
-      if (typeof fn !== 'function') throw new TypeError('need wrapper function');
-      Object.keys(fn).forEach(function (k) {
-        wrapper[k] = fn[k];
-      });
-      return wrapper;
-
-      function wrapper() {
-        var args = new Array(arguments.length);
-
-        for (var i = 0; i < args.length; i++) {
-          args[i] = arguments[i];
-        }
-
-        var ret = fn.apply(this, args);
-        var cb = args[args.length - 1];
-
-        if (typeof ret === 'function' && ret !== cb) {
-          Object.keys(cb).forEach(function (k) {
-            ret[k] = cb[k];
-          });
-        }
-
-        return ret;
-      }
-    }
-  }, {}],
-  378: [function (require, module, exports) {
+  393: [function (require, module, exports) {
+    arguments[4][140][0].apply(exports, arguments);
+  }, {
+    "dup": 140
+  }],
+  394: [function (require, module, exports) {
     module.exports = function (commands, options) {
       if (typeof commands === "string") {
         commands = [commands];
@@ -59106,4 +56646,4 @@ var _typeof2 = _interopRequireDefault(require("@babel/runtime/helpers/typeof"));
     "bluebird": 4,
     "child_process": undefined
   }]
-}, {}, [143]);
+}, {}, [159]);

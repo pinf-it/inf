@@ -53,7 +53,19 @@ exports.inf = async function (inf) {
                 if (value.value instanceof Buffer) {
                     value = value.value.toString();
                 } else {
-                    value = value.toString();
+                    if (value instanceof inf.LIB.INF.CodeblockNode) {
+                        const vars = {
+                            INF: inf
+                        };
+                        await inf.LIB.Promise.map(value.value._args, async function (name) {
+                            if (typeof vars[name] === 'undefined') {
+                                vars[name] = await inf.getValueForVariablePath([name]);
+                            }
+                        });
+                        value = value.toString(vars);
+                    } else {
+                        value = value.toString();
+                    }
                 }
 
                 process.stdout.write(value + "\n");
@@ -69,7 +81,19 @@ exports.inf = async function (inf) {
                 if (value.value instanceof Buffer) {
                     value = value.value.toString();
                 } else {
-                    value = value.toString();
+                    if (value instanceof inf.LIB.INF.CodeblockNode) {
+                        const vars = {
+                            INF: inf
+                        };
+                        await inf.LIB.Promise.map(value.value._args, async function (name) {
+                            if (typeof vars[name] === 'undefined') {
+                                vars[name] = await inf.getValueForVariablePath([name]);
+                            }
+                        });
+                        value = value.toString(vars);
+                    } else {
+                        value = value.toString();
+                    }
                 }
 
                 process.stderr.write(value + "\n");
