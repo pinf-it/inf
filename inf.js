@@ -2394,6 +2394,9 @@ class Processor {
                 if (referenceValue.pointer) {
                     referenceValue.pointer = await self.namespace.replaceVariablesInString(referenceValue.pointer);
                 }
+                if (referenceValue.alias) {
+                    referenceValue.alias = self.namespace.makeNamespacePointerForString(null, referenceValue.alias);
+                }
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace);
 

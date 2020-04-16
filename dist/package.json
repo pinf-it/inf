@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf-dist",
-  "version": "0.2.0-pre.7",
+  "version": "0.2.0-pre.17",
   "access": "public",
   "pm": "npm",
   "bin": {
