@@ -784,7 +784,15 @@ LIB.Promise.defer = function () {
     return deferred;
 }
 
-Object.defineProperty(LIB, 'verbose', { get: function() { return !!process.env.INF_DEBUG; } });
+let verboseValue = !!process.env.INF_DEBUG;
+Object.defineProperty(LIB, 'verbose', {
+    get: function() {
+        return verboseValue;
+    },
+    set: function (value) {
+        verboseValue = value;
+    }
+});
 Object.defineProperty(LIB, 'UTIL', { get: function() { return require("util"); } });
 Object.defineProperty(LIB, 'CHILD_PROCESS', { get: function() { return require("child_process"); } });
 Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("lodash/merge"); } });
