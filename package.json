@@ -1,6 +1,6 @@
 {
   "name": "@pinf-it/inf",
-  "version": "0.2.0-pre.17",
+  "version": "0.2.0-pre.18",
   "pm": "npm",
   "bin": {
     "inf": "inf.js"
@@ -42,6 +42,7 @@
     "resolve": "^1.14.0",
     "runbash": "^0.1.0-pre.0",
     "traverse": "^0.6.6",
-    "debug-trace": "^2.2.3"
+    "debug-trace": "^2.2.3",
+    "bent": "^7.3.0"
   }
 }
