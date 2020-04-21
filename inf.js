@@ -799,6 +799,8 @@ Object.defineProperty(LIB, 'LODASH_MERGE', { get: function() { return require("l
 Object.defineProperty(LIB, 'LODASH', { get: function() { return require("lodash"); } });
 Object.defineProperty(LIB, 'RUNBASH', { get: function() { return require("runbash"); } });
 Object.defineProperty(LIB, 'COLORS', { get: function() { return require("colors/safe"); } });
+Object.defineProperty(LIB, 'BENT', { get: function() { return require("bent"); } });
+
 
 Object.defineProperty(LIB, 'STABLE_JSON', { get: function() {
     const SORTED_JSON_STRINGIFY = require("json-stable-stringify");
