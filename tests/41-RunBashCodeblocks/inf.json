@@ -16,11 +16,11 @@
 
     "runner2 #": "./runner2.",
     "runner2 # setImplementation()": {
-        "impl": (run.bash.method () >>>
+        "impl": (run.bash.origin.method () >>>
 
             # Comment that should be ignored
 
-            echo "#channel-name" "Message"
+            BO_cecho "#channel-name Message" YELLOW
 
         <<<)
     },

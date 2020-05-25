@@ -38,11 +38,11 @@ inf {
     "# echo +4": "-- 3 --",
 
     "runner2 #": "./runner2.",
-    "runner2 # setImplementation()": (run.bash.method (VARS, opts) >>>
+    "runner2 # setImplementation()": (run.bash.origin.script.method (VARS, opts) >>>
 
         ls %%%VARS.filename%%%
 
-        echo "opts.size: %%%opts.size%%%"
+        BO_cecho "opts.size: %%%opts.size%%%" YELLOW
 
     <<<),
     "# echo +5": "runner2 # run()",

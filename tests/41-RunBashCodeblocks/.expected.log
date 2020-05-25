@@ -4,11 +4,11 @@ Hello World from test.txt
 progress ...
 -- 2 --
 text.txt
-opts.size: 1129
+opts.size: 1154
 
 -- 3 --
 text.txt
-opts.size: 1129
+[0;33mopts.size: 1154[0m
 
 -- 4 --
 error message
@@ -22,7 +22,7 @@ error message
 #channel-name Message
 
 -- s2 --
-#channel-name Message
+[0;33m#channel-name Message[0m
 
 -- s3 --
 OK
