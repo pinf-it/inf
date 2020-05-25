@@ -42,6 +42,13 @@ exports.inf = async function (inf) {
                     value = await value.value();
                 }
 
+                if (
+                    value instanceof inf.LIB.INF.CodeblockNode &&
+                    inf.isCodeblock(value.value)
+                ) {
+                    await inf.runCodeblock(value.value);
+                }
+
                 return true;
             } else
             if (pointer === "echo") {
