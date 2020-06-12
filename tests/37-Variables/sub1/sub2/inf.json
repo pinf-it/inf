@@ -40,6 +40,14 @@
             "#": "./dynamic-load3."
         }
     <<<),
+    "runner1 # run_root": (inf () >>>
+        {
+            "# echo": "Greeting (root): \${PINF.greeting}",
+            "# echo": "Greeting (root): \${ns @ PINF.greeting}",
+
+            "#": "./sub1/sub2/dynamic-load3."
+        }
+    <<<),
 
     "# echo": "--- dynamic end 3 ---",
 

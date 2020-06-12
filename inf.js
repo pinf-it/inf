@@ -161,6 +161,8 @@ setImmediate(function () {
                     await inf.runInstructionsFile(PATH.relative(cwd, PATH.resolve(filepath)));
                 }
 
+                await inf.lastInstructionProcessed();
+
             } catch (err) {
                 exitWithError(err);
             }
@@ -185,7 +187,18 @@ class INF {
         log("INF filename", __filename);
     }
 
-    async runInstructionsFile (filepath) {
+    async lastInstructionProcessed (reason) {
+        const self = this;
+
+        if (self.namespace.onProcessingDoneHandlers) {
+            // TODO: Use 'map' when running in 'parallel' mode.
+            await Promise.mapSeries(self.namespace.onProcessingDoneHandlers, async function (handler) {
+                return handler(reason);
+            });
+        }
+    }
+
+    async runInstructionsFile (filepath, options) {
         let self = this;
 
         if (/~infi\.log$/.test(filepath)) {
@@ -203,10 +216,10 @@ class INF {
 
         let instructions = await FS.readFileAsync(path, "utf8");
 
-        return self.runInstructions(instructions, filepath);
+        return self.runInstructions(instructions, filepath, null, options);
     }
 
-    async runInstructions (instructions, filepath, referringNamespace) {
+    async runInstructions (instructions, filepath, referringNamespace, options) {
         let self = this;
 
         if (!filepath) {
@@ -214,10 +227,22 @@ class INF {
         }
 
         referringNamespace = referringNamespace || self.referringNamespace;
+        options = options || {};
 
         filepath = PATH.resolve(self.baseDir, filepath);
-        const baseDir = PATH.dirname(filepath);
-        filepath = PATH.basename(filepath);
+
+// console.error("INF runInstructions options.baseDir", options.baseDir);
+
+        let baseDir = null;
+        if (options.baseDir) {
+            baseDir = options.baseDir;
+            filepath = PATH.relative(baseDir, filepath);
+        } else {
+            baseDir = PATH.dirname(filepath);
+            filepath = PATH.basename(filepath);
+        }
+
+// console.error("INF runInstructions baseDir", baseDir, "filepath", filepath);
 
         self.parser = new Parser(baseDir, filepath);
         // TODO: Instead of first populating 'instructionObjects' and then processing them we should
@@ -225,14 +250,28 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
-        self.namespace = new Namespace(self, baseDir, referringNamespace, self.options);
+        if (options.useExistingNamespace) {
+            self.namespace = referringNamespace;
+
+            self.namespace.initOptions = options;
+
+//console.log("RE_USE NMAMESPACE", self.baseDir, options);
+
+
+        } else {
+            self.namespace = new Namespace(self, baseDir, referringNamespace, self.options, options);
+        }
+
         self.processor = new Processor(self.namespace);
 
-        if (filepath) {
-            self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
-            if (referringNamespace) {
-                self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];                
-                self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
+        if (!options.useExistingNamespace) {
+
+            if (filepath) {
+                self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
+                if (referringNamespace) {
+                    self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];                
+                    self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
+                }
             }
         }
 
@@ -283,36 +322,39 @@ class INF {
             return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
         });
 
-        if (
-            referringNamespace &&
-            self.namespace.options.mapNamespaceAliasesIntoParent !== false
-        ) {
-            self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+        if (!options.useExistingNamespace) {
 
-            Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+            if (
+                referringNamespace &&
+                self.namespace.options.mapNamespaceAliasesIntoParent !== false
+            ) {
+                self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
 
-                    self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+                Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
+                    if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
 
-                        if (anchorPrefix) {
-                            return [PATH.join(
-                                anchorPrefix.toString(),
-                                key
-                            ), self.namespace.mappedNamespaceAliases[key]];
-                        }
+                        self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
 
-                        return [key, self.namespace.mappedNamespaceAliases[key]];
-                    });
-                }
-            });
-        }
+                            if (anchorPrefix) {
+                                return [PATH.join(
+                                    anchorPrefix.toString(),
+                                    key
+                                ), self.namespace.mappedNamespaceAliases[key]];
+                            }
 
-        if (!self.namespace.referringNamespace) {
-            self.namespace.componentInitContext.emit("processed");
-        }
+                            return [key, self.namespace.mappedNamespaceAliases[key]];
+                        });
+                    }
+                });
+            }
 
-        if (filepath) {
-            self.namespace.pathStack.pop();
+            if (!self.namespace.referringNamespace) {
+                self.namespace.componentInitContext.emit("processed");
+            }
+
+            if (filepath) {
+                self.namespace.pathStack.pop();
+            }
         }
 
         return self.namespace.apis;
@@ -568,6 +610,7 @@ class Component {
 
                 componentInitContext = componentInitContext.forNode(pluginInstance, namespace);
 
+
                 let instance = pluginInstance;
                 await Promise.mapSeries(plugins, async function (plugin) {
 
@@ -593,39 +636,85 @@ class Component {
                 });
                 instances[type][alias] = instance;
 
-//console.error("init", type, alias, namespace.baseDir);
+// console.error("init COMP", type, alias, namespace.baseDir);
 
                 pluginInstance.namespace = namespace;
                 pluginInstance.resolvedNamespace = resolvedNamespace;
                 pluginInstance.alias = alias;
 
-                if (namespace.options.implementationAdapters) {
+                if (
+                    // type === "interface" ||
+                    namespace.options.getImplementationAdapterForId ||
+                    namespace.options.implementationAdapters
+                ) {
                     let adapterId = null;
                     Object.keys(mod).forEach(function (_adapterId) {
                         if (adapterId) return;
-                        if (namespace.options.implementationAdapters[_adapterId]) {
+
+// console.error("Check for interface adapter:", _adapterId);
+
+//console.log("namespace.options.getImplementationAdapterForId", namespace.options.getImplementationAdapterForId);
+
+                        if (
+                            namespace.options.implementationAdapters &&
+                            namespace.options.implementationAdapters[_adapterId]
+                        ) {
                             adapterId = _adapterId;
+
+                        // console.error("Found adapter!!");
+                        } else
+                        if (
+                            namespace.options.getImplementationAdapterForId &&
+                            namespace.options.getImplementationAdapterForId(namespace, _adapterId)
+                        ) {
+                            adapterId = _adapterId;
+
+// console.error("Found adapter!!");
                         }
                     });
+
                     if (adapterId) {
                         const adapter = await namespace.getImplementationAdapterForId(adapterId);
 
-                        pluginInstance.impl = await adapter.forInstance(namespace, mod[adapterId], {
+                        const adaptedImpl = (await adapter.forInstance(namespace, mod[adapterId], {
                             pluginInstance: pluginInstance,
                             componentInitContext: componentInitContext,
                             alias: alias,
                             compAlias: options.compAlias || null,
+                            prefixPath: options.prefixPath || null,
+                            prefixPathStack: options.prefixPathStack || null,
+                            firstPrefixPath: options.firstPrefixPath || null,
                             compNamespace: compNamespace
-                        });
+                        }));
+
+                        const interfaceImpl = adaptedImpl.interface;
+
+                        if (mod.inf) {
+                            pluginInstance.impl = await mod.inf(componentInitContext, alias);
+
+                            if (pluginInstance.impl.interface) {
+                                throw new Error(`A component that uses an interface implementation adapter may not export an interface directly!`);
+                            }
+                        } else {
+                            pluginInstance.impl = {};
+                        }
+
+                        if (adaptedImpl.interface) {
+                            pluginInstance.impl.interface = adaptedImpl.interface;
+                        }
+                        if (adaptedImpl.invoke) {
+                            pluginInstance.impl.invoke = adaptedImpl.invoke;
+                        }
                     }
                 }
 
                 if (!pluginInstance.impl) {
 
                     if (typeof mod.inf !== "function") {
+                        console.error("mod:", mod);
                         throw new Error("Component at path '" + self.path + "' does not export 'inf()'!");
                     }
-            
+
                     pluginInstance.impl = await mod.inf(componentInitContext, alias);
                 }
                 
@@ -691,6 +780,7 @@ class Component {
                         if (!methods.has(method)) {
                             if (method === "invoke") {
                                 console.error("pointer", arg1);
+                                console.log("pluginInstance.impl", pluginInstance.impl);
                                 throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(pointer, value)'!`);
                             }
                             throw new Error(`Component at path '${pluginInstance.path}' does not export 'inf().${method}(alias, node)'!`);
@@ -857,8 +947,14 @@ async function runCodeblock (namespace, value, vars) {
 
     if (
         codeblock.getFormat() === 'run.bash' ||
+        codeblock.getFormat() === 'run.bash.method' ||
         codeblock.getFormat() === 'run.bash.progress' ||
-        codeblock.getFormat() === 'run.bash.method'
+        codeblock.getFormat() === 'run.bash.origin' ||
+        codeblock.getFormat() === 'run.bash.origin.method' ||
+        codeblock.getFormat() === 'run.bash.origin.method.progress' ||
+        codeblock.getFormat() === 'run.bash.origin.script' ||
+        codeblock.getFormat() === 'run.bash.origin.script.method' ||
+        codeblock.getFormat() === 'run.bash.origin.script.method.progress'
     ) {
 
         await Promise.map(codeblock._args, async function (name) {
@@ -878,14 +974,44 @@ async function runCodeblock (namespace, value, vars) {
         let result = null;
 
         try {
-            result = await RUNBASH(codeblock.getCode(), {
+
+            let runCommand = null;
+            if (
+                codeblock.getFormat() === 'run.bash.origin.script' ||
+                codeblock.getFormat() === 'run.bash.origin.script.method' ||
+                codeblock.getFormat() === 'run.bash.origin.script.method.progress'
+            ) {
+                const hash = CRYPTO.createHash('sha1').update(codeblock.getCode()).digest('hex');
+                const tmpPath = LIB.PATH.join(namespace.baseDir, '.~', 'pinf.it~inf', 'run.bash.origin.script-cache', `${hash}.sh`);
+
+                await LIB.FS.outputFile(tmpPath, [
+                    '#!/usr/bin/env bash.origin.script',
+                    codeblock.getCode()
+                ].join('\n'), 'utf8');
+
+                runCommand = `bash.origin.script "${tmpPath}"`;
+
+            } else {
+                runCommand = codeblock.getCode();
+            }
+
+            result = await RUNBASH(runCommand, {
                 progress: (
                     codeblock.getFormat() === 'run.bash.progress' ||
+                    codeblock.getFormat() === 'run.bash.origin.method.progress' ||
+                    codeblock.getFormat() === 'run.bash.origin.script.method.progress' ||
                     namespace.options.progress ||
                     !!process.env.INF_DEBUG ||
                     !!process.env.DEBUG                    
                 ),
-                wait: true
+                wait: true,
+                wrappers: {
+                    "bash.origin": (
+                        codeblock.getFormat() === 'run.bash.origin' ||
+                        codeblock.getFormat() === 'run.bash.origin.method' ||
+                        codeblock.getFormat() === 'run.bash.origin.method.progress'
+                    )
+                }
             });
         } catch (err) {
             result = err;
@@ -896,7 +1022,11 @@ async function runCodeblock (namespace, value, vars) {
             //log('Discarding stderr:', result.stderr);
         }
 
-        if (codeblock.getFormat() !== 'run.bash.progress') {
+        if (
+            codeblock.getFormat() !== 'run.bash.progress' &&
+            codeblock.getFormat() !== 'run.bash.origin.method.progress' &&
+            codeblock.getFormat() !== 'run.bash.origin.script.method.progress'
+        ) {
             if (result.code !== 0) {
                 console.error(LIB.COLORS.red("[inf][" + codeblock.getFormat() + "] Code which contains error >>> " + code + " <<<"));
                 throw new Error(`Bash codeblock exited with non 0 code of '${result.code}'!`);
@@ -1008,6 +1138,7 @@ class ComponentInitContext extends EventEmitter {
 
         self.LIB = LIB;
 
+
         self.options = namespace.options;
         self.baseDir = namespace.baseDir;
 
@@ -1052,7 +1183,19 @@ require.memoize("/main.js", function (require, exports, module) {
 
         self.run = async function (filepath, options) {
 
-            let opts = LODASH_MERGE({}, namespace.options, options || {});
+            let opts = {};
+            Object.keys(namespace.options).forEach(function (name) {
+                if (typeof opts[name] === 'undefined') {
+                    opts[name] = namespace.options[name];
+                }
+            });
+            if (options) {
+                Object.keys(options).forEach(function (name) {
+                    if (typeof opts[name] === 'undefined') {
+                        opts[name] = options[name];
+                    }
+                });
+            }
             
             if (/\{/.test(filepath)) {
 
@@ -1068,23 +1211,59 @@ require.memoize("/main.js", function (require, exports, module) {
             return inf.runInstructionsFile(PATH.basename(path));
         }
 
-        self.load = async function (filepath) {
+        self.load = async function (filepath, options) {
+            options = options || {};
+
+            options.useExistingNamespace = true;
+
             if (
                 filepath instanceof InfNode &&
                 filepath.value instanceof CodeblockNode
             ) {
                 const baseDir = filepath.baseDir;
-                filepath = await filepath.toInstructions();
+                filepath = await filepath.toInstructions(options.variables || {});
+                delete options.variables;
                 const hash = CRYPTO.createHash('sha1').update(filepath).digest('hex').substring(0, 7);
-                return namespace.inf.runInstructions(filepath, PATH.join(baseDir, `inline-${hash}.inf.json`), namespace);
-            }
 
+// console.log("filepath::", filepath);
+
+// console.log("LOAD FOR: 1:", namespace.baseDir);
+
+                const ret = await namespace.inf.runInstructions(filepath, PATH.join(baseDir, `.~inline-${hash}.inf.json`), namespace, options);
+
+                await namespace.inf.lastInstructionProcessed('load');                
+
+                return ret;
+//                        inheritCompleteContext: false
+//             } else
+//             if (
+//                 typeof filepath === 'object' &&
+//                 filepath['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
+//             ) {
+
+// console.log("TODO: RUN!!!", filepath)
+
+//                 let codeblock = CODEBLOCK.thawFromJSON(filepath);
+
+//                 if (codeblock.getFormat() !== 'inf') {
+//                     throw new Error(`Codeblock is not of format 'inf'!`);                    
+//                 }
+
+//                 // TODO: Compile variables?
+
+// console.log("TODO: RUN!!2222!", codeblock.getCode())
+
+//                 return namespace.inf.runInstructions(codeblock.getCode(), null, namespace, options);
+
+// //process.exit(1);
+            }
+            
             if (/\{/.test(filepath)) {
-                return namespace.inf.runInstructions(filepath, null, namespace);
+                return namespace.inf.runInstructions(filepath, null, namespace, options);
             }
 
             let path = PATH.resolve(namespace.baseDir || "", filepath);
-            return namespace.inf.runInstructionsFile(path, namespace);
+            return namespace.inf.runInstructionsFile(path, namespace, options);
         }
 
         self.wrapValue = function (value) {
@@ -1099,6 +1278,7 @@ require.memoize("/main.js", function (require, exports, module) {
 
         self.isCodeblock = function (value) {
             return (
+                value &&
                 typeof value === 'object' &&
                 value['.@'] === 'github.com~0ink~codeblock/codeblock:Codeblock'
             );
@@ -1164,6 +1344,17 @@ require.memoize("/main.js", function (require, exports, module) {
                 }
             }
             context.log = context.console.log;
+
+            context.registerInterfaceClasses = function (classes) {
+                namespace.interfaceClasses[node.alias] = namespace.interfaceClasses[node.alias] || {};
+                Object.keys(classes).forEach(function (name) {
+                    namespace.interfaceClasses[node.alias][name] = classes[name];
+                });
+            }
+
+            context.registerOnProcessingDoneHandler = function (handler) {
+                namespace.onProcessingDoneHandlers.push(handler);
+            }
 
             return context;
         }
@@ -1273,8 +1464,12 @@ class NamespacePointer extends String {
 
 class Namespace {
 
-    constructor (inf, baseDir, referringNamespace, options) {
+    constructor (inf, baseDir, referringNamespace, options, initOptions) {
         let self = this;
+
+// console.log("NS options", options);
+
+        initOptions = initOptions || {};
 
         self.inf = inf;
         self.baseDir = baseDir;
@@ -1294,27 +1489,54 @@ class Namespace {
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.apis = (self.referringNamespace && self.referringNamespace.apis) || {};
 
-        // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
-        //       Not sure why it was ever passed by reference. We may need to map more variables
-        //       above my copying instead of using same reference.
-        //self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
-        self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
-
-        self.anchorPrefixStack = [].concat((self.referringNamespace && self.referringNamespace.anchorPrefixStack) || []);
-        self.anchorPrefix = options.anchorPrefix || null;
-        if (self.anchorPrefix && options.skipAddToAnchorPrefixStack !== false) {
-
-//console.log("NEW FOR ANCHOR PREFIX", options.anchorPrefix);
-
-            self.anchorPrefixStack.push(self.anchorPrefix);
-        }
 
         self.implementationAdapters = (self.referringNamespace && self.referringNamespace.implementationAdapters) || {};
 
         // Holds all paths including own and all children and parents to the extent loaded.
         self.allPaths = (self.referringNamespace && self.referringNamespace.allPaths) || [];
 
+
+        // Classes that tools/entities on anmespaces can register for interfaces to use.
+        self.interfaceClasses = (self.referringNamespace && self.referringNamespace.interfaceClasses) || {};
+
+        self.onProcessingDoneHandlers = (self.referringNamespace && self.referringNamespace.onProcessingDoneHandlers) || [];
+
+
+        self.initOptions = initOptions;
+
+        if (initOptions.inheritCompleteContext) {
+            
+            self.pathStack = self.referringNamespace.pathStack;
+            self.anchorPrefixStack = self.referringNamespace.anchorPrefixStack;
+            self.anchorPrefix = self.referringNamespace.anchorPrefix;
+throw new Error("DEPRECATED!??");
+// console.log("INHERIT COMPLETE CONTEXT: 22 :", self.referringNamespace.baseDir, self.referringNamespace.anchorPrefix);
+// console.log("INHERIT COMPLETE CONTEXT: 33 :", self.baseDir, self.anchorPrefix);
+            
+        } else {
+
+            // NOTE: The 'pathStack' needs to be copied instead of using the same reference.
+            //       Not sure why it was ever passed by reference. We may need to map more variables
+            //       above my copying instead of using same reference.
+            //self.pathStack = (self.referringNamespace && self.referringNamespace.pathStack) || [];
+            self.pathStack = [].concat((self.referringNamespace && self.referringNamespace.pathStack) || []);
+
+            self.anchorReference = options.anchorReference || null;
+// console.log("SET anchorReference for", self.baseDir, self.anchorReference);            
+
+            self.anchorPrefixStack = [].concat((self.referringNamespace && self.referringNamespace.anchorPrefixStack) || []);
+            self.anchorPrefix = options.anchorPrefix || null;
+            if (self.anchorPrefix && options.skipAddToAnchorPrefixStack !== false) {
+
+    //console.log("NEW FOR ANCHOR PREFIX", options.anchorPrefix);
+
+                self.anchorPrefixStack.push(self.anchorPrefix);
+            }
+
+        }
+
         self.componentInitContext = new ComponentInitContext(self);
+
 
         if (self.referringNamespace) {
             self.referringNamespace.componentInitContext.on("processed", function () {
@@ -1322,27 +1544,36 @@ class Namespace {
             });
         }
 
-        if (self.referringNamespace && self.referringNamespace.mappedNamespaceAliases) {
-            self.mappedNamespaceAliases = {};
-            Object.keys(self.referringNamespace.mappedNamespaceAliases).forEach(function (key) {
-                self.mappedNamespaceAliases[key] = self.referringNamespace.mappedNamespaceAliases[key];
-            });
-        } else {
-            self.mappedNamespaceAliases = {};    
-        }
+        if (initOptions.inheritCompleteContext) {
 
-        if (self.referringNamespace && self.referringNamespace.mappedAliases) {
-            self.mappedAliases = {};
-            Object.keys(self.referringNamespace.mappedAliases).forEach(function (key) {
-                self.mappedAliases[key] = self.referringNamespace.mappedAliases[key];
-            });
-        } else {
-            self.mappedAliases = {};    
-        }
+            self.mappedNamespaceAliases = self.referringNamespace.mappedNamespaceAliases;
+            self.mappedAliases = self.referringNamespace.mappedAliases;
+            self.lib = self.referringNamespace.lib;
 
-        self.lib = LIB_JSON.forBaseDir(self.baseDir, {
-            throwOnNoConfigFileFound: false
-        });
+        } else {
+
+            if (self.referringNamespace && self.referringNamespace.mappedNamespaceAliases) {
+                self.mappedNamespaceAliases = {};
+                Object.keys(self.referringNamespace.mappedNamespaceAliases).forEach(function (key) {
+                    self.mappedNamespaceAliases[key] = self.referringNamespace.mappedNamespaceAliases[key];
+                });
+            } else {
+                self.mappedNamespaceAliases = {};    
+            }
+
+            if (self.referringNamespace && self.referringNamespace.mappedAliases) {
+                self.mappedAliases = {};
+                Object.keys(self.referringNamespace.mappedAliases).forEach(function (key) {
+                    self.mappedAliases[key] = self.referringNamespace.mappedAliases[key];
+                });
+            } else {
+                self.mappedAliases = {};    
+            }
+
+            self.lib = LIB_JSON.forBaseDir(self.baseDir, {
+                throwOnNoConfigFileFound: false
+            });    
+        }
     }
 /*
     flipDomainInUri (uri) {
@@ -1387,7 +1618,7 @@ class Namespace {
             const originalUri = uri;
             uri = await self.options.resolveInfUri(uri, self);
             if (!uri) {
-                throw new Error(`Resolved original uri '${originalUri}' to '${uri}' using 'self.options.resolveInfUri()'!`);
+                throw new Error(`Resolved original uri '${originalUri}' to '${uri}' (NOT FOUND) using 'self.options.resolveInfUri()'!`);
             }
         }
 
@@ -1640,8 +1871,6 @@ class Namespace {
 
         if (self.anchorPrefix) {
 
-//console.error("anchor", anchor);
-
             // TODO: Map directly into 'self.aliases' as it is inherited anyway or use 'self.forParent.mappedAliases'?
             if (anchor.anchorNamespaceAlias) {
                 const prefixedAlias = self.anchorPrefix.replace(/\/$/, '') + '/' + anchor.anchorNamespaceAlias.replace(/^\//, '');
@@ -1660,8 +1889,9 @@ class Namespace {
         return self.aliases[alias];
     }
 
-    async mapInterface (alias, uri) {
+    async mapInterface (alias, uri, options) {
         let self = this;
+        options = options || {};
 
         let instanceUri = uri;
 
@@ -1698,18 +1928,31 @@ class Namespace {
             // Cause interface to be re-initialized for the new alias.
 //            interfaceComp.$instance = null;
 
-// console.log('MAP INTERFACE(2)::', alias, 'nsPrefixAlias', nsPrefixAlias);
+// console.log('MAP INTERFACE(2)::', alias, 'nsPrefixAlias', nsPrefixAlias, "component.alias", component.alias, 'baseDir', self.baseDir);
 
-//console.log("REMAP::::", component.alias);
+// console.log("options.prefixPath::::", options.prefixPath);
+// process.exit(1);
+
+// console.log("GET INTERFACE 2", component);
+
 
             const interfaceComp = await component.forAlias('interface', nsPrefixAlias, self, null, {
-                compAlias: component.alias
+                compAlias: component.alias,
+                prefixPath: options.prefixPath,
+                firstPrefixPath: (self.anchorPrefixStack && self.anchorPrefixStack.length && LIB.PATH.join.apply(LIB.PATH, self.anchorPrefixStack.map(function (anchorPrefix) {
+                    return anchorPrefix.toString();
+                }))) || '',
+                prefixPathStack: options.prefixPathStack
             });
+
+// console.log("interfaceComp::", interfaceComp);
 
 // console.log("MAP INTERFACE FOR ALIAS (3)", nsPrefixAlias, 'nsPrefixAlias:', nsPrefixAlias);
 
             return (self.interfaces[nsPrefixAlias] = interfaceComp);
         }
+
+// console.log("GET INTERFACE for uri 1", uri);
 
         component = await self.getComponentForUri(uri);
         if (self.interfaces[nsPrefixAlias]) {
@@ -1723,6 +1966,8 @@ class Namespace {
         }
 
         log("Map interface for uri '" + uri + "' to alias '" + nsPrefixAlias + "'");
+
+// console.log("GET INTERFACE 1", component);
 
 // console.log("MAP INTERFACE FOR ALIAS (1)", alias, 'nsPrefixAlias:', nsPrefixAlias);
 
@@ -1804,6 +2049,11 @@ class Namespace {
 //console.log("GET INTERFACE FOR ALIAS", alias, 'nsPrefixAlias', nsPrefixAlias);
 
         if (!this.interfaces[nsPrefixAlias]) {
+
+// console.log("BASEDIR", this.baseDir);
+
+            console.error('this.interfaces:', this.interfaces);
+
             throw new Error(`Interface for alias '${nsPrefixAlias}' not mapped!`);
         }
         if (!this.interfaces[nsPrefixAlias].$instance) {
@@ -1959,19 +2209,38 @@ class Namespace {
 
         if (!self.implementationAdapters[adapterId]) {
 
-            if (!self.options.implementationAdapters[adapterId]) {
-                return null;
-            }
+            if (
+                self.options.implementationAdapters &&
+                self.options.implementationAdapters[adapterId]
+            ) {
+                if (typeof self.options.implementationAdapters[adapterId] === 'string') {
 
-            if (typeof self.options.implementationAdapters[adapterId] === 'string') {
-                
-                const adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
+                    const adapterPath = PATH.resolve(self.baseDir, self.options.implementationAdapters[adapterId]);
 
-                const adapter = require(adapterPath);
+                    const adapter = require(adapterPath);
 
-                self.implementationAdapters[adapterId] = adapter;
-            } else {
-                self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
+                    self.implementationAdapters[adapterId] = adapter;
+    
+                } else {
+                    self.implementationAdapters[adapterId] = self.options.implementationAdapters[adapterId];
+                }
+
+            } else
+            if (self.options.getImplementationAdapterForId) {
+                if (!self.options.getImplementationAdapterForId(self, adapterId)) {
+                    return null;
+                }
+
+                if (typeof self.options.getImplementationAdapterForId(self, adapterId) === 'string') {
+                    
+                    const adapterPath = PATH.resolve(self.baseDir, self.options.getImplementationAdapterForId(adapterId));
+
+                    const adapter = require(adapterPath);
+
+                    self.implementationAdapters[adapterId] = adapter;
+                } else {
+                    self.implementationAdapters[adapterId] = self.options.getImplementationAdapterForId(self, adapterId);
+                }
             }
         }
 
@@ -2243,7 +2512,11 @@ class CodeblockNode extends Node {
 
         let codeblock = CODEBLOCK.thawFromJSON(this.value);
 
-        codeblock = codeblock.compile(args);
+        try {
+            codeblock = codeblock.compile(args);
+        } catch (err) {
+            // ignore as we do not care for toString()
+        }
 
         return codeblock.getCode();
     }
@@ -2387,10 +2660,10 @@ class Processor {
         let self = this;
 
         async function wrapValue (_value, topLevel) {
-
+                        
             // See if we are referencing an aliased component. If we are we resolve the reference
             // and pass it along with the component invocation.
-            let referenceMatch = _value.value.match(/^([^#]*?)\s*#\s*(.+?)$/);
+            let referenceMatch = _value.value.match(/^(?:([^#]*?)\s+)?#\s+(.+?)$/);
 
             if (
                 referenceMatch &&
@@ -2407,6 +2680,8 @@ class Processor {
                 if (referenceValue.alias) {
                     referenceValue.alias = self.namespace.makeNamespacePointerForString(null, referenceValue.alias);
                 }
+
+//console.log("referenceValue", referenceValue);
 
                 let referencedComponent = await self.namespace.getComponentForAlias(referenceValue.alias, referenceValue.resolvedNamespace);
 
@@ -2485,7 +2760,7 @@ class Processor {
                 if (
                     typeof obj === "string" &&
                     (
-                        /^([^#]*?)\s*#\s*(.+?)$/.test(obj) ||
+                        /^([^#]*?)\s+#\s+(.+?)$/.test(obj) ||
                         /^:[^:]+:\s*/.test(obj)
                     )
                 ) {
@@ -2645,7 +2920,7 @@ class Processor {
 
             log(`Replace namespace alias '${valueAlias}' with:`, self.namespace.mappedNamespaceAliases[valueAlias]);
 
-            value = value.replace(/^[^@]+?\s*@\s*[^#]+(\s*#)/, `${[
+            value = value.replace(/^[^@]+?\s*@\s*[^#]*(\s+#)/, `${[
                 self.namespace.mappedNamespaceAliases[valueAlias].replace(/\/$/, ""),
                 valuePointer.replace(/^\//, "")
             ].join("/").replace(/\/$/, "")}$1`);
@@ -2666,6 +2941,7 @@ class Processor {
         }
 
         value = Node.WrapInstructionNode(self.namespace, value);
+
         value.meta = meta;
 
         if (anchorNamespacePrefix) {
@@ -2687,6 +2963,18 @@ class Processor {
                 value.value = await runCodeblock(self.namespace, value.value);
             } else
             if (value.getFormat() === 'run.bash.progress') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.bash.origin') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.bash.origin.progress') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.bash.origin.script') {
+                value.value = await runCodeblock(self.namespace, value.value);
+            } else
+            if (value.getFormat() === 'run.bash.origin.script.progress') {
                 value.value = await runCodeblock(self.namespace, value.value);
             } else
             if (value.getFormat() === 'run.javascript') {
@@ -2768,15 +3056,18 @@ class Processor {
                                 //       aliased data can be applied to multiple namespaces.
                             }
 
-                            let inf = new INF(PATH.dirname(path), self.namespace, LODASH_MERGE(
-                                {},
-                                self.namespace.options,
-                                {
-                                    anchorPrefix: alias || self.namespace.anchorPrefix || null,
-                                    mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
-                                    skipAddToAnchorPrefixStack: !!alias
+                            const opts = {
+                                anchorReference: reference,
+                                anchorPrefix: alias || self.namespace.anchorPrefix || null,
+                                mapNamespaceAliasesIntoParent: alias || self.namespace.anchorPrefix ? false : true,
+                                skipAddToAnchorPrefixStack: !!alias
+                            };
+                            Object.keys(self.namespace.options).forEach(function (name) {
+                                if (typeof opts[name] === 'undefined') {
+                                    opts[name] = self.namespace.options[name];
                                 }
-                            ));
+                            });
+                            let inf = new INF(PATH.dirname(path), self.namespace, opts);
 
                             self.namespace.childInfByPath[path] = inf;
 
@@ -2889,10 +3180,29 @@ class Processor {
             } else
             if (anchor.type === 'interface') {
 
+// console.log("mapInterface:", value);
+
                 value.value = await self.namespace.replaceVariablesInString(value.value);
+
+// console.log("mapInterface:", value);
 
                 value.value = self.namespace.makeNamespacePointerForString(null, value.value);
 
+//console.log("self.namespace", self.namespace);
+
+// console.log("SEGMENTS:", value, value.value.getSegments());
+
+                const prefixPathStack = self.namespace.anchorPrefixStack.map(function (anchorPrefix) {
+                    return anchorPrefix.toString();
+                }).concat(value.value.getSegments().filter(function (segment) {
+                    return (!!segment.alias);
+                }).map(function (segment) {
+                    return segment.alias;
+                }));
+                const prefixPath = LIB.PATH.join.apply(LIB.PATH, prefixPathStack);
+
+                // TODO: Not sure if this is right. We should probably not be updating 'value.value' and instead
+                //       build out a meta object with several context properties on it.
                 if (value.value.getSegments().length > 1) {
 
                     const key = value.value.toString();
@@ -2912,7 +3222,14 @@ class Processor {
                     value.value = value.value.toString();
                 }
 
-                const interfaceComponent = await self.namespace.mapInterface(anchor.alias, value.value);
+//console.log("firstPrefixPath::::", firstPrefixPath);
+
+// console.log("prefixPath::::", prefixPath);
+
+                const interfaceComponent = await self.namespace.mapInterface(anchor.alias, value.value, {
+                    prefixPath: prefixPath,
+                    prefixPathStack: prefixPathStack
+                });
 
                 if (anchor.contract) {
                     interfaceComponent.contract = [
@@ -2948,6 +3265,7 @@ class Processor {
 
             // Replace variables            
             anchor.pointer = await self.namespace.replaceVariablesInString(anchor.pointer);
+
             value.value = await self.namespace.replaceVariablesInString(value.value);
 
             value = await self.closureForValueIfReference(value, async function (value, _value) {
