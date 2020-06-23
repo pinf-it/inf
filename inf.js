@@ -1648,6 +1648,15 @@ throw new Error("DEPRECATED!??");
                         return PATH.join(self.baseDir, filepath);
                     });
                 }
+            } else
+            // Absolute path
+            if (/^\//.test(uri)) {
+                let cwdPaths = await GLOB.async(filepath, { cwd: '/' });
+                if (cwdPaths.length) {
+                    return cwdPaths.map(function (filepath) {
+                        return PATH.join('/', filepath);
+                    });
+                }
             }
 
             if (self.lib.js) {

@@ -88,3 +88,14 @@ inf {
 
     "# echo +3": "OK"
 }
+
+echo "---"
+
+# Absolute path
+inf {
+    "#": "\${__DIRNAME__}/../06-MapAliasToComponent/",
+
+    "stdout # echo": "ok",
+
+    "# echo": "OK"
+}
