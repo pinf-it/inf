@@ -3053,7 +3053,7 @@ class Processor {
 
                         if (
                             !self.namespace.isInheritingFrom(path) &&
-                            self.namespace.pathStack.indexOf(path) === -1                            
+                            self.namespace.pathStack.indexOf(path) === -1
                         ) {
 
                             log("Inherit from inf file:", path);
@@ -3145,6 +3145,12 @@ class Processor {
                                 self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
 
                                 let inf = self.namespace.childInfByPath[path];
+
+                                if (!inf) {
+                                    console.error('self.namespace.childInfByPath:', self.namespace.childInfByPath);
+                                    console.error('path:', path);
+                                    throw new Error(`Path '${path}' not found in 'self.namespace.childInfByPath'!`);
+                                }
 
                                 if (inf.namespace.forParent.allPaths) {
                                     inf.namespace.forParent.allPaths.forEach(function (path) {
