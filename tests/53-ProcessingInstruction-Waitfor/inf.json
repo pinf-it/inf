@@ -1,0 +1,15 @@
+{
+    "# echo": "[inf] Should be first",
+
+    "#": "./sub.",
+
+    "# echo": "[inf] Should be third",
+
+    "%% waitfor": "marker1",
+
+    "# echo": "[inf] Should be fith",
+
+    "%% waitfor": "marker2",
+
+    "# echo": "[inf] Should be seventh"
+}

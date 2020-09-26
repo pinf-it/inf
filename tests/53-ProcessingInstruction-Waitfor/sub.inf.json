@@ -1,0 +1,11 @@
+{
+    "# echo": "[sub] Should be second",
+
+    "%% waitfor": "marker1",
+
+    "# echo": "[sub] Should be fourth",
+
+    "%% waitfor": "marker2",
+
+    "# echo": "[sub] Should be sixth"
+}
