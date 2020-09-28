@@ -250,6 +250,7 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
+
         if (options.useExistingNamespace) {
             self.namespace = referringNamespace;
 
@@ -260,6 +261,19 @@ class INF {
         } else {
             self.namespace = new Namespace(self, baseDir, referringNamespace, self.options, options);
         }
+
+
+        if (!referringNamespace) {
+
+            self.namespace.onProcessingDone = Promise.defer();
+
+            instructionObjects.push(function () {
+                // All done processing instructions in root document.
+
+                return self.namespace.onProcessingDone.resolve();
+            });
+        }
+
 
         self.processor = new Processor(self.namespace, {
             onPause: function () {
@@ -293,9 +307,11 @@ class INF {
             self.namespace.waitforMarkers = {};
             const waitforRe = /^%% waitfor\t"([^"]+)"\s/;
             instructionObjects.forEach(function (instructionObject) {
-                const m = instructionObject.match(waitforRe);
-                if (m) {
-                    self.namespace.waitforMarkers[m[1]] = true;
+                if (typeof instructionObject === 'string') {
+                    const m = instructionObject.match(waitforRe);
+                    if (m) {
+                        self.namespace.waitforMarkers[m[1]] = true;
+                    }
                 }
             });
 
@@ -312,7 +328,12 @@ class INF {
                 if (self.namespace.stopped) {
                     return null;
                 }
-    
+
+                if (typeof instructionObject === 'function') {
+                    await instructionObject();
+                    return null;
+                }
+
                 // Replace variables
                 instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
                     if (/^\{.+\}$/.test(arguments[1])) {
@@ -395,6 +416,10 @@ class INF {
         }
 
         await process();
+
+        if (!referringNamespace) {
+            await self.namespace.onProcessingDone.promise;
+        }
 
         return self.namespace.apis;
     }
@@ -1519,6 +1544,8 @@ class Namespace {
 
         self.allNamespaces = (self.referringNamespace && self.referringNamespace.allNamespaces) || [];
         self.allNamespaces.push(self);
+
+        self.rootNamespace = (self.referringNamespace && self.referringNamespace.rootNamespace) || self;
 
         self.forParent = {};
         self.childInfByPath = (self.referringNamespace && self.referringNamespace.childInfByPath) || {};
