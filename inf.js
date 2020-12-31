@@ -250,6 +250,7 @@ class INF {
         //       large instruction files.
         let instructionObjects = await self.parser.parseInstructions(instructions);
 
+
         if (options.useExistingNamespace) {
             self.namespace = referringNamespace;
 
@@ -257,104 +258,167 @@ class INF {
 
 //console.log("RE_USE NMAMESPACE", self.baseDir, options);
 
-
         } else {
             self.namespace = new Namespace(self, baseDir, referringNamespace, self.options, options);
         }
 
-        self.processor = new Processor(self.namespace);
 
-        if (!options.useExistingNamespace) {
+        if (!referringNamespace) {
 
-            if (filepath) {
-                self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
-                if (referringNamespace) {
-                    self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];                
-                    self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
+            self.namespace.onProcessingDone = Promise.defer();
+
+            instructionObjects.push(function () {
+                // All done processing instructions in root document.
+
+                return self.namespace.onProcessingDone.resolve();
+            });
+        }
+
+
+        self.processor = new Processor(self.namespace, {
+            onPause: function () {
+
+                instructionObjects = instructionObjects.slice(instructionIndex + 1);
+
+                // We return the 'process' function which when called will continue
+                // processing the instructions.
+                return process;
+            }
+        });
+
+        let instructionIndex = 0;
+
+        async function process () {
+
+            instructionIndex = 0;
+
+            if (!options.useExistingNamespace) {
+
+                if (filepath) {
+                    self.namespace.pathStack.push(PATH.resolve(baseDir, filepath));
+                    if (referringNamespace) {
+                        self.namespace.forParent.allPaths = self.namespace.forParent.allPaths || [];                
+                        self.namespace.forParent.allPaths.push(PATH.resolve(baseDir, filepath));
+                    }
+                }
+            }
+    
+            // Look ahead to see if there are specific processing instructions.
+            self.namespace.waitforMarkers = {};
+            const waitforRe = /^%% waitfor\t"([^"]+)"\s/;
+            instructionObjects.forEach(function (instructionObject) {
+                if (typeof instructionObject === 'string') {
+                    const m = instructionObject.match(waitforRe);
+                    if (m) {
+                        self.namespace.waitforMarkers[m[1]] = true;
+                    }
+                }
+            });
+
+//console.log("waitforMarkers:", self.namespace.waitforMarkers);
+
+            let ignoreRemaining = false;
+            await Promise.mapSeries(instructionObjects, async function (instructionObject, i) {
+                if (ignoreRemaining) {
+                    return null;
+                }
+
+                instructionIndex = i;
+    
+                if (self.namespace.stopped) {
+                    return null;
+                }
+
+                if (typeof instructionObject === 'function') {
+                    await instructionObject();
+                    return null;
+                }
+
+                // Replace variables
+                instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
+                    if (/^\{.+\}$/.test(arguments[1])) {
+                        // Executable expression
+                        let args = self.options;
+                        return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
+                    } else {
+                        // Simple varibale reference
+                        return JSON.stringify(LODASH_GET({
+                            args: self.options
+                        }, arguments[1], ''));
+                    }
+                });
+                instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
+                    if (arguments[1] !== '%%') {
+                        return arguments[0];
+                    }
+                    if (/^\{.+\}$/.test(arguments[2])) {
+                        // Executable expression
+                        let args = self.options;
+                        return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
+                    } else {
+                        // Simple varibale reference
+                        return LODASH_GET({
+                            args: self.options
+                        }, arguments[2], '');    
+                    }
+                });
+    
+                instructionObject = instructionObject.split("\t");
+    
+                if (
+                    instructionObject.length === 1 &&
+                    instructionObject[0] === ''
+                ) {
+                    return;
+                }
+    
+                const result = await self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
+
+                if (result === 'PAUSE') {
+                    ignoreRemaining = true;
+                }
+            });
+    
+            if (!options.useExistingNamespace) {
+    
+                if (
+                    referringNamespace &&
+                    self.namespace.options.mapNamespaceAliasesIntoParent !== false
+                ) {
+                    self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
+    
+                    Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
+                        if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
+    
+                            self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
+    
+                                if (anchorPrefix) {
+                                    return [PATH.join(
+                                        anchorPrefix.toString(),
+                                        key
+                                    ), self.namespace.mappedNamespaceAliases[key]];
+                                }
+    
+                                return [key, self.namespace.mappedNamespaceAliases[key]];
+                            });
+                        }
+                    });
+                }
+    
+                // if (!self.namespace.referringNamespace) {
+                //     self.namespace.componentInitContext.emit("processed");
+                // }
+    
+                if (filepath) {
+                    self.namespace.pathStack.pop();
                 }
             }
         }
 
-        await Promise.mapSeries(instructionObjects, await function (instructionObject) {
+        await process();
 
-            if (self.namespace.stopped) {
-                return null;
-            }
-
-            // Replace variables
-            instructionObject = instructionObject.replace(/"%%([^%]+)%%"/g, function () {
-                if (/^\{.+\}$/.test(arguments[1])) {
-                    // Executable expression
-                    let args = self.options;
-                    return JSON.stringify(eval(arguments[1].replace(/(^\{|\}$)/g, "")) || '');
-                } else {
-                    // Simple varibale reference
-                    return JSON.stringify(LODASH_GET({
-                        args: self.options
-                    }, arguments[1], ''));
-                }
-            });
-            instructionObject = instructionObject.replace(/(%+)([^%]+)(%+)/g, function () {
-                if (arguments[1] !== '%%') {
-                    return arguments[0];
-                }
-                if (/^\{.+\}$/.test(arguments[2])) {
-                    // Executable expression
-                    let args = self.options;
-                    return eval(arguments[2].replace(/(^\{|\}$)/g, "") || '');
-                } else {
-                    // Simple varibale reference
-                    return LODASH_GET({
-                        args: self.options
-                    }, arguments[2], '');    
-                }
-            });
-
-            instructionObject = instructionObject.split("\t");
-
-            if (
-                instructionObject.length === 1 &&
-                instructionObject[0] === ''
-            ) {
-                return;
-            }
-
-            return self.processor.processInstruction(instructionObject[0], JSON.parse(instructionObject[1]), JSON.parse(instructionObject[2] || '{}'));
-        });
-
-        if (!options.useExistingNamespace) {
-
-            if (
-                referringNamespace &&
-                self.namespace.options.mapNamespaceAliasesIntoParent !== false
-            ) {
-                self.namespace.forParent.mappedNamespaceAliases = self.namespace.forParent.mappedNamespaceAliases || [];
-
-                Object.keys(self.namespace.mappedNamespaceAliases).forEach(function (key) {
-                    if (typeof referringNamespace.mappedNamespaceAliases[key] === "undefined") {
-
-                        self.namespace.forParent.mappedNamespaceAliases.push(function (anchorPrefix) {
-
-                            if (anchorPrefix) {
-                                return [PATH.join(
-                                    anchorPrefix.toString(),
-                                    key
-                                ), self.namespace.mappedNamespaceAliases[key]];
-                            }
-
-                            return [key, self.namespace.mappedNamespaceAliases[key]];
-                        });
-                    }
-                });
-            }
-
-            if (!self.namespace.referringNamespace) {
-                self.namespace.componentInitContext.emit("processed");
-            }
-
-            if (filepath) {
-                self.namespace.pathStack.pop();
-            }
+        if (!referringNamespace) {
+            await self.namespace.onProcessingDone.promise;
         }
 
         return self.namespace.apis;
@@ -1478,6 +1542,11 @@ class Namespace {
 
         self.referringNamespace = referringNamespace;
 
+        self.allNamespaces = (self.referringNamespace && self.referringNamespace.allNamespaces) || [];
+        self.allNamespaces.push(self);
+
+        self.rootNamespace = (self.referringNamespace && self.referringNamespace.rootNamespace) || self;
+
         self.forParent = {};
         self.childInfByPath = (self.referringNamespace && self.referringNamespace.childInfByPath) || {};
 
@@ -1488,6 +1557,8 @@ class Namespace {
         self.contracts = (self.referringNamespace && self.referringNamespace.contracts) || {};
         self.plugins = (self.referringNamespace && self.referringNamespace.plugins) || [];
         self.apis = (self.referringNamespace && self.referringNamespace.apis) || {};
+
+        self.waitfors = (self.referringNamespace && self.referringNamespace.waitfors) || {};
 
 
         self.implementationAdapters = (self.referringNamespace && self.referringNamespace.implementationAdapters) || {};
@@ -2661,10 +2732,11 @@ exports.VariablesReferenceNode = VariablesReferenceNode;
 
 class Processor {
 
-    constructor (namespace) {
+    constructor (namespace, options) {
         let self = this;
 
         self.namespace = namespace;
+        self._options = options || {};
     }
 
     async closureForValueIfReference (value, valueProcessor) {
@@ -2999,6 +3071,44 @@ class Processor {
             //       run it via 'INF.runCodeblock(value, vars)'
         }
 
+        // Handle processing instrutions
+        if (/^%% .+$/.test(anchor.value)) {
+
+            if (/^%% waitfor$/.test(anchor.value)) {
+
+                // Pause instruction processing.
+                const process = self._options.onPause();
+
+                self.namespace.waitfors[value.value] = self.namespace.waitfors[value.value] || Promise.defer();
+
+                self.namespace.waitfors[value.value].registeredCount = self.namespace.waitfors[value.value].registeredCount || 0;
+                self.namespace.waitfors[value.value].registeredCount += 1;
+
+                self.namespace.waitfors[value.value].promise = self.namespace.waitfors[value.value].promise.then(process);
+
+                // Check if we should continue with all waitfor markers.
+                // We continue when all parsers/namespaces that have the named
+                // marker have reached the marker.
+
+                let expectedCount = 0;
+                self.namespace.allNamespaces.forEach(function (namespace) {
+                    if (namespace.waitforMarkers[value.value]) {
+                        expectedCount += 1;
+                    }
+                });
+
+                if (self.namespace.waitfors[value.value].registeredCount === expectedCount) {
+
+                    await self.namespace.waitfors[value.value].resolve();
+
+                    delete self.namespace.waitfors[value.value];
+                }
+
+                return 'PAUSE';
+            } else {
+                throw new Error(`Processing instruction '${anchor.value}' not supported!`);
+            }
+        } else
         // Inherit from another inf.json file
         if (anchor.value === "#") {
 
@@ -3055,7 +3165,7 @@ class Processor {
 
                         if (
                             !self.namespace.isInheritingFrom(path) &&
-                            self.namespace.pathStack.indexOf(path) === -1                            
+                            self.namespace.pathStack.indexOf(path) === -1
                         ) {
 
                             log("Inherit from inf file:", path);
@@ -3147,6 +3257,12 @@ class Processor {
                                 self.namespace.mappedNamespaceAliases[alias.toString()] = alias.toString();
 
                                 let inf = self.namespace.childInfByPath[path];
+
+                                if (!inf) {
+                                    console.error('self.namespace.childInfByPath:', self.namespace.childInfByPath);
+                                    console.error('path:', path);
+                                    throw new Error(`Path '${path}' not found in 'self.namespace.childInfByPath'!`);
+                                }
 
                                 if (inf.namespace.forParent.allPaths) {
                                     inf.namespace.forParent.allPaths.forEach(function (path) {
