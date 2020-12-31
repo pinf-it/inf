@@ -1,0 +1,26 @@
+{
+    "Server #": "./server.",
+
+    "#": {
+        "/sub": "./middleware/*/"
+    },
+
+    "#": "./app.",
+
+    "Server # start()": "",
+
+    "# run": (run.bash.progress () >>>
+
+        echo "---"
+
+        curl -s http://localhost:8080/
+
+        echo -e "\n---"
+
+        curl -s http://localhost:8080/sub/get-random-greeting
+
+        echo -e "\n---"
+    <<<),
+
+    "Server # stop()": ""
+}

@@ -8,6 +8,8 @@
 
     "self @ # echo": "Hello World",
 
+    "# echo": "INF_PARENT_PREFIX: ${__INF_PARENT_PREFIX__}",   
+
 
     ":pattern.stream:": "../34-Interfaces/stream.",
     ":transform.uppercase:": "../34-Interfaces/uppercase.",

@@ -2135,7 +2135,9 @@ throw new Error("DEPRECATED!??");
                 DIR_PARENT_PATH: PATH.dirname(dirname),
                 DIR_BASENAME: PATH.basename(dirname),
                 BASEDIR: process.cwd(),
-                RELPATH: PATH.relative(process.cwd(), path)
+                RELPATH: PATH.relative(process.cwd(), path),
+
+                INF_PARENT_PREFIX: (this.anchorPrefixStack && this.anchorPrefixStack.toString()) || ''
             };
         }
 

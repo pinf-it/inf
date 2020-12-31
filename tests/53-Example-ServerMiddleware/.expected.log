@@ -1,0 +1,24 @@
+Server running at: http://localhost:8080/
+---
+<html>
+    <head>
+        <title>Home</title>
+    </head>
+    <body>
+        <h1>Available Routes</h1>
+        <ul></ul>
+    </body>
+    <script>
+        window.fetch('/.well-known/list-endpoints').then(function (response) {
+            return response.json();
+        }).then(function (routes) {
+
+            document.querySelector('UL').innerHTML = routes.map(function (route) {
+                return `<li><a href="${route}">${route}</a></li>`;
+            }).join('\n');
+        });
+    </script>
+</html>
+---
+Hello World
+---

@@ -1,0 +1,5 @@
+{
+    "middleware-${__DIR_BASENAME__} #": "./middleware.",
+
+    "Server # GET() ${__INF_PARENT_PREFIX__}/get-random-greeting": "middleware-${__DIR_BASENAME__} # getApp()"
+}

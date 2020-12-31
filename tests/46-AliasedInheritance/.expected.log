@@ -1,4 +1,5 @@
 [inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)
+INF_PARENT_PREFIX: inf.pinf.it/cli/runner/v0/default
 Loaded interface harness: inf.pinf.it/cli/runner/v0/default:transform.uppercase 1
 Loaded interface: transform.uppercase 1 (inf.pinf.it/cli/runner/v0/default:transform.uppercase:1)
 HELLO WORLD
@@ -33,6 +34,23 @@ api (main.js) {
                 }
             ],
             "api": "[inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)"
+        }
+    ],
+    "deploy|inf.pinf.it/cli/runner/v0|default|": [
+        {
+            "anchor": [
+                [
+                    {
+                        "alias": "deploy",
+                        "resolved": "inf.pinf.it/cli/runner/v0"
+                    },
+                    {
+                        "literal": "default"
+                    }
+                ]
+            ],
+            "implements": [],
+            "api": true
         }
     ],
     "deploy|inf.pinf.it/cli/runner/v0|default|stdout": [

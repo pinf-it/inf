@@ -1,0 +1,32 @@
+{
+    "Server # GET() /favicon.ico": (javascript () >>>
+
+        return function (req, res, next) {
+
+            res.writeHead(200);
+            res.end('');
+        };
+    <<<),
+
+    "Server # GET() /": (html () >>>
+        <html>
+            <head>
+                <title>Home</title>
+            </head>
+            <body>
+                <h1>Available Routes</h1>
+                <ul></ul>
+            </body>
+            <script>
+                window.fetch('/.well-known/list-endpoints').then(function (response) {
+                    return response.json();
+                }).then(function (routes) {
+
+                    document.querySelector('UL').innerHTML = routes.map(function (route) {
+                        return `<li><a href="${route}">${route}</a></li>`;
+                    }).join('\n');
+                });
+            </script>
+        </html>
+    <<<)
+}

@@ -1,0 +1,57 @@
+{
+    "Server #": "./server.",
+
+    "middleware-1 #": "./middleware/well-known-list-endpoints.",
+    "Server # GET() /.well-known/list-endpoints": "middleware-1 # getApp()",
+
+    "middleware-2 #": "./middleware/get-random-greeting.",
+    "Server # GET() /get-random-greeting": "middleware-2 # getApp()",
+
+    "Server # GET() /favicon.ico": (javascript () >>>
+
+        return function (req, res, next) {
+
+            res.writeHead(200);
+            res.end('');
+        };
+    <<<),
+
+    "Server # GET() /": (html () >>>
+        <html>
+            <head>
+                <title>Home</title>
+            </head>
+            <body>
+                <h1>Available Routes</h1>
+                <ul></ul>
+            </body>
+            <script>
+                window.fetch('/.well-known/list-endpoints').then(function (response) {
+                    return response.json();
+                }).then(function (routes) {
+
+                    document.querySelector('UL').innerHTML = routes.map(function (route) {
+                        return `<li><a href="${route}">${route}</a></li>`;
+                    }).join('\n');
+                });
+            </script>
+        </html>
+    <<<),
+
+    "Server # start()": "",
+
+    "# run": (run.bash.progress () >>>
+
+        echo "---"
+
+        curl -s http://localhost:8080/
+
+        echo -e "\n---"
+
+        curl -s http://localhost:8080/get-random-greeting
+
+        echo -e "\n---"
+    <<<),
+
+    "Server # stop()": ""
+}

@@ -39,6 +39,23 @@ inf.runInstructionsFile("_.inf.json").then(function (api) {
                 "api": "[inf.pinf.it/wrappers/test/v0] Hello World (hostname: foobar)"
             }
         ],
+        "deploy|inf.pinf.it/cli/runner/v0|default|": [
+            {
+                "anchor": [
+                    [
+                        {
+                            "alias": "deploy",
+                            "resolved": "inf.pinf.it/cli/runner/v0"
+                        },
+                        {
+                            "literal": "default"
+                        }
+                    ]
+                ],
+                "implements": [],
+                "api": true
+            }
+        ],        
         "deploy|inf.pinf.it/cli/runner/v0|default|stdout": [
             {
                 "anchor": [
